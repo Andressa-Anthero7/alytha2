@@ -1,0 +1,7 @@
+{
+  "name": "AgroTrade - Plataforma de Grãos",
+  "description": "Sistema de cotação e intermediação de soja, milho e sorgo com gestão de ofertas e negociações.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}
