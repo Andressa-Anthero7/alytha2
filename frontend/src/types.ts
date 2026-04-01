@@ -3,13 +3,19 @@ export interface User {
   name: string;
   email: string;
   type: 'vendedor' | 'comprador' | 'corretor' | 'backoffice';
+  phone?: string;
+  company?: string;
 }
 
 export interface QualityParams {
-  moisture: number;
-  impurity: number;
-  broken: number;
-  damaged: number;
+  moisture?: number;
+  impurity?: number;
+  broken?: number;
+  damaged?: number;
+  deliveryWindow?: string;
+  notes?: string;
+  observations?: string;
+  [key: string]: string | number | undefined;
 }
 
 export interface Offer {
@@ -29,6 +35,9 @@ export interface Offer {
   createdAt: string;
 }
 
+export type BrokerageMode = 'percentage' | 'fixed' | 'per_sack';
+export type BrokeragePayer = 'seller' | 'buyer';
+
 export interface Negotiation {
   id: number;
   offerId: number;
@@ -38,6 +47,10 @@ export interface Negotiation {
   brokerId: number;
   proposedPrice: number;
   proposedQuantity: number;
+  brokerageMode?: BrokerageMode | null;
+  brokeragePercentage?: number | null;
+  brokerageValue?: number | null;
+  brokeragePayer?: BrokeragePayer | null;
   brokerageFee: number;
   status: 'pendente' | 'aceita' | 'recusada';
   createdAt: string;

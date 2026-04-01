@@ -15,7 +15,7 @@ class UserSerializer(serializers.ModelSerializer):
 
 
 class OfferSerializer(serializers.ModelSerializer):
-    userId = serializers.PrimaryKeyRelatedField(source='user', queryset=User.objects.all())
+    userId = serializers.PrimaryKeyRelatedField(source='user', queryset=User.objects.all(), required=False, allow_null=True)
     type = serializers.CharField(source='offer_type')
     paymentTerms = serializers.CharField(source='payment_terms')
     createdAt = serializers.DateTimeField(source='created_at', read_only=True)

@@ -319,6 +319,65 @@ class AuthFlowTests(APITestCase):
         self.assertEqual(res.data['detail'], 'So e possivel casar ofertas do mesmo grao')
         self.assertFalse(Negotiation.objects.exists())
 
+    def test_authenticated_user_can_create_offer_without_user_id(self):
+        self.client.post(reverse('register', args=['vendedor']), {
+            'name': 'Seller Self',
+            'email': 'seller.self@test.com',
+            'password': 'passforte123',
+        }, format='json')
+
+        res = self.client.post('/api/login/', {'email': 'seller.self@test.com', 'password': 'passforte123'}, format='json')
+        self.assertEqual(res.status_code, 200)
+
+        token = res.data['access']
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {token}')
+
+        res = self.client.post('/api/offers', {
+            'type': 'venda',
+            'grain': 'Soja',
+            'quantity': 500,
+            'unit': 'Sacas',
+            'price': 130,
+            'location': 'Rio Verde - GO',
+            'crop': '24/25',
+            'shipping': 'FOB',
+            'quality': {'notes': 'Padrao exportacao'},
+            'paymentTerms': 'A vista'
+        }, format='json')
+
+        self.assertEqual(res.status_code, 201)
+        offer = Offer.objects.get(id=res.data['id'])
+        self.assertEqual(offer.user.email, 'seller.self@test.com')
+
+    def test_change_password_endpoint(self):
+        self.client.post(reverse('register', args=['vendedor']), {
+            'name': 'Seller Password',
+            'email': 'seller.password@test.com',
+            'password': 'SenhaInicial123!',
+        }, format='json')
+
+        login = self.client.post('/api/login/', {'email': 'seller.password@test.com', 'password': 'SenhaInicial123!'}, format='json')
+        self.assertEqual(login.status_code, 200)
+
+        token = login.data['access']
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {token}')
+
+        change = self.client.post('/api/change-password/', {
+            'current_password': 'SenhaInicial123!',
+            'new_password': 'NovaSenha456@',
+        }, format='json')
+
+        self.assertEqual(change.status_code, 200)
+        self.assertEqual(change.data['detail'], 'Senha alterada com sucesso.')
+
+        self.client.credentials()
+
+        old_login = self.client.post('/api/login/', {'email': 'seller.password@test.com', 'password': 'SenhaInicial123!'}, format='json')
+        self.assertEqual(old_login.status_code, 401)
+
+        new_login = self.client.post('/api/login/', {'email': 'seller.password@test.com', 'password': 'NovaSenha456@'}, format='json')
+        self.assertEqual(new_login.status_code, 200)
+
 
 class SeedDemoCommandTests(APITestCase):
     def test_seed_demo_creates_three_buy_and_three_sell_per_grain(self):

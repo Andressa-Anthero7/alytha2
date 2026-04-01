@@ -2,7 +2,9 @@ from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
 from django.shortcuts import get_object_or_404
 from django.db import IntegrityError
+from django.core.exceptions import ValidationError
 from django.contrib.auth import authenticate, get_user_model
+from django.contrib.auth.password_validation import validate_password
 from django.db.models import Q
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
@@ -293,3 +295,38 @@ class LoginView(APIView):
             'refresh': str(refresh),
             'user': UserSerializer(market_user).data if market_user else None
         })
+
+
+class ChangePasswordView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        current_password = request.data.get('current_password')
+        new_password = request.data.get('new_password')
+
+        if not current_password or not new_password:
+            return Response(
+                {'detail': 'current_password e new_password são obrigatórios.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        user = request.user
+
+        if not user.check_password(current_password):
+            return Response(
+                {'detail': 'Senha atual inválida.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            validate_password(new_password, user)
+        except ValidationError as exc:
+            return Response(
+                {'detail': ' '.join(exc.messages)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        user.set_password(new_password)
+        user.save(update_fields=['password'])
+
+        return Response({'detail': 'Senha alterada com sucesso.'}, status=status.HTTP_200_OK)

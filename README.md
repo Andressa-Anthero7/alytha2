@@ -1,20 +1,61 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# Alytha – React/Vite/Tailwind + Django REST
 
-# Run and deploy your AI Studio app
+Aplicacao full-stack sem mocks: frontend em React (Vite + Tailwind) consumindo API em Django REST Framework.
 
-This contains everything you need to run your app locally.
+## Requisitos
+- Node.js 18+
+- Python 3.10+
 
-View your app in AI Studio: https://ai.studio/apps/b6dcc034-f03a-4a85-9b83-b5f2ea6519f5
+## Backend (Django REST)
+1) Instalar dependencias  
+   `pip install -r backend/requirements.txt`
+2) Migrar banco e popular dados demo  
+   `python backend/manage.py migrate`  
+   `python backend/manage.py seed_demo`
+   `python backend/manage.py seed_demo --orders-per-side 3`
+3) Subir API  
+   `python backend/manage.py runserver 0.0.0.0:8000`
 
-## Run Locally
+## Frontend (React/Vite)
+Dentro de `frontend/`:
+1) Instalar pacotes  
+   `cd frontend && npm install`
+2) Rodar em desenvolvimento (proxy para Django em :8000)  
+   `cd frontend && npm run dev`
+3) Build estatico  
+   `cd frontend && npm run build`
 
-**Prerequisites:**  Node.js
+## Variaveis de ambiente
+Copiar `frontend/.env.example` para `frontend/.env` e ajustar:
+- `VITE_API_URL` (opcional) – base da API em producao. Padrao `/api` (usa proxy local).
+- `VITE_API_PROXY_TARGET` (opcional) – URL de proxy no dev. Padrao `http://localhost:8000`.
+- `GEMINI_API_KEY` – apenas se voce usar integrações Gemini ja existentes.
 
+## Credenciais de demonstração
+Após `python backend/manage.py seed_demo`, use as credenciais abaixo (senha padrão `seed123`):
+- Corretor: `nix@agro.com`
+- Vendedores: `venda1@agro.com`, `venda2@agro.com`, `venda3@agro.com`
+- Compradores: `compra1@agro.com`, `compra2@agro.com`, `compra3@agro.com`
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+## Endpoints principais
+- `GET /api/offers` – ofertas ativas (usar `?all=true` para listar todas).
+- `POST /api/offers` – cria oferta (campos compatíveis com src/types.ts).
+- `DELETE /api/offers/:id`
+- `GET /api/users` e `DELETE /api/users/:id`
+- `GET /api/negotiations`
+- `POST /api/negotiations/match` – cria negociacao a partir de buyOfferId/sellOfferId.
+- `PATCH /api/negotiations/:id` – atualiza status (`pendente|aceita|recusada`) e fecha ofertas quando aceita.
+
+## Observacoes
+- O mock server Node foi aposentado; use o backend Django para dados reais.
+- A seed cria usuarios base (corretor + compradores + vendedores) e ofertas auto-geradas.
+- Padrao da seed: 3 compras + 3 vendas para cada grao listado na plataforma (Soja, Milho e Sorgo).
+
+## Rotas do frontend (demo)
+- Landing Produtor: `/lp/produtor`
+- Landing Comprador: `/lp/comprador`
+- Cadastro Transportador: `/lp/cadastro_transportador`
+- Cadastro Armazenagem: `/lp/cadastro_armazenagem`
+- App Cliente: `/app/cliente`
+- Trading Desk (Corretor): `/app/tradingdesk/:corretorId`
+- Backoffice: `/app/admin/backoffice`

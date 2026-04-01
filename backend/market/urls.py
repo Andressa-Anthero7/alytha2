@@ -2,7 +2,7 @@ from rest_framework.routers import SimpleRouter
 
 from django.urls import path
 from rest_framework_simplejwt.views import TokenRefreshView
-from .views import OfferViewSet, UserViewSet, NegotiationViewSet, RegisterView, LoginView
+from .views import OfferViewSet, UserViewSet, NegotiationViewSet, RegisterView, LoginView, ChangePasswordView
 
 router = SimpleRouter(trailing_slash=False)
 router.register(r'users', UserViewSet, basename='user')
@@ -13,4 +13,5 @@ urlpatterns = router.urls + [
     path('register/<str:role_slug>', RegisterView.as_view(), name='register'),
     path('login/', LoginView.as_view(), name='login'),
     path('token/refresh', TokenRefreshView.as_view(), name='token_refresh'),
+    path('change-password/', ChangePasswordView.as_view(), name='change_password'),
 ]
