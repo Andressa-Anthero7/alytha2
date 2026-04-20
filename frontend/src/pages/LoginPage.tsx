@@ -1,7 +1,6 @@
 import { AlertCircle, ArrowRight, Headset, LoaderCircle } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
-import Navbar from '../components/Navbar';
 import { apiFetch } from '../lib/api';
 import { isAuthenticated, saveAuth } from '../lib/auth';
 import { supportEmail, supportWhatsAppDisplay, supportWhatsAppHref } from '../shared/api';
@@ -52,22 +51,23 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top,#e4f5ea_0%,#ffffff_42%,#f7f4ec_100%)]">
-      <Navbar />
-
-      <main className="mx-auto grid max-w-7xl gap-8 px-6 py-16 lg:grid-cols-[0.95fr_1.05fr] lg:items-center">
-        <section className="rounded-[2.5rem] bg-[linear-gradient(180deg,#052e2b_0%,#0f5f54_100%)] p-10 text-white shadow-[0_55px_140px_-75px_rgba(5,46,43,0.88)]">
-          <p className="text-xs font-black uppercase tracking-[0.3em] text-emerald-200">Login real</p>
-          <h1 className="mt-5 text-5xl font-black tracking-tight">Entre para cadastrar ofertas e operar a plataforma.</h1>
-          <p className="mt-5 max-w-xl text-base leading-8 text-emerald-50/90">
-            O acesso usa JWT com refresh token, proteção de rotas e manutenção da Trading Desk para o perfil operacional.
+    <div className="min-h-screen bg-[radial-gradient(circle_at_top,#e6f4eb_0%,#ffffff_42%,#f7f2e8_100%)]">
+      <main className="mx-auto grid max-w-7xl gap-6 px-4 py-8 sm:px-6 sm:py-12 lg:grid-cols-[0.95fr_1.05fr] lg:items-center lg:px-8 lg:py-16">
+        <section className="rounded-[2rem] bg-[linear-gradient(180deg,#052e2b_0%,#0f5f54_100%)] p-7 text-white shadow-[0_55px_140px_-75px_rgba(5,46,43,0.88)] sm:rounded-[2.5rem] sm:p-10">
+          <p className="text-[11px] font-black uppercase tracking-[0.3em] text-emerald-200">Acesso Alytha</p>
+          <h1 className="mt-4 text-4xl font-black tracking-tight sm:text-5xl">
+            Entre para acompanhar a operação comercial com segurança.
+          </h1>
+          <p className="mt-5 max-w-xl text-sm leading-7 text-emerald-50/90 sm:text-base sm:leading-8">
+            Use seu acesso para consultar oportunidades, acompanhar negociações e manter suas informações organizadas na
+            plataforma Alytha.
           </p>
 
           <div className="mt-8 space-y-3">
             {[
-              'Acesso de comprador, vendedor, corretor e backoffice.',
-              'Dashboard unificado após login.',
-              'Troca de senha disponível dentro do perfil.',
+              'Ambiente profissional para compradores, vendedores e corretagem.',
+              'Acesso ao dashboard com visão comercial e operacional.',
+              'Fluxo preparado para apoiar a rotina da mesa e dos cadastros.',
             ].map((item) => (
               <div key={item} className="rounded-2xl border border-white/10 bg-white/8 px-4 py-3 text-sm text-white">
                 {item}
@@ -76,12 +76,12 @@ export default function LoginPage() {
           </div>
         </section>
 
-        <section className="rounded-[2.5rem] border border-white/80 bg-white/90 p-8 shadow-[0_50px_140px_-75px_rgba(15,23,42,0.65)] backdrop-blur">
+        <section className="rounded-[2rem] border border-white/80 bg-white/92 p-6 shadow-[0_50px_140px_-75px_rgba(15,23,42,0.65)] backdrop-blur sm:rounded-[2.5rem] sm:p-8">
           <div>
-            <p className="text-xs font-black uppercase tracking-[0.3em] text-emerald-700">Entrar</p>
-            <h2 className="mt-4 text-4xl font-black tracking-tight text-slate-950">Acesse sua conta Alytha</h2>
-            <p className="mt-4 text-base leading-8 text-slate-600">
-              Use seu e-mail e senha para abrir o dashboard, cadastrar ofertas e acompanhar a operação comercial.
+            <p className="text-[11px] font-black uppercase tracking-[0.3em] text-emerald-700">Entrar</p>
+            <h2 className="mt-3 text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">Acesse sua conta Alytha</h2>
+            <p className="mt-4 text-sm leading-7 text-slate-600 sm:text-base sm:leading-8">
+              Informe seu e-mail e sua senha para continuar. Se precisar de apoio, nossa equipe de suporte está disponível.
             </p>
           </div>
 
@@ -123,12 +123,12 @@ export default function LoginPage() {
               className="inline-flex w-full items-center justify-center gap-3 rounded-full bg-emerald-600 px-6 py-4 text-sm font-black uppercase tracking-[0.22em] text-white shadow-lg shadow-emerald-600/25 hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-70"
             >
               {loading && <LoaderCircle className="h-4 w-4 animate-spin" />}
-              {loading ? 'Entrando...' : 'Entrar na plataforma'}
+              {loading ? 'Entrando...' : 'Entrar'}
               {!loading && <ArrowRight className="h-4 w-4" />}
             </button>
           </form>
 
-          <div className="mt-8 rounded-[2rem] border border-amber-100 bg-amber-50/80 p-6">
+          <div className="mt-8 rounded-[1.8rem] border border-amber-100 bg-amber-50/80 p-5 sm:p-6">
             <div className="flex items-start gap-3">
               <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-amber-700 shadow-sm">
                 <Headset className="h-5 w-5" />
@@ -136,15 +136,15 @@ export default function LoginPage() {
               <div>
                 <p className="text-sm font-black text-amber-950">Suporte comercial e técnico</p>
                 <p className="mt-2 text-sm leading-7 text-amber-900/80">
-                  Se precisar recuperar o acesso ou confirmar seu cadastro, fale com a equipe da Alytha.
+                  Se for necessário recuperar o acesso ou confirmar informações de cadastro, fale com a equipe da Alytha.
                 </p>
               </div>
             </div>
 
-            <div className="mt-5 flex flex-wrap gap-3">
+            <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
               <a
                 href={`mailto:${supportEmail}`}
-                className="rounded-full border border-amber-200 bg-white px-4 py-3 text-sm font-bold text-amber-900 hover:bg-amber-100"
+                className="rounded-full border border-amber-200 bg-white px-4 py-3 text-center text-sm font-bold text-amber-900 hover:bg-amber-100"
               >
                 {supportEmail}
               </a>
@@ -153,7 +153,7 @@ export default function LoginPage() {
                   href={supportWhatsAppHref}
                   target="_blank"
                   rel="noreferrer"
-                  className="rounded-full bg-amber-700 px-4 py-3 text-sm font-bold text-white hover:bg-amber-800"
+                  className="rounded-full bg-amber-700 px-4 py-3 text-center text-sm font-bold text-white hover:bg-amber-800"
                 >
                   WhatsApp {supportWhatsAppDisplay}
                 </a>

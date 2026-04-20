@@ -42,11 +42,7 @@ export function saveAuth(access: string, refresh: string | null, user: unknown) 
     removeStorage(REFRESH_KEY);
   }
 
-  if (user) {
-    writeStorage(USER_KEY, JSON.stringify(user));
-  } else {
-    removeStorage(USER_KEY);
-  }
+  setCurrentUser(user);
 
   removeStorage(LEGACY_ACCESS_KEY);
   removeStorage(LEGACY_REFRESH_KEY);
@@ -67,6 +63,14 @@ export function getRefreshToken() {
 
 export function getCurrentUser<T = User>(): T | null {
   return parseUser<T>(readStorage(USER_KEY));
+}
+
+export function setCurrentUser(user: unknown) {
+  if (user) {
+    writeStorage(USER_KEY, JSON.stringify(user));
+  } else {
+    removeStorage(USER_KEY);
+  }
 }
 
 export function clearAuth() {

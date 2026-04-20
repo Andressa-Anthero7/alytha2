@@ -1,3 +1,5 @@
+import uuid
+
 from django.db import models
 
 
@@ -14,10 +16,16 @@ class User(models.Model):
     type = models.CharField(max_length=20, choices=USER_TYPES)
     phone = models.CharField(max_length=20, blank=True)
     company = models.CharField(max_length=150, blank=True)
+    broker_link_token = models.UUIDField(unique=True, editable=False, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
         return self.name
+
+    def save(self, *args, **kwargs):
+        if not self.broker_link_token:
+            self.broker_link_token = uuid.uuid4()
+        super().save(*args, **kwargs)
 
 
 class Offer(models.Model):
@@ -29,8 +37,29 @@ class Offer(models.Model):
         ('FOB', 'FOB'),
         ('CIF', 'CIF'),
     )
+    STATUS_CHOICES = (
+        ('ativa', 'Ativa'),
+        ('finalizada', 'Finalizada'),
+        ('aguardando_pagamento', 'Aguardando pagamento'),
+    )
+    NEGOTIATION_CHANNEL_CHOICES = (
+        ('mesa', 'Operando com a mesa'),
+        ('direta', 'Oferta direta'),
+    )
+    DIRECT_PAYMENT_STATUS_CHOICES = (
+        ('free', 'Isenta'),
+        ('pending', 'Aguardando pagamento'),
+        ('paid', 'Pago'),
+    )
 
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='offers')
+    exclusive_broker = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='exclusive_marketplace_offers',
+    )
     offer_type = models.CharField(max_length=10, choices=OFFER_TYPES)
     grain = models.CharField(max_length=50)
     quantity = models.DecimalField(max_digits=15, decimal_places=2)
@@ -39,9 +68,13 @@ class Offer(models.Model):
     location = models.CharField(max_length=120)
     crop = models.CharField(max_length=10)
     shipping = models.CharField(max_length=3, choices=SHIPPING_CHOICES)
+    negotiation_channel = models.CharField(max_length=10, choices=NEGOTIATION_CHANNEL_CHOICES, default='mesa')
+    mesa_commission = models.DecimalField(max_digits=4, decimal_places=2, null=True, blank=True)
+    direct_fee = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    direct_payment_status = models.CharField(max_length=12, choices=DIRECT_PAYMENT_STATUS_CHOICES, default='free')
     quality = models.JSONField(default=dict)
     payment_terms = models.CharField(max_length=120)
-    status = models.CharField(max_length=12, default='ativa')
+    status = models.CharField(max_length=24, choices=STATUS_CHOICES, default='ativa')
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
@@ -58,6 +91,7 @@ class Negotiation(models.Model):
         ('percentage', 'Percentual'),
         ('fixed', 'Valor fixo'),
         ('per_sack', 'Valor por saca'),
+        ('spread', 'Spread'),
     )
     BROKERAGE_PAYER_CHOICES = (
         ('seller', 'Vendedor'),

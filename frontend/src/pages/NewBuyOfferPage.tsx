@@ -5,11 +5,11 @@ export default function NewBuyOfferPage() {
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top,#fff1de_0%,#ffffff_44%,#f8fafc_100%)]">
       <Navbar />
-      <main className="mx-auto max-w-7xl px-6 py-16">
+      <main className="mx-auto max-w-7xl px-4 py-10 sm:px-6 sm:py-14 lg:px-8 lg:py-16">
         <OfferForm
           offerType="compra"
-          title="Cadastrar intenção de compra"
-          subtitle="Defina produto, volume, local, faixa de preço, padrão desejado e condições da operação para acelerar a prospecção."
+          title="Cadastrar demanda (compra)"
+          subtitle="Estruture sua demanda com produto, volume, praca, safra, faixa de preco e condicoes comerciais para facilitar a originacao e acelerar a negociacao."
         />
       </main>
     </div>

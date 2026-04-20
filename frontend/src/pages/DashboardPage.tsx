@@ -1,11 +1,12 @@
-import { AlertCircle, ArrowRight, KeyRound, LoaderCircle, PackageSearch, Wheat } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { AlertCircle, ArrowRight, LayoutGrid, LoaderCircle, PackageSearch, ShieldCheck, Wheat } from 'lucide-react';
+import { useEffect, useState, type JSX } from 'react';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
-import Navbar from '../components/Navbar';
-import { apiFetch } from '../lib/api';
 import { clearAuth, getCurrentUser } from '../lib/auth';
 import { TradingDeskPage } from '../modules/tradingdesk/TradingDeskPage';
-import type { Offer, User } from '../types';
+import { apiFetch } from '../shared/api';
+import { DashboardWorkspaceHeader } from '../shared/DashboardWorkspaceHeader';
+import { formatCurrency, formatDateTime, formatNumber } from '../shared/format';
+import type { ClientDashboardBadge, ClientDashboardPayload, ClientDashboardSummaryCard, MarketplaceCardOffer, Offer, User } from '../types';
 
 const roleLabels = {
   vendedor: 'Vendedor',
@@ -14,46 +15,192 @@ const roleLabels = {
   backoffice: 'Backoffice',
 } as const;
 
+const offerTypeLabels = {
+  venda: 'Oferta de venda',
+  compra: 'Intencao de compra',
+} as const;
+
+const channelLabels = {
+  mesa: 'Mesa Alytha',
+  direta: 'Oferta direta',
+} as const;
+
+const statusLabels = {
+  ativa: 'Ativa',
+  finalizada: 'Finalizada',
+  aguardando_pagamento: 'Aguardando PIX',
+} as const;
+
 const grainAccent = {
   Soja: 'bg-emerald-100 text-emerald-800',
   Milho: 'bg-amber-100 text-amber-800',
   Sorgo: 'bg-orange-100 text-orange-800',
 } as const;
 
+const toneClasses = {
+  slate: 'bg-slate-100 text-slate-600',
+  emerald: 'bg-emerald-50 text-emerald-700',
+  amber: 'bg-amber-50 text-amber-800',
+  orange: 'bg-orange-50 text-orange-700',
+} as const;
+
+const getStatusTone = (status: Offer['status']) => {
+  if (status === 'aguardando_pagamento') {
+    return 'bg-amber-100 text-amber-900';
+  }
+
+  if (status === 'finalizada') {
+    return 'bg-slate-200 text-slate-700';
+  }
+
+  return 'bg-emerald-100 text-emerald-800';
+};
+
+const getSummaryIcon = (id: ClientDashboardSummaryCard['id']) => {
+  if (id === 'activeOffers') return ShieldCheck;
+  if (id === 'directOffers') return PackageSearch;
+  if (id === 'deskOffers') return Wheat;
+  return LayoutGrid;
+};
+
+function StatBadge({ badge }: JSX.IntrinsicAttributes & { badge: ClientDashboardBadge }) {
+  return (
+    <span className={`rounded-full px-4 py-2 text-[11px] font-black uppercase tracking-[0.2em] ${toneClasses[badge.tone]}`}>
+      {formatNumber(badge.value)} {badge.label}
+    </span>
+  );
+}
+
+function OwnOfferCard({ offer }: JSX.IntrinsicAttributes & { offer: Offer }) {
+  return (
+    <article className="rounded-[1.8rem] border border-slate-200 bg-slate-50 p-5">
+      <div className="flex items-center justify-between gap-3">
+        <span
+          className={`rounded-full px-3 py-1 text-xs font-black uppercase tracking-[0.2em] ${
+            grainAccent[offer.grain as keyof typeof grainAccent] || 'bg-slate-200 text-slate-700'
+          }`}
+        >
+          {offer.grain}
+        </span>
+        <span className="text-xs font-black uppercase tracking-[0.18em] text-slate-500">{offerTypeLabels[offer.type]}</span>
+      </div>
+
+      <h3 className="mt-4 text-2xl font-black text-slate-950">
+        {formatNumber(offer.quantity)} {offer.unit}
+      </h3>
+      <p className="mt-2 text-sm text-slate-600">{offer.location}</p>
+
+      <div className="mt-4 grid gap-3 text-sm text-slate-600">
+        <div className="flex items-center justify-between gap-3">
+          <span>Safra</span>
+          <span className="font-bold text-slate-900">{offer.crop}</span>
+        </div>
+        <div className="flex items-center justify-between gap-3">
+          <span>Valor</span>
+          <span className="font-bold text-emerald-700">{formatCurrency(offer.price)}</span>
+        </div>
+        <div className="flex items-center justify-between gap-3">
+          <span>Canal</span>
+          <span className="font-bold text-slate-900">{channelLabels[offer.negotiationChannel]}</span>
+        </div>
+      </div>
+
+      <div className="mt-4 flex flex-wrap gap-2">
+        <span className={`rounded-full px-3 py-1 text-[11px] font-black uppercase tracking-[0.18em] ${getStatusTone(offer.status)}`}>
+          {statusLabels[offer.status]}
+        </span>
+        {offer.exclusiveBrokerName ? (
+          <span className="rounded-full bg-white px-3 py-1 text-[11px] font-black uppercase tracking-[0.18em] text-slate-600">
+            Corretor {offer.exclusiveBrokerName}
+          </span>
+        ) : null}
+      </div>
+
+      <p className="mt-4 text-[11px] font-black uppercase tracking-[0.18em] text-slate-500">Cadastrada em {formatDateTime(offer.createdAt)}</p>
+    </article>
+  );
+}
+
+function MarketOfferCard({ offer }: JSX.IntrinsicAttributes & { offer: MarketplaceCardOffer }) {
+  return (
+    <article className="rounded-[1.8rem] border border-slate-200 bg-slate-50 p-5">
+      <div className="flex items-center justify-between gap-3">
+        <span
+          className={`rounded-full px-3 py-1 text-xs font-black uppercase tracking-[0.2em] ${
+            grainAccent[offer.grain as keyof typeof grainAccent] || 'bg-slate-200 text-slate-700'
+          }`}
+        >
+          {offer.grain}
+        </span>
+        <span className="text-xs font-black uppercase tracking-[0.18em] text-slate-500">{offer.shipping}</span>
+      </div>
+
+      <h3 className="mt-4 text-2xl font-black text-slate-950">{offerTypeLabels[offer.type]}</h3>
+      <p className="mt-2 text-sm text-slate-600">{offer.location}</p>
+
+      <div className="mt-4 grid gap-3 text-sm text-slate-600">
+        <div className="flex items-center justify-between gap-3">
+          <span>Quantidade</span>
+          <span className="font-bold text-slate-900">
+            {formatNumber(offer.quantity)} {offer.unit}
+          </span>
+        </div>
+        <div className="flex items-center justify-between gap-3">
+          <span>Valor</span>
+          <span className="font-bold text-emerald-700">{formatCurrency(offer.price)}</span>
+        </div>
+        <div className="flex items-center justify-between gap-3">
+          <span>Canal</span>
+          <span className="font-bold text-slate-900">{channelLabels[offer.negotiationChannel]}</span>
+        </div>
+        <div className="flex items-center justify-between gap-3">
+          <span>Safra</span>
+          <span className="font-bold text-slate-900">{offer.crop}</span>
+        </div>
+      </div>
+
+      <p className="mt-4 text-[11px] font-black uppercase tracking-[0.18em] text-slate-500">Publicada em {formatDateTime(offer.createdAt)}</p>
+    </article>
+  );
+}
+
 export default function DashboardPage() {
   const navigate = useNavigate();
   const user = getCurrentUser<User>();
-  const [offers, setOffers] = useState<Offer[]>([]);
+  const userId = user?.id ?? null;
+  const userType = user?.type ?? null;
+  const [dashboard, setDashboard] = useState<ClientDashboardPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
   useEffect(() => {
-    if (!user || user.type === 'corretor' || user.type === 'backoffice') {
+    if (!userId || userType === 'corretor' || userType === 'backoffice') {
       return;
     }
 
-    const loadOffers = async () => {
+    const loadDashboard = async () => {
       setLoading(true);
       setError('');
 
       try {
-        const response = await apiFetch('/offers?all=true');
-        const payload = await response.json().catch(() => null);
+        const response = await apiFetch('/client-dashboard/');
+        const payload = (await response.json().catch(() => null)) as ClientDashboardPayload | { detail?: string } | null;
 
-        if (!response.ok) {
-          throw new Error(payload?.detail || 'Não foi possível carregar suas ofertas.');
+        if (!response.ok || !payload || !('header' in payload)) {
+          throw new Error((payload && 'detail' in payload && payload.detail) || 'Nao foi possivel carregar o dashboard.');
         }
 
-        setOffers(Array.isArray(payload) ? payload : []);
+        setDashboard(payload);
       } catch (loadError) {
-        setError(loadError instanceof Error ? loadError.message : 'Erro inesperado ao carregar o painel.');
+        setDashboard(null);
+        setError(loadError instanceof Error ? loadError.message : 'Erro inesperado ao carregar o dashboard.');
       } finally {
         setLoading(false);
       }
     };
 
-    void loadOffers();
-  }, [user]);
+    void loadDashboard();
+  }, [userId, userType]);
 
   if (!user) {
     return <Navigate to="/login" replace />;
@@ -68,126 +215,178 @@ export default function DashboardPage() {
     return <TradingDeskPage currentUser={user} onLogout={handleLogout} />;
   }
 
-  const primaryAction = user.type === 'vendedor'
-    ? { href: '/ofertas/venda/nova', label: 'Cadastrar nova venda' }
-    : { href: '/ofertas/compra/nova', label: 'Cadastrar nova compra' };
+  const fallbackPrimaryAction =
+    user.type === 'vendedor'
+      ? { href: '/ofertas/venda/nova', label: 'Cadastrar oferta de venda' }
+      : { href: '/ofertas/compra/nova', label: 'Cadastrar demanda (compra)' };
 
+  const header = dashboard?.header;
+  const hero = dashboard?.hero;
+  const account = dashboard?.account;
+  const ownOffersSection = dashboard?.ownOffersSection;
+  const marketSection = dashboard?.marketSection;
+  const summaryCards = dashboard?.summaryCards || [];
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top,#edf8f1_0%,#f8fafc_38%,#f3eee3_100%)] text-slate-900">
-      <Navbar />
+    <div className="min-h-screen bg-[#F8F9FA] text-slate-900">
+      <DashboardWorkspaceHeader
+        tickerItems={header?.tickerItems || ['Sincronizando painel...', 'Atualizando informacoes do perfil...']}
+        headline={header?.title || 'Carregando painel'}
+        subtitle={header?.subtitle || 'Buscando informacoes do dashboard.'}
+        roleLabel={dashboard?.roleLabel || roleLabels[user.type]}
+        primaryAction={hero?.primaryAction || fallbackPrimaryAction}
+        displayName={header?.userName || user.name}
+        companyLabel={header?.userCompany || user.company || roleLabels[user.type]}
+        account={account}
+        onLogout={handleLogout}
+      />
 
-      <main className="mx-auto max-w-7xl px-6 py-16">
-        <section className="grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
-          <div className="rounded-[2.5rem] border border-white/80 bg-white/90 p-8 shadow-[0_50px_140px_-75px_rgba(15,23,42,0.65)]">
-            <p className="text-xs font-black uppercase tracking-[0.3em] text-emerald-700">Painel Alytha</p>
-            <h1 className="mt-4 text-4xl font-black tracking-tight text-slate-950">Olá, {user.name}.</h1>
-            <p className="mt-4 max-w-2xl text-base leading-8 text-slate-600">
-              Seu acesso está ativo para cadastrar ofertas, revisar sua base comercial e manter a negociação mais organizada.
-            </p>
-
-            <div className="mt-8 flex flex-wrap gap-4">
-              <Link
-                to={primaryAction.href}
-                className="inline-flex items-center gap-3 rounded-full bg-emerald-600 px-6 py-4 text-sm font-black uppercase tracking-[0.22em] text-white shadow-lg shadow-emerald-600/25 hover:bg-emerald-700"
-              >
-                {primaryAction.label}
-                <ArrowRight className="h-4 w-4" />
-              </Link>
-              <Link
-                to={user.type === 'vendedor' ? '/ofertas/compra/nova' : '/ofertas/venda/nova'}
-                className="rounded-full border border-slate-300 bg-white px-6 py-4 text-sm font-black uppercase tracking-[0.22em] text-slate-900 hover:border-slate-400"
-              >
-                Abrir outro cadastro
-              </Link>
-              <Link
-                to="/perfil/trocar-senha"
-                className="inline-flex items-center gap-3 rounded-full border border-amber-200 bg-amber-50 px-6 py-4 text-sm font-black uppercase tracking-[0.22em] text-amber-900 hover:bg-amber-100"
-              >
-                <KeyRound className="h-4 w-4" />
-                Trocar senha
-              </Link>
-            </div>
+      <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-7 lg:px-8 lg:py-8">
+        {error ? (
+          <div className="mb-6 flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-4 text-sm text-red-700">
+            <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" />
+            <span>{error}</span>
           </div>
+        ) : null}
 
-          <div className="rounded-[2.5rem] bg-[linear-gradient(180deg,#111827_0%,#1f2937_100%)] p-8 text-white shadow-[0_55px_140px_-75px_rgba(15,23,42,0.85)]">
-            <p className="text-xs font-black uppercase tracking-[0.3em] text-emerald-200">Conta conectada</p>
-            <div className="mt-5 space-y-4">
-              <div className="rounded-2xl border border-white/10 bg-white/8 px-4 py-4">
-                <p className="text-xs font-black uppercase tracking-[0.2em] text-white/60">Perfil</p>
-                <p className="mt-2 text-2xl font-black">{roleLabels[user.type]}</p>
-              </div>
-              <div className="rounded-2xl border border-white/10 bg-white/8 px-4 py-4">
-                <p className="text-xs font-black uppercase tracking-[0.2em] text-white/60">E-mail</p>
-                <p className="mt-2 text-sm font-semibold text-white">{user.email}</p>
-              </div>
-              <div className="rounded-2xl border border-white/10 bg-white/8 px-4 py-4">
-                <p className="text-xs font-black uppercase tracking-[0.2em] text-white/60">Empresa</p>
-                <p className="mt-2 text-sm font-semibold text-white">{user.company || 'Não informada'}</p>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section className="mt-10 rounded-[2.5rem] border border-white/80 bg-white/90 p-8 shadow-[0_45px_120px_-80px_rgba(15,23,42,0.55)]">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div>
-              <p className="text-xs font-black uppercase tracking-[0.3em] text-slate-500">Suas ofertas</p>
-              <h2 className="mt-3 text-3xl font-black tracking-tight text-slate-950">Base recente cadastrada</h2>
-            </div>
-            <div className="rounded-full bg-slate-100 px-4 py-2 text-xs font-black uppercase tracking-[0.22em] text-slate-600">
-              {offers.length} registro(s)
-            </div>
-          </div>
-
-          {loading ? (
-            <div className="mt-8 flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-600">
-              <LoaderCircle className="h-4 w-4 animate-spin" />
-              Carregando suas ofertas...
-            </div>
-          ) : error ? (
-            <div className="mt-8 flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-4 text-sm text-red-700">
-              <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" />
-              <span>{error}</span>
-            </div>
-          ) : offers.length === 0 ? (
-            <div className="mt-8 rounded-[2rem] border border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center">
-              <PackageSearch className="mx-auto h-10 w-10 text-slate-400" />
-              <h3 className="mt-4 text-2xl font-black text-slate-900">Nenhuma oferta cadastrada ainda.</h3>
-              <p className="mt-3 text-sm leading-7 text-slate-600">
-                Use o painel para cadastrar sua primeira {user.type === 'vendedor' ? 'oferta de venda' : 'intenção de compra'}.
-              </p>
+        <section className="rounded-[1.15rem] border border-white/80 bg-white/92 px-3 py-2 shadow-[0_20px_60px_-58px_rgba(15,23,42,0.24)] sm:rounded-[1.3rem] sm:px-4 sm:py-2.5 lg:py-2">
+          {loading || !hero ? (
+            <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+              <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
+              Carregando visao principal do painel...
             </div>
           ) : (
-            <div className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-              {offers.slice(0, 6).map((offer) => (
-                <article key={offer.id} className="rounded-[1.8rem] border border-slate-200 bg-slate-50 p-5">
-                  <div className="flex items-center justify-between gap-3">
-                    <span
-                      className={`rounded-full px-3 py-1 text-xs font-black uppercase tracking-[0.2em] ${
-                        grainAccent[offer.grain as keyof typeof grainAccent] || 'bg-slate-200 text-slate-700'
-                      }`}
-                    >
-                      {offer.grain}
-                    </span>
-                    <span className="text-xs font-black uppercase tracking-[0.18em] text-slate-500">{offer.type}</span>
-                  </div>
-                  <h3 className="mt-4 text-2xl font-black text-slate-950">
-                    {Number(offer.quantity).toLocaleString('pt-BR')} {offer.unit}
-                  </h3>
-                  <p className="mt-2 inline-flex items-center gap-2 text-sm text-slate-600">
-                    <Wheat className="h-4 w-4 text-emerald-700" />
-                    {offer.location}
-                  </p>
-                  <p className="mt-4 text-sm font-semibold text-slate-700">Safra {offer.crop}</p>
-                  <p className="mt-2 text-3xl font-black text-emerald-700">
-                    R$ {Number(offer.price).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </p>
-                  <p className="mt-3 text-xs font-bold uppercase tracking-[0.18em] text-slate-500">
-                    Status: {offer.status}
-                  </p>
-                </article>
-              ))}
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                <p className="text-[8px] font-black uppercase tracking-[0.2em] text-emerald-700">{hero.eyebrow}</p>
+                <span className="hidden h-1 w-1 rounded-full bg-slate-300 sm:block" />
+                <h2 className="text-sm font-black tracking-tight text-slate-950 sm:text-[0.98rem]">{hero.title}</h2>
+              </div>
+
+              <div className="mt-1 flex flex-wrap gap-1">
+                {hero.badges.map((badge) => (
+                  <span
+                    key={badge.id}
+                    className={`rounded-full px-2.5 py-0.5 text-[9px] font-black uppercase tracking-[0.14em] ${toneClasses[badge.tone]}`}
+                  >
+                    {formatNumber(badge.value)} {badge.label}
+                  </span>
+                ))}
+              </div>
             </div>
+          )}
+        </section>
+
+        <section className="mt-2 grid gap-1 sm:grid-cols-2 xl:grid-cols-4">
+          {loading && summaryCards.length === 0 ? (
+            <div className="col-span-full flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">
+              <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
+              Carregando indicadores do painel...
+            </div>
+          ) : (
+            summaryCards.map((item) => {
+              const Icon = getSummaryIcon(item.id);
+              return (
+                <article
+                  key={item.id}
+                  className="rounded-[0.95rem] border border-white/80 bg-white/92 px-3 py-1.5 shadow-[0_16px_42px_-54px_rgba(15,23,42,0.2)]"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <div className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md ${toneClasses[item.tone]}`}>
+                        <Icon className="h-3 w-3" />
+                      </div>
+                      <p className="truncate text-[9px] font-black uppercase tracking-[0.12em] text-slate-500">{item.label}</p>
+                    </div>
+                    <p className="text-sm font-black leading-none text-slate-950">{formatNumber(item.value)}</p>
+                  </div>
+                </article>
+              );
+            })
+          )}
+        </section>
+
+        <section className="mt-5 rounded-[2rem] border border-white/80 bg-white/92 p-5 shadow-[0_45px_120px_-80px_rgba(15,23,42,0.55)] sm:rounded-[2.4rem] sm:p-6 lg:mt-4">
+          {loading || !ownOffersSection ? (
+            <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-600">
+              <LoaderCircle className="h-4 w-4 animate-spin" />
+              Carregando as ofertas do seu perfil...
+            </div>
+          ) : (
+            <>
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="text-[11px] font-black uppercase tracking-[0.3em] text-slate-500">{ownOffersSection.eyebrow}</p>
+                  <h2 className="mt-2 text-2xl font-black tracking-tight text-slate-950 sm:text-3xl">{ownOffersSection.title}</h2>
+                  <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">{ownOffersSection.description}</p>
+                </div>
+
+                <div className="flex flex-wrap gap-1.5">
+                  {ownOffersSection.badges.map((badge) => (
+                    <StatBadge key={badge.id} badge={badge} />
+                  ))}
+                </div>
+              </div>
+
+              {ownOffersSection.items.length === 0 ? (
+                <div className="mt-8 rounded-[2rem] border border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center">
+                  <PackageSearch className="mx-auto h-10 w-10 text-slate-400" />
+                  <h3 className="mt-4 text-2xl font-black text-slate-900">{ownOffersSection.emptyTitle}</h3>
+                  <p className="mt-3 text-sm leading-7 text-slate-600">{ownOffersSection.emptyDescription}</p>
+                  <Link
+                    to={hero?.primaryAction.href || fallbackPrimaryAction.href}
+                    className="mt-6 inline-flex items-center gap-3 rounded-full bg-emerald-600 px-6 py-4 text-sm font-black uppercase tracking-[0.22em] text-white shadow-lg shadow-emerald-600/25 hover:bg-emerald-700"
+                  >
+                    {hero?.primaryAction.label || fallbackPrimaryAction.label}
+                    <ArrowRight className="h-4 w-4" />
+                  </Link>
+                </div>
+              ) : (
+                <div className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                  {ownOffersSection.items.map((offer) => (
+                    <OwnOfferCard key={offer.id} offer={offer} />
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+        </section>
+
+        <section className="mt-10 rounded-[2rem] border border-white/80 bg-white/92 p-6 shadow-[0_45px_120px_-80px_rgba(15,23,42,0.55)] sm:rounded-[2.4rem] sm:p-8">
+          {loading || !marketSection ? (
+            <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-600">
+              <LoaderCircle className="h-4 w-4 animate-spin" />
+              Carregando as ultimas oportunidades do marketplace...
+            </div>
+          ) : (
+            <>
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                  <p className="text-[11px] font-black uppercase tracking-[0.3em] text-slate-500">{marketSection.eyebrow}</p>
+                  <h2 className="mt-3 text-2xl font-black tracking-tight text-slate-950 sm:text-3xl">{marketSection.title}</h2>
+                  <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-600">{marketSection.description}</p>
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  {marketSection.badges.map((badge) => (
+                    <StatBadge key={badge.id} badge={badge} />
+                  ))}
+                </div>
+              </div>
+
+              {marketSection.items.length === 0 ? (
+                <div className="mt-8 rounded-[2rem] border border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center">
+                  <PackageSearch className="mx-auto h-10 w-10 text-slate-400" />
+                  <h3 className="mt-4 text-2xl font-black text-slate-900">{marketSection.emptyTitle}</h3>
+                  <p className="mt-3 text-sm leading-7 text-slate-600">{marketSection.emptyDescription}</p>
+                </div>
+              ) : (
+                <div className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                  {marketSection.items.map((offer) => (
+                    <MarketOfferCard key={offer.id} offer={offer} />
+                  ))}
+                </div>
+              )}
+            </>
           )}
         </section>
       </main>

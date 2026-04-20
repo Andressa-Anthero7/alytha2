@@ -24,6 +24,7 @@ body {
     linear-gradient(180deg, #fbfcf8 0%, #f8fafc 40%, #eef4ef 100%);
   color: var(--alytha-ink);
   font-family: 'Manrope', 'Segoe UI', sans-serif;
+  overflow-x: hidden;
 }
 
 #root {
@@ -77,4 +78,23 @@ button:disabled {
 
 .animate-marquee:hover {
   animation-play-state: paused;
+}
+
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.55) transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.5);
 }

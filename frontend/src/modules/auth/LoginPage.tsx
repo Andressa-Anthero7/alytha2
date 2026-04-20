@@ -24,8 +24,8 @@ export function LoginPage({ routeBase, onSessionChange }: LoginPageProps) {
   const title = normalizedRoleSlug === 'corretor' ? 'Acesso da Mesa' : 'Acesso Alytha';
   const subtitle =
     normalizedRoleSlug === 'corretor'
-      ? 'Entre para acompanhar ofertas, negociacoes e contratos no modulo inicial.'
-      : 'Use seu login para entrar no fluxo inicial da plataforma.';
+      ? 'Entre para acompanhar ofertas, negociações e contratos da mesa da Alytha.'
+      : 'Use seu acesso para consultar oportunidades e seguir no fluxo comercial da plataforma.';
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -41,7 +41,7 @@ export function LoginPage({ routeBase, onSessionChange }: LoginPageProps) {
 
       const payload = await response.json().catch(() => null);
       if (!response.ok) {
-        setError(payload?.detail || 'Nao foi possivel entrar.');
+        setError(payload?.detail || 'Não foi possível entrar.');
         return;
       }
 
@@ -49,7 +49,7 @@ export function LoginPage({ routeBase, onSessionChange }: LoginPageProps) {
       if (mappedRole === 'BACKOFFICE') {
         clearStoredSession();
         onSessionChange();
-        setError('O backoffice ficou fora deste modulo inicial.');
+        setError('O acesso de backoffice não está disponível neste módulo.');
         return;
       }
 
@@ -68,24 +68,26 @@ export function LoginPage({ routeBase, onSessionChange }: LoginPageProps) {
 
   return (
     <div className="min-h-screen bg-[linear-gradient(180deg,#f8fafc_0%,#ffffff_100%)]">
-      <ShellHeader eyebrow="Autenticacao" title={title} subtitle={subtitle} />
+      <ShellHeader eyebrow="Autenticação" title={title} subtitle={subtitle} />
 
-      <main className="mx-auto grid max-w-6xl gap-10 px-6 py-12 lg:grid-cols-[0.95fr_1.05fr]">
-        <section className="rounded-[2rem] bg-slate-950 p-8 text-white shadow-2xl shadow-slate-900/20">
+      <main className="mx-auto grid max-w-6xl gap-6 px-4 py-8 sm:px-6 sm:py-12 lg:grid-cols-[0.95fr_1.05fr]">
+        <section className="rounded-[2rem] bg-slate-950 p-7 text-white shadow-2xl shadow-slate-900/20 sm:p-8">
           <p className="text-[10px] font-black uppercase tracking-[0.24em] text-emerald-300">
             {normalizedRoleSlug === 'corretor' ? 'Corretor' : 'Cliente'}
           </p>
-          <h2 className="mt-4 text-4xl font-black leading-tight">Um login, um modulo inicial, menos ruido operacional.</h2>
+          <h2 className="mt-4 text-3xl font-black leading-tight sm:text-4xl">
+            Um acesso profissional para seguir a operação com clareza.
+          </h2>
           <p className="mt-4 max-w-lg text-sm leading-7 text-slate-300">
-            Esta branch concentra o caminho de entrada do produto. Tudo o que acontece aqui foi mantido para apoiar o
-            modulo base: landing pages, autenticacao e mesa.
+            A Alytha centraliza os fluxos de entrada para que compradores, vendedores e corretagem acompanhem o que importa
+            sem ruído de informação.
           </p>
 
           <div className="mt-8 space-y-4">
             {[
-              'Sessao persistida com access + refresh token.',
-              'Redirecionamento direto para o portal do cliente ou para a mesa do corretor.',
-              'Fluxo pronto para receber novos modulos sem carregar telas paralelas.',
+              'Acesso direcionado para a mesa do corretor ou para o portal do cliente.',
+              'Continuidade da operação com dados e negociações organizados.',
+              'Base preparada para suportar novos módulos sem perder simplicidade.',
             ].map((item) => (
               <div key={item} className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-200">
                 {item}
@@ -94,12 +96,14 @@ export function LoginPage({ routeBase, onSessionChange }: LoginPageProps) {
           </div>
         </section>
 
-        <section className="rounded-[2rem] border border-slate-200 bg-white p-8 shadow-xl shadow-slate-200/60">
+        <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-xl shadow-slate-200/60 sm:p-8">
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
               <p className="text-[10px] font-black uppercase tracking-[0.24em] text-emerald-600">Entrar</p>
               <h3 className="mt-2 text-3xl font-black tracking-tight text-slate-950">Continue de onde parou</h3>
-              <p className="mt-2 text-sm text-slate-500">Seu acesso permanece o mesmo enquanto a Alytha cresce por modulos.</p>
+              <p className="mt-2 text-sm text-slate-500">
+                Seu acesso segue o mesmo, com uma experiência mais limpa e preparada para produção.
+              </p>
             </div>
 
             {error && (
@@ -110,7 +114,7 @@ export function LoginPage({ routeBase, onSessionChange }: LoginPageProps) {
             )}
 
             <label className="block space-y-2">
-              <span className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-500">Email</span>
+              <span className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-500">E-mail</span>
               <input
                 type="email"
                 required
@@ -177,9 +181,9 @@ export function LoginPage({ routeBase, onSessionChange }: LoginPageProps) {
                 <Headset className="h-5 w-5" />
               </div>
               <div>
-                <p className="text-sm font-black text-emerald-950">Suporte tecnico</p>
+                <p className="text-sm font-black text-emerald-950">Suporte técnico</p>
                 <p className="mt-1 text-sm text-emerald-800">
-                  Se o acesso travar no meio da operacao, fale com o time da Alytha.
+                  Se o acesso travar no meio da operação, fale com o time da Alytha.
                 </p>
               </div>
             </div>
@@ -189,7 +193,7 @@ export function LoginPage({ routeBase, onSessionChange }: LoginPageProps) {
                 href={`mailto:${supportEmail}`}
                 className="flex-1 rounded-2xl border border-emerald-200 bg-white px-4 py-3 text-center text-sm font-bold text-emerald-800 transition-colors hover:border-emerald-300 hover:bg-emerald-100/40"
               >
-                Enviar email
+                Enviar e-mail
               </a>
               {supportWhatsAppHref && (
                 <a
