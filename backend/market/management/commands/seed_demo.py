@@ -11,7 +11,7 @@ AuthUser = get_user_model()
 
 USER_SEED_DATA = [
     {"id": 1, "name": "Nix Corretora", "email": "nix@agro.com", "type": "corretor", "company": "Mesa Agro"},
-    {"id": 101, "name": "Fazenda Esperanca", "email": "venda1@agro.com", "type": "vendedor", "company": "Grupo Esperanca"},
+    {"id": 101, "name": "Fazenda Esperança", "email": "venda1@agro.com", "type": "vendedor", "company": "Grupo Esperança"},
     {"id": 102, "name": "Agro Vale", "email": "venda2@agro.com", "type": "vendedor", "company": "Agro Vale"},
     {"id": 103, "name": "Sementes do Campo", "email": "venda3@agro.com", "type": "vendedor", "company": "Sementes do Campo"},
     {"id": 201, "name": "Cargill S.A.", "email": "compra1@agro.com", "type": "comprador", "company": "Cargill"},
@@ -25,7 +25,7 @@ GRAIN_PROFILES = [
         "base_price": Decimal("135.50"),
         "base_quantity": Decimal("4500"),
         "crop": "24/25",
-        "locations": ["Sorriso - MT", "Lucas do Rio Verde - MT", "Paranagua - PR"],
+        "locations": ["Sorriso - MT", "Lucas do Rio Verde - MT", "Paranaguá - PR"],
         "quality": {"moisture": 14, "impurity": 1, "broken": 2, "damaged": 1},
     },
     {
@@ -41,7 +41,7 @@ GRAIN_PROFILES = [
         "base_price": Decimal("45.00"),
         "base_quantity": Decimal("5200"),
         "crop": "24/25",
-        "locations": ["Rio Verde - GO", "Uberlandia - MG", "Barreiras - BA"],
+        "locations": ["Rio Verde - GO", "Uberlândia - MG", "Barreiras - BA"],
         "quality": {"moisture": 14, "impurity": 1, "broken": 2, "damaged": 2},
     },
 ]
@@ -52,8 +52,8 @@ AUTO_OFFER_ID_END = 901000
 
 class Command(BaseCommand):
     help = (
-        "Popula o banco com dados de demonstracao. "
-        "Gera automaticamente N compras e N vendas para cada grao da plataforma."
+        "Popula o banco com dados de demonstração. "
+        "Gera automaticamente N compras e N vendas para cada grão da plataforma."
     )
 
     def add_arguments(self, parser):
@@ -61,12 +61,12 @@ class Command(BaseCommand):
             "--orders-per-side",
             type=int,
             default=3,
-            help="Quantidade de ofertas de compra e venda por grao (padrao: 3).",
+            help="Quantidade de ofertas de compra e venda por grão (padrão: 3).",
         )
         parser.add_argument(
             "--no-clear-generated",
             action="store_true",
-            help="Nao remove as ofertas auto-geradas previamente antes de gerar novas.",
+            help="Não remove as ofertas auto-geradas previamente antes de gerar novas.",
         )
 
     @staticmethod
@@ -88,8 +88,8 @@ class Command(BaseCommand):
             auth_user.save()
 
     def _build_offer_payloads(self, orders_per_side: int):
-        payment_sell = ["A vista", "15 dias", "30 dias"]
-        payment_buy = ["A vista", "14 dias", "30 dias"]
+        payment_sell = ["À vista", "15 dias", "30 dias"]
+        payment_buy = ["À vista", "14 dias", "30 dias"]
         seller_ids = [101, 102, 103]
         buyer_ids = [201, 202, 203]
         offers = []
@@ -164,7 +164,7 @@ class Command(BaseCommand):
         total_offers = grains_count * orders_per_side * 2
         self.stdout.write(
             self.style.SUCCESS(
-                f"Dados de demonstracao carregados: {orders_per_side} compras + {orders_per_side} vendas "
-                f"para cada um dos {grains_count} graos ({total_offers} ofertas)."
+                f"Dados de demonstração carregados: {orders_per_side} compras + {orders_per_side} vendas "
+                f"para cada um dos {grains_count} grãos ({total_offers} ofertas)."
             )
         )
