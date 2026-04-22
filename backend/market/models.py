@@ -1,6 +1,7 @@
 import uuid
 
 from django.db import models
+from django.utils import timezone
 
 
 class User(models.Model):
@@ -16,6 +17,20 @@ class User(models.Model):
     type = models.CharField(max_length=20, choices=USER_TYPES)
     phone = models.CharField(max_length=20, blank=True)
     company = models.CharField(max_length=150, blank=True)
+    legal_name = models.CharField(max_length=160, blank=True)
+    profile_segment = models.CharField(max_length=40, blank=True)
+    document_type = models.CharField(max_length=10, blank=True)
+    document_number = models.CharField(max_length=30, blank=True)
+    state_registration = models.CharField(max_length=30, blank=True)
+    address_zip_code = models.CharField(max_length=12, blank=True)
+    address_street = models.CharField(max_length=160, blank=True)
+    address_number = models.CharField(max_length=20, blank=True)
+    address_complement = models.CharField(max_length=120, blank=True)
+    address_district = models.CharField(max_length=120, blank=True)
+    address_city = models.CharField(max_length=120, blank=True)
+    address_state = models.CharField(max_length=2, blank=True)
+    address_country = models.CharField(max_length=60, blank=True, default='Brasil')
+    document_notes = models.TextField(blank=True)
     broker_link_token = models.UUIDField(unique=True, editable=False, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -26,6 +41,21 @@ class User(models.Model):
         if not self.broker_link_token:
             self.broker_link_token = uuid.uuid4()
         super().save(*args, **kwargs)
+
+
+class PasswordResetToken(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='password_reset_tokens')
+    token = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    expires_at = models.DateTimeField()
+    used_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f'Reset token for {self.user.email}'
+
+    @property
+    def is_active(self):
+        return self.used_at is None and self.expires_at > timezone.now()
 
 
 class Offer(models.Model):

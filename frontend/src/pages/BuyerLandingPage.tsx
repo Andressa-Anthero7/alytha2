@@ -1,7 +1,9 @@
 import { ArrowRight, CheckCircle2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import Navbar from '../components/Navbar';
-import { isAuthenticated } from '../lib/auth';
+import { getCurrentUser, isAuthenticated } from '../lib/auth';
+import { getPrimaryAppPath } from '../shared/appRoutes';
+import type { User } from '../types';
 
 const buyerSteps = [
   'Informe produto, volume e local.',
@@ -10,8 +12,9 @@ const buyerSteps = [
 ] as const;
 
 export default function BuyerLandingPage() {
+  const currentUser = getCurrentUser<User>();
   const primaryHref = isAuthenticated() ? '/ofertas/compra/nova' : '/login';
-  const secondaryHref = isAuthenticated() ? '/dashboard' : '/';
+  const secondaryHref = isAuthenticated() ? getPrimaryAppPath(currentUser) : '/';
 
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top,#fff0db_0%,#ffffff_40%,#f8fafc_100%)] text-slate-900">
@@ -20,8 +23,8 @@ export default function BuyerLandingPage() {
       <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8 lg:py-10">
         <section className="mb-6 flex flex-col gap-3 rounded-[1.8rem] border border-white/80 bg-white/90 p-4 shadow-[0_35px_100px_-75px_rgba(15,23,42,0.55)] sm:mb-8 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:p-5">
           <div>
-            <p className="text-[10px] font-black uppercase tracking-[0.22em] text-amber-700">Acesso rapido</p>
-            <p className="mt-1.5 text-[13px] font-semibold text-slate-600 sm:text-sm">Cadastre sua demanda no inicio da jornada.</p>
+            <p className="text-[10px] font-black uppercase tracking-[0.22em] text-amber-700">Acesso rápido</p>
+            <p className="mt-1.5 text-[13px] font-semibold text-slate-600 sm:text-sm">Cadastre sua demanda no início da jornada.</p>
           </div>
 
           <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
@@ -43,11 +46,11 @@ export default function BuyerLandingPage() {
 
         <section className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
           <div className="max-w-3xl">
-            <p className="text-[10px] font-black uppercase tracking-[0.24em] text-amber-700">Comprar graos</p>
+            <p className="text-[10px] font-black uppercase tracking-[0.24em] text-amber-700">Comprar grãos</p>
             <h1 className="mt-4 text-3xl font-black leading-[1.05] tracking-tight sm:text-4xl lg:text-5xl">
               Encontre oportunidades de soja, milho e sorgo com mais rapidez.
             </h1>
-            <p className="mt-4 max-w-2xl text-[14px] leading-7 text-slate-600 sm:text-base sm:leading-8">
+            <p className="mt-4 max-w-2xl text-[15px] leading-7 text-slate-600 sm:text-[17px] sm:leading-8">
               Consulte o marketplace, publique sua demanda e acompanhe oportunidades com apoio comercial da Alytha.
             </p>
           </div>

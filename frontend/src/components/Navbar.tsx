@@ -1,14 +1,18 @@
 import { ArrowRight, LayoutDashboard, LogOut, Menu, ShieldCheck, X } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { clearAuth, getCurrentUser, isAuthenticated } from '../lib/auth';
+import { getPrimaryAppPath } from '../shared/appRoutes';
 import { BrandLogo } from '../shared/BrandLogo';
+import type { User } from '../types';
+
+export const OPEN_MOBILE_NAV_EVENT = 'alytha:open-mobile-menu';
 
 const navItems = [
-  { label: 'Inicio', to: '/' },
+  { label: 'Início', to: '/' },
   { label: 'Quem Somos', to: '/quemsomos' },
-  { label: 'Vender graos', to: '/vendedorgraos' },
-  { label: 'Comprar graos', to: '/compradorgraos' },
+  { label: 'Vender grãos', to: '/vendedorgraos' },
+  { label: 'Comprar grãos', to: '/compradorgraos' },
   { label: 'Corretores', to: '/corretores' },
 ];
 
@@ -22,8 +26,9 @@ const roleLabels = {
 export default function Navbar() {
   const navigate = useNavigate();
   const location = useLocation();
-  const user = getCurrentUser();
+  const user = getCurrentUser<User>();
   const loggedIn = isAuthenticated() && Boolean(user);
+  const dashboardHref = getPrimaryAppPath(user);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const handleLogout = () => {
@@ -32,6 +37,18 @@ export default function Navbar() {
   };
 
   const closeMobileMenu = () => setMobileMenuOpen(false);
+
+  useEffect(() => {
+    const handleOpenMobileMenu = () => {
+      setMobileMenuOpen(true);
+    };
+
+    window.addEventListener(OPEN_MOBILE_NAV_EVENT, handleOpenMobileMenu);
+
+    return () => {
+      window.removeEventListener(OPEN_MOBILE_NAV_EVENT, handleOpenMobileMenu);
+    };
+  }, []);
 
   const renderLink = (label: string, to: string) => {
     const active = location.pathname === to;
@@ -62,9 +79,9 @@ export default function Navbar() {
           {loggedIn ? (
             <>
               <Link
-                to="/dashboard"
+                to={dashboardHref}
                 className={`inline-flex items-center gap-2 rounded-full px-4 py-2.5 ${
-                  location.pathname === '/dashboard'
+                  location.pathname === dashboardHref
                     ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/20'
                     : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
                 }`}
@@ -114,10 +131,10 @@ export default function Navbar() {
             {loggedIn ? (
               <>
                 <Link
-                  to="/dashboard"
+                  to={dashboardHref}
                   onClick={closeMobileMenu}
                   className={`inline-flex items-center justify-center gap-2 rounded-full px-4 py-3 text-sm font-semibold ${
-                    location.pathname === '/dashboard'
+                    location.pathname === dashboardHref
                       ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/20'
                       : 'bg-emerald-50 text-emerald-700'
                   }`}

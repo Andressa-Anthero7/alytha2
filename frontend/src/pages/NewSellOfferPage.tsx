@@ -9,7 +9,7 @@ export default function NewSellOfferPage() {
         <OfferForm
           offerType="venda"
           title="Cadastrar oferta de venda"
-          subtitle="Estruture sua oferta com produto, volume, praca, safra, base de preco, modalidade FOB/CIF e condicoes comerciais para dar mais velocidade a mesa e ao mercado."
+          subtitle="Estruture sua oferta com produto, volume, praça, safra, base de preço, modalidade FOB/CIF e condições comerciais para dar mais velocidade à mesa e ao mercado."
         />
       </main>
     </div>

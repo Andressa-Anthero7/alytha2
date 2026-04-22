@@ -41,14 +41,14 @@ export function LandingBuyerPage({ routeBase }: LandingBuyerPageProps) {
         <section>
           <div className="inline-flex items-center gap-2 rounded-full border border-orange-400/30 bg-orange-500/10 px-4 py-2 text-[10px] font-black uppercase tracking-[0.24em] text-orange-300">
             <span className="h-2 w-2 rounded-full bg-orange-400" />
-            Modulo publico do comprador
+            Módulo público do comprador
           </div>
           <h1 className="mt-6 max-w-3xl text-5xl font-black leading-[0.92] tracking-tight lg:text-7xl">
-            Origine mais rapido com um funil que ja desemboca na mesa.
+            Origine mais rápido com um funil que já desemboca na mesa.
           </h1>
           <p className="mt-6 max-w-2xl text-lg leading-8 text-slate-300">
-            Esta branch agora concentra o modulo inicial da Alytha: landing pages, autenticacao e trading desk. O
-            comprador entra por um fluxo publico mais direto e chega no time certo sem carregar modulos paralelos.
+            Esta branch agora concentra o módulo inicial da Alytha: landing pages, autenticação e trading desk. O
+            comprador entra por um fluxo público mais direto e chega ao time certo sem carregar módulos paralelos.
           </p>
 
           <div className="mt-8 flex flex-col gap-4 sm:flex-row">
@@ -72,17 +72,17 @@ export function LandingBuyerPage({ routeBase }: LandingBuyerPageProps) {
               {
                 icon: LayoutGrid,
                 title: 'Pipeline limpo',
-                description: 'O comprador entra por uma rota unica, sem ruido de transporte ou backoffice.',
+                description: 'O comprador entra por uma rota única, sem ruído de transporte ou backoffice.',
               },
               {
                 icon: FileText,
-                title: 'Base para modulos',
-                description: 'Auth e navegacao ja ficam prontos para receber as proximas frentes do app.',
+                title: 'Base para módulos',
+                description: 'Auth e navegação já ficam prontos para receber as próximas frentes do app.',
               },
               {
                 icon: ArrowLeftRight,
                 title: 'Mesa central',
-                description: 'O trading desk passa a ser o nucleo operacional desta branch enxuta.',
+                description: 'O trading desk passa a ser o núcleo operacional desta branch enxuta.',
               },
             ].map((item) => (
               <div key={item.title} className="rounded-[1.75rem] border border-white/10 bg-white/5 p-6 backdrop-blur">
@@ -101,7 +101,7 @@ export function LandingBuyerPage({ routeBase }: LandingBuyerPageProps) {
           <div className="relative overflow-hidden rounded-[2.5rem] border border-white/10 bg-slate-900/80 shadow-2xl shadow-black/40">
             <img
               src="https://images.unsplash.com/photo-1586771107445-d3afcb0de51f?q=80&w=1200&auto=format&fit=crop"
-              alt="Armazem de graos"
+              alt="Armazém de grãos"
               className="h-[520px] w-full object-cover opacity-85"
               referrerPolicy="no-referrer"
             />
@@ -111,8 +111,8 @@ export function LandingBuyerPage({ routeBase }: LandingBuyerPageProps) {
                   <Truck className="h-7 w-7" />
                 </div>
                 <div>
-                  <p className="text-[10px] font-black uppercase tracking-[0.24em] text-orange-300">Modulo inicial</p>
-                  <p className="mt-1 text-xl font-black">Fluxo publico enxuto para crescer por modulos.</p>
+                  <p className="text-[10px] font-black uppercase tracking-[0.24em] text-orange-300">Módulo inicial</p>
+                  <p className="mt-1 text-xl font-black">Fluxo público enxuto para crescer por módulos.</p>
                 </div>
               </div>
             </div>

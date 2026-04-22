@@ -4,6 +4,7 @@ import { Link, Navigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import { apiFetch } from '../lib/api';
 import { getCurrentUser, setCurrentUser } from '../lib/auth';
+import { getPrimaryAppPath } from '../shared/appRoutes';
 import type { User } from '../types';
 
 type ProfileFormState = {
@@ -21,6 +22,7 @@ const roleLabels = {
 
 export default function ProfilePage() {
   const currentUser = getCurrentUser<User>();
+  const dashboardHref = getPrimaryAppPath(currentUser);
   const [profile, setProfile] = useState<User | null>(currentUser);
   const [form, setForm] = useState<ProfileFormState>({
     name: currentUser?.name || '',
@@ -111,7 +113,7 @@ export default function ProfilePage() {
       <main className="mx-auto max-w-6xl px-4 py-10 sm:px-6 sm:py-14 lg:px-8 lg:py-16">
         <div className="mb-6">
           <Link
-            to="/dashboard"
+            to={dashboardHref}
             className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50"
           >
             <ArrowLeft className="h-4 w-4" />

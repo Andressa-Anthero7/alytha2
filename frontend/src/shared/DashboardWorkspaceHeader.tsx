@@ -101,7 +101,7 @@ export function DashboardWorkspaceHeader({
               {showUserMenu && (
                 <>
                   <div className="fixed inset-0 z-40" onClick={() => setShowUserMenu(false)} />
-                  <div className="absolute right-0 z-50 mt-2 w-full origin-top-right overflow-hidden rounded-[1.6rem] border border-slate-200 bg-white shadow-2xl sm:w-[21rem]">
+                  <div className="absolute right-0 z-50 mt-2 flex max-h-[min(calc(100vh-7rem),34rem)] w-full origin-top-right flex-col overflow-hidden rounded-[1.6rem] border border-slate-200 bg-white shadow-2xl sm:w-[21rem]">
                     <div className="border-b border-slate-100 px-4 py-4">
                       <p className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500">
                         {account?.eyebrow || 'Conta conectada'}
@@ -110,69 +110,74 @@ export function DashboardWorkspaceHeader({
                       <p className="mt-1 text-[10px] font-black uppercase tracking-[0.18em] text-emerald-600">{companyLabel}</p>
                     </div>
 
-                    {account ? (
-                      <div className="space-y-1.5 border-b border-slate-100 bg-slate-50/70 px-4 py-2.5 lg:space-y-1 lg:py-2">
-                        <div className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 lg:py-1">
-                          <p className="text-[8px] font-black uppercase tracking-[0.16em] text-slate-500">{account.profileLabel}</p>
-                          <p className="mt-0.5 text-[11px] font-black leading-tight text-slate-950">{account.profileValue}</p>
-                        </div>
+                    <div className="custom-scrollbar min-h-0 flex-1 overflow-y-auto">
+                      {account ? (
+                        <div className="space-y-1.5 border-b border-slate-100 bg-slate-50/70 px-4 py-2.5 lg:space-y-1 lg:py-2">
+                          <div className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 lg:py-1">
+                            <p className="text-[8px] font-black uppercase tracking-[0.16em] text-slate-500">{account.profileLabel}</p>
+                            <p className="mt-0.5 text-[11px] font-black leading-tight text-slate-950">{account.profileValue}</p>
+                          </div>
 
-                        <div className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 lg:py-1">
-                          <p className="text-[8px] font-black uppercase tracking-[0.16em] text-slate-500">{account.companyLabel}</p>
-                          <p className="mt-0.5 text-[10px] font-bold leading-tight text-slate-900">{account.companyValue}</p>
-                        </div>
+                          <div className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 lg:py-1">
+                            <p className="text-[8px] font-black uppercase tracking-[0.16em] text-slate-500">{account.companyLabel}</p>
+                            <p className="mt-0.5 text-[10px] font-bold leading-tight text-slate-900">{account.companyValue}</p>
+                          </div>
 
-                        <div className="rounded-2xl border border-slate-200 bg-white px-3 py-2 lg:py-1.5">
-                          <p className="text-[9px] font-black uppercase tracking-[0.16em] text-emerald-700">{account.focusTitle}</p>
-                          <p className="mt-1 text-[11px] leading-4 text-slate-600">{account.focusDescription}</p>
+                          <div className="rounded-2xl border border-slate-200 bg-white px-3 py-2 lg:py-1.5">
+                            <p className="text-[9px] font-black uppercase tracking-[0.16em] text-emerald-700">{account.focusTitle}</p>
+                            <p className="mt-1 text-[11px] leading-4 text-slate-600">{account.focusDescription}</p>
 
-                          <div className="mt-2 grid gap-1 sm:grid-cols-3 lg:mt-1.5">
-                            {account.marketIndicators.map((indicator) => (
-                              <div key={indicator.id} className="rounded-xl border border-slate-200 bg-slate-50 px-2.5 py-1.5 lg:py-1">
-                                <p className="text-[8px] font-black uppercase tracking-[0.14em] text-slate-500">{indicator.label}</p>
-                                <p className="mt-0.5 text-sm font-black text-slate-950">{indicator.value}</p>
-                              </div>
-                            ))}
+                            <div className="mt-2 grid gap-1 sm:grid-cols-3 lg:mt-1.5">
+                              {account.marketIndicators.map((indicator) => (
+                                <div key={indicator.id} className="rounded-xl border border-slate-200 bg-slate-50 px-2.5 py-1.5 lg:py-1">
+                                  <p className="text-[8px] font-black uppercase tracking-[0.14em] text-slate-500">{indicator.label}</p>
+                                  <p className="mt-0.5 text-sm font-black text-slate-950">{indicator.value}</p>
+                                </div>
+                              ))}
+                            </div>
                           </div>
                         </div>
+                      ) : null}
+
+                      <div className="space-y-1 px-2 py-2">
+                        <Link
+                          to="/perfil"
+                          onClick={() => setShowUserMenu(false)}
+                          className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-sm font-bold text-slate-700 transition-colors hover:bg-slate-50"
+                        >
+                          <UserRound className="h-4 w-4 text-slate-500" />
+                          Meu perfil
+                        </Link>
+
+                        <Link
+                          to="/perfil/trocar-senha"
+                          onClick={() => setShowUserMenu(false)}
+                          className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-sm font-bold text-slate-700 transition-colors hover:bg-slate-50"
+                        >
+                          <KeyRound className="h-4 w-4 text-slate-500" />
+                          Trocar senha
+                        </Link>
+
+                        <a
+                          href={supportHref}
+                          target={supportTarget}
+                          rel={supportRel}
+                          onClick={() => setShowUserMenu(false)}
+                          className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-sm font-bold text-slate-700 transition-colors hover:bg-slate-50"
+                        >
+                          <Headset className="h-4 w-4 text-slate-500" />
+                          Falar com suporte
+                        </a>
                       </div>
-                    ) : null}
-
-                    <div className="space-y-1 px-2 py-2">
-                      <Link
-                        to="/perfil"
-                        onClick={() => setShowUserMenu(false)}
-                        className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-sm font-bold text-slate-700 transition-colors hover:bg-slate-50"
-                      >
-                        <UserRound className="h-4 w-4 text-slate-500" />
-                        Meu perfil
-                      </Link>
-
-                      <Link
-                        to="/perfil/trocar-senha"
-                        onClick={() => setShowUserMenu(false)}
-                        className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-sm font-bold text-slate-700 transition-colors hover:bg-slate-50"
-                      >
-                        <KeyRound className="h-4 w-4 text-slate-500" />
-                        Trocar senha
-                      </Link>
-
-                      <a
-                        href={supportHref}
-                        target={supportTarget}
-                        rel={supportRel}
-                        onClick={() => setShowUserMenu(false)}
-                        className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-sm font-bold text-slate-700 transition-colors hover:bg-slate-50"
-                      >
-                        <Headset className="h-4 w-4 text-slate-500" />
-                        Falar com suporte
-                      </a>
                     </div>
 
-                    <div className="border-t border-slate-100 px-2 py-2">
+                    <div className="border-t border-slate-100 bg-white px-2 py-2">
                       <button
                         type="button"
-                        onClick={onLogout}
+                        onClick={() => {
+                          setShowUserMenu(false);
+                          onLogout();
+                        }}
                         className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-sm font-bold text-red-600 transition-colors hover:bg-red-50"
                       >
                         <LogOut className="h-4 w-4" />

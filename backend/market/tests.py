@@ -1,11 +1,11 @@
-from decimal import Decimal
+﻿from decimal import Decimal
 
 from django.core.management import call_command
 from rest_framework.test import APITestCase
 from django.urls import reverse
 from django.contrib.auth import get_user_model
 
-from .models import User, Offer, Negotiation
+from .models import Negotiation, Offer, PasswordResetToken, User
 
 
 class AuthFlowTests(APITestCase):
@@ -73,11 +73,13 @@ class AuthFlowTests(APITestCase):
         sell_offer = self.client.post('/api/offers', {
             'userId': seller.id, 'type': 'venda', 'grain': 'Soja', 'quantity': 1000, 'unit': 'Sacas',
             'price': 120, 'location': 'MT', 'crop': '24/25', 'shipping': 'FOB',
+            'negotiationChannel': 'direta',
             'quality': {}, 'paymentTerms': 'À vista'
         }, format='json').data
         buy_offer = self.client.post('/api/offers', {
             'userId': buyer.id, 'type': 'compra', 'grain': 'Soja', 'quantity': 800, 'unit': 'Sacas',
             'price': 125, 'location': 'MT', 'crop': '24/25', 'shipping': 'FOB',
+            'negotiationChannel': 'direta',
             'quality': {}, 'paymentTerms': '30 dias'
         }, format='json').data
         # match
@@ -115,11 +117,13 @@ class AuthFlowTests(APITestCase):
         sell_offer = self.client.post('/api/offers', {
             'userId': seller.id, 'type': 'venda', 'grain': 'Soja', 'quantity': 1000, 'unit': 'Sacas',
             'price': 120, 'location': 'MT', 'crop': '24/25', 'shipping': 'FOB',
-            'quality': {}, 'paymentTerms': 'A vista'
+            'negotiationChannel': 'direta',
+            'quality': {}, 'paymentTerms': 'À vista'
         }, format='json').data
         buy_offer = self.client.post('/api/offers', {
             'userId': buyer.id, 'type': 'compra', 'grain': 'Soja', 'quantity': 800, 'unit': 'Sacas',
             'price': 125, 'location': 'MT', 'crop': '24/25', 'shipping': 'FOB',
+            'negotiationChannel': 'direta',
             'quality': {}, 'paymentTerms': '30 dias'
         }, format='json').data
 
@@ -196,11 +200,13 @@ class AuthFlowTests(APITestCase):
         sell_offer = self.client.post('/api/offers', {
             'userId': seller.id, 'type': 'venda', 'grain': 'Milho', 'quantity': 900, 'unit': 'Sacas',
             'price': 80, 'location': 'GO', 'crop': '24/25', 'shipping': 'FOB',
-            'quality': {}, 'paymentTerms': 'A vista'
+            'negotiationChannel': 'direta',
+            'quality': {}, 'paymentTerms': 'À vista'
         }, format='json').data
         buy_offer = self.client.post('/api/offers', {
             'userId': buyer.id, 'type': 'compra', 'grain': 'Milho', 'quantity': 750, 'unit': 'Sacas',
             'price': 82, 'location': 'GO', 'crop': '24/25', 'shipping': 'FOB',
+            'negotiationChannel': 'direta',
             'quality': {}, 'paymentTerms': '14 dias'
         }, format='json').data
 
@@ -248,11 +254,13 @@ class AuthFlowTests(APITestCase):
         sell_offer = self.client.post('/api/offers', {
             'userId': seller.id, 'type': 'venda', 'grain': 'Milho', 'quantity': 900, 'unit': 'Sacas',
             'price': 80, 'location': 'GO', 'crop': '24/25', 'shipping': 'FOB',
-            'quality': {}, 'paymentTerms': 'A vista'
+            'negotiationChannel': 'direta',
+            'quality': {}, 'paymentTerms': 'À vista'
         }, format='json').data
         buy_offer = self.client.post('/api/offers', {
             'userId': buyer.id, 'type': 'compra', 'grain': 'Milho', 'quantity': 750, 'unit': 'Sacas',
             'price': 82, 'location': 'GO', 'crop': '24/25', 'shipping': 'FOB',
+            'negotiationChannel': 'direta',
             'quality': {}, 'paymentTerms': '14 dias'
         }, format='json').data
 
@@ -264,7 +272,7 @@ class AuthFlowTests(APITestCase):
         }, format='json')
 
         self.assertEqual(res.status_code, 400)
-        self.assertEqual(res.data['detail'], 'Selecione uma comissao do match entre R$ 1,00 e R$ 5,00 em passos de R$ 0,50.')
+        self.assertEqual(res.data['detail'], 'Selecione uma comissão do match entre R$ 1,00 e R$ 5,00 em passos de R$ 0,50.')
 
     def test_match_uses_registration_commission_from_mesa_offer(self):
         self.client.post(reverse('register', args=['vendedor']), {
@@ -294,7 +302,7 @@ class AuthFlowTests(APITestCase):
             'userId': seller.id, 'type': 'venda', 'grain': 'Milho', 'quantity': 900, 'unit': 'Sacas',
             'price': 80, 'location': 'GO', 'crop': '24/25', 'shipping': 'FOB',
             'negotiationChannel': 'mesa', 'mesaCommission': 1.5,
-            'quality': {}, 'paymentTerms': 'A vista'
+            'quality': {}, 'paymentTerms': 'À vista'
         }, format='json').data
         buy_offer = self.client.post('/api/offers', {
             'userId': buyer.id, 'type': 'compra', 'grain': 'Milho', 'quantity': 750, 'unit': 'Sacas',
@@ -415,11 +423,13 @@ class AuthFlowTests(APITestCase):
         sell_offer = self.client.post('/api/offers', {
             'userId': seller.id, 'type': 'venda', 'grain': 'Sorgo', 'quantity': 600, 'unit': 'Sacas',
             'price': 70, 'location': 'MS', 'crop': '24/25', 'shipping': 'FOB',
-            'quality': {}, 'paymentTerms': 'A vista'
+            'negotiationChannel': 'direta',
+            'quality': {}, 'paymentTerms': 'À vista'
         }, format='json').data
         buy_offer = self.client.post('/api/offers', {
             'userId': buyer.id, 'type': 'compra', 'grain': 'Sorgo', 'quantity': 500, 'unit': 'Sacas',
             'price': 73, 'location': 'MS', 'crop': '24/25', 'shipping': 'FOB',
+            'negotiationChannel': 'direta',
             'quality': {}, 'paymentTerms': '7 dias'
         }, format='json').data
 
@@ -469,11 +479,13 @@ class AuthFlowTests(APITestCase):
         sell_offer = self.client.post('/api/offers', {
             'userId': seller.id, 'type': 'venda', 'grain': 'Sorgo', 'quantity': 720, 'unit': 'Sacas',
             'price': 45.00, 'location': 'Barreiras - BA', 'crop': '24/25', 'shipping': 'FOB',
-            'quality': {}, 'paymentTerms': 'A vista'
+            'negotiationChannel': 'direta',
+            'quality': {}, 'paymentTerms': 'À vista'
         }, format='json').data
         buy_offer = self.client.post('/api/offers', {
             'userId': buyer.id, 'type': 'compra', 'grain': 'Sorgo', 'quantity': 680, 'unit': 'Sacas',
             'price': 47.50, 'location': 'Rio Verde - GO', 'crop': '24/25', 'shipping': 'FOB',
+            'negotiationChannel': 'direta',
             'quality': {}, 'paymentTerms': '7 dias'
         }, format='json').data
 
@@ -520,11 +532,13 @@ class AuthFlowTests(APITestCase):
         sell_offer = self.client.post('/api/offers', {
             'userId': seller.id, 'type': 'venda', 'grain': 'Milho', 'quantity': 900, 'unit': 'Sacas',
             'price': 82.00, 'location': 'Jataí - GO', 'crop': '24/25', 'shipping': 'FOB',
-            'quality': {}, 'paymentTerms': 'A vista'
+            'negotiationChannel': 'direta',
+            'quality': {}, 'paymentTerms': 'À vista'
         }, format='json').data
         buy_offer = self.client.post('/api/offers', {
             'userId': buyer.id, 'type': 'compra', 'grain': 'Milho', 'quantity': 750, 'unit': 'Sacas',
             'price': 81.80, 'location': 'Jataí - GO', 'crop': '24/25', 'shipping': 'FOB',
+            'negotiationChannel': 'direta',
             'quality': {}, 'paymentTerms': '14 dias'
         }, format='json').data
 
@@ -535,7 +549,7 @@ class AuthFlowTests(APITestCase):
         }, format='json')
 
         self.assertEqual(res.status_code, 400)
-        self.assertEqual(res.data['detail'], 'Spread deve ser positivo para ser usado como comissao')
+        self.assertEqual(res.data['detail'], 'Spread deve ser positivo para ser usado como comissão')
         self.assertFalse(Negotiation.objects.exists())
 
     def test_broker_cannot_match_different_grains(self):
@@ -565,7 +579,7 @@ class AuthFlowTests(APITestCase):
         sell_offer = self.client.post('/api/offers', {
             'userId': seller.id, 'type': 'venda', 'grain': 'Milho', 'quantity': 1000, 'unit': 'Sacas',
             'price': 120, 'location': 'MT', 'crop': '24/25', 'shipping': 'FOB',
-            'quality': {}, 'paymentTerms': 'A vista'
+            'quality': {}, 'paymentTerms': 'À vista'
         }, format='json').data
         buy_offer = self.client.post('/api/offers', {
             'userId': buyer.id, 'type': 'compra', 'grain': 'Soja', 'quantity': 800, 'unit': 'Sacas',
@@ -579,7 +593,7 @@ class AuthFlowTests(APITestCase):
         }, format='json')
 
         self.assertEqual(res.status_code, 400)
-        self.assertEqual(res.data['detail'], 'So e possivel casar ofertas do mesmo grao')
+        self.assertEqual(res.data['detail'], 'Só é possível casar ofertas do mesmo grão')
         self.assertFalse(Negotiation.objects.exists())
 
     def test_authenticated_user_can_create_offer_without_user_id(self):
@@ -604,8 +618,8 @@ class AuthFlowTests(APITestCase):
             'location': 'Rio Verde - GO',
             'crop': '24/25',
             'shipping': 'FOB',
-            'quality': {'notes': 'Padrao exportacao'},
-            'paymentTerms': 'A vista'
+            'quality': {'notes': 'Padrão exportação'},
+            'paymentTerms': 'À vista'
         }, format='json')
 
         self.assertEqual(res.status_code, 201)
@@ -635,8 +649,14 @@ class AuthFlowTests(APITestCase):
             'crop': '24/25',
             'shipping': 'FOB',
             'quality': {
+                'moisture': 14,
+                'impurity': 1,
+                'damaged': 3,
+                'ardidos': 2,
+                'ph': 78,
+                'standard': 'Exportação',
                 'deliveryWindow': 'abril a maio',
-                'notes': 'Umidade até 14%',
+                'notes': 'Lote com prêmio para exportação',
                 'observations': 'Carga disponível para retirada imediata',
             },
             'paymentTerms': 'Pagamento em 7 dias',
@@ -651,8 +671,14 @@ class AuthFlowTests(APITestCase):
         self.assertEqual(offer.grain, 'Milho')
         self.assertEqual(offer.location, 'Lucas do Rio Verde - MT')
         self.assertEqual(offer.payment_terms, 'Pagamento em 7 dias')
+        self.assertEqual(offer.quality['moisture'], 14)
+        self.assertEqual(offer.quality['impurity'], 1)
+        self.assertEqual(offer.quality['damaged'], 3)
+        self.assertEqual(offer.quality['ardidos'], 2)
+        self.assertEqual(offer.quality['ph'], 78)
+        self.assertEqual(offer.quality['standard'], 'Exportação')
         self.assertEqual(offer.quality['deliveryWindow'], 'abril a maio')
-        self.assertEqual(offer.quality['notes'], 'Umidade até 14%')
+        self.assertEqual(offer.quality['notes'], 'Lote com prêmio para exportação')
         self.assertEqual(offer.quality['observations'], 'Carga disponível para retirada imediata')
 
     def test_change_password_endpoint(self):
@@ -682,6 +708,76 @@ class AuthFlowTests(APITestCase):
         self.assertEqual(old_login.status_code, 401)
 
         new_login = self.client.post('/api/login/', {'email': 'seller.password@test.com', 'password': 'NovaSenha456@'}, format='json')
+        self.assertEqual(new_login.status_code, 200)
+
+    def test_register_accepts_extended_profile_fields(self):
+        response = self.client.post(reverse('register', args=['comprador']), {
+            'name': 'Comprador Perfil',
+            'email': 'comprador.perfil@test.com',
+            'password': 'PerfilCompleto123!',
+            'phone': '11988887777',
+            'company': 'Trading Horizonte',
+            'legal_name': 'Trading Horizonte Ltda',
+            'profile_segment': 'trading',
+            'document_type': 'cnpj',
+            'document_number': '12.345.678/0001-90',
+            'state_registration': '123456789',
+            'address_zip_code': '01452-000',
+            'address_street': 'Avenida das Nações',
+            'address_number': '1500',
+            'address_complement': 'Conjunto 82',
+            'address_district': 'Jardins',
+            'address_city': 'São Paulo',
+            'address_state': 'sp',
+            'address_country': 'Brasil',
+            'document_notes': 'Comprador habilitado para mercado interno e exportação.',
+        }, format='json')
+
+        self.assertEqual(response.status_code, 201)
+        user = User.objects.get(email='comprador.perfil@test.com')
+        self.assertEqual(user.type, 'comprador')
+        self.assertEqual(user.profile_segment, 'trading')
+        self.assertEqual(user.document_type, 'cnpj')
+        self.assertEqual(user.document_number, '12.345.678/0001-90')
+        self.assertEqual(user.legal_name, 'Trading Horizonte Ltda')
+        self.assertEqual(user.address_state, 'SP')
+        self.assertEqual(user.address_city, 'São Paulo')
+        self.assertEqual(response.data['profile_segment'], 'trading')
+        self.assertEqual(response.data['document_type'], 'cnpj')
+
+    def test_forgot_password_request_and_confirm_flow(self):
+        self.client.post(reverse('register', args=['vendedor']), {
+            'name': 'Seller Recover',
+            'email': 'seller.recover@test.com',
+            'password': 'SenhaInicial123!',
+        }, format='json')
+
+        request_reset = self.client.post('/api/forgot-password/request/', {
+            'email': 'seller.recover@test.com',
+        }, format='json')
+
+        self.assertEqual(request_reset.status_code, 200)
+        self.assertIn('resetPath', request_reset.data)
+        self.assertIn('token', request_reset.data)
+
+        reset_token = PasswordResetToken.objects.get(user__email='seller.recover@test.com')
+        self.assertTrue(reset_token.is_active)
+
+        confirm_reset = self.client.post('/api/forgot-password/confirm/', {
+            'token': str(reset_token.token),
+            'new_password': 'SenhaNova789@',
+        }, format='json')
+
+        self.assertEqual(confirm_reset.status_code, 200)
+        self.assertEqual(confirm_reset.data['detail'], 'Senha redefinida com sucesso.')
+
+        reset_token.refresh_from_db()
+        self.assertIsNotNone(reset_token.used_at)
+
+        old_login = self.client.post('/api/login/', {'email': 'seller.recover@test.com', 'password': 'SenhaInicial123!'}, format='json')
+        self.assertEqual(old_login.status_code, 401)
+
+        new_login = self.client.post('/api/login/', {'email': 'seller.recover@test.com', 'password': 'SenhaNova789@'}, format='json')
         self.assertEqual(new_login.status_code, 200)
 
     def test_authenticated_user_can_view_own_profile(self):
@@ -794,8 +890,8 @@ class MarketplaceRulesTests(APITestCase):
             'crop': '24/25',
             'shipping': 'FOB',
             'negotiationChannel': 'direta',
-            'quality': {'notes': 'Lote padrao'},
-            'paymentTerms': 'A vista',
+            'quality': {'notes': 'Lote padrão'},
+            'paymentTerms': 'À vista',
         }
 
         for index in range(4):
@@ -813,7 +909,7 @@ class MarketplaceRulesTests(APITestCase):
         self.assertEqual(fifth.data['directPaymentStatus'], 'pending')
         self.assertEqual(fifth.data['registration']['directOffersUsedThisMonth'], 5)
         self.assertEqual(fifth.data['registration']['freeDirectOffersRemaining'], 0)
-        self.assertEqual(fifth.data['registration']['pix']['beneficiary'], 'Alytha Intermediacoes de Negocios Ltda')
+        self.assertEqual(fifth.data['registration']['pix']['beneficiary'], 'Alytha Intermediações de Negócios Ltda')
         self.assertEqual(fifth.data['registration']['pix']['pixKey'], '66.291.663/0001-10')
 
     def test_broker_link_creates_exclusive_offer_visible_only_to_owner_broker(self):
@@ -871,6 +967,9 @@ class MarketplaceRulesTests(APITestCase):
         self.register_user('corretor', 'Broker Hidden', 'broker.hidden@test.com')
 
         seller = User.objects.get(email='seller.public.search@test.com')
+        seller.phone = '16999999999'
+        seller.company = 'Fazenda Publica'
+        seller.save(update_fields=['phone', 'company'])
         broker = User.objects.get(email='broker.hidden@test.com')
 
         visible_offer = Offer.objects.create(
@@ -886,7 +985,22 @@ class MarketplaceRulesTests(APITestCase):
             negotiation_channel='mesa',
             mesa_commission=Decimal('1.00'),
             quality={'notes': 'Lote especial'},
-            payment_terms='A vista',
+            payment_terms='À vista',
+            status='ativa',
+        )
+        other_public_offer = Offer.objects.create(
+            user=seller,
+            offer_type='venda',
+            grain='Milho',
+            quantity=850,
+            unit='Sacas',
+            price=Decimal('82.00'),
+            location='Lucas do Rio Verde - MT',
+            crop='26',
+            shipping='CIF',
+            negotiation_channel='direta',
+            quality={'notes': 'Outro grão público'},
+            payment_terms='14 dias',
             status='ativa',
         )
         hidden_exclusive = Offer.objects.create(
@@ -902,8 +1016,8 @@ class MarketplaceRulesTests(APITestCase):
             shipping='FOB',
             negotiation_channel='mesa',
             mesa_commission=Decimal('1.00'),
-            quality={'notes': 'Nao deve aparecer'},
-            payment_terms='A vista',
+            quality={'notes': 'Não deve aparecer'},
+            payment_terms='À vista',
             status='ativa',
         )
 
@@ -916,11 +1030,31 @@ class MarketplaceRulesTests(APITestCase):
         self.assertEqual(search_notes.status_code, 200)
         self.assertIn(visible_offer.id, [item['id'] for item in search_notes.data['items']])
 
+        grain_filter = self.client.get('/api/public-marketplace/offers?grain=Soja')
+        self.assertEqual(grain_filter.status_code, 200)
+        self.assertIn(visible_offer.id, [item['id'] for item in grain_filter.data['items']])
+        self.assertNotIn(other_public_offer.id, [item['id'] for item in grain_filter.data['items']])
+        self.assertNotIn(hidden_exclusive.id, [item['id'] for item in grain_filter.data['items']])
+
         detail = self.client.get(f'/api/public-marketplace/offers/{visible_offer.id}')
         self.assertEqual(detail.status_code, 200)
         self.assertEqual(detail.data['id'], visible_offer.id)
-        self.assertEqual(detail.data['contact']['email'], 'seller.public.search@test.com')
-        self.assertEqual(detail.data['contact']['name'], 'Seller Public Search')
+        self.assertEqual(detail.data['contact']['name'], 'Acesso restrito')
+        self.assertEqual(detail.data['contact']['company'], '')
+        self.assertTrue(detail.data['contact']['locked'])
+        self.assertNotEqual(detail.data['contact']['email'], 'seller.public.search@test.com')
+        self.assertNotEqual(detail.data['contact']['phone'], '16999999999')
+
+        self.register_user('comprador', 'Buyer Viewer', 'buyer.viewer@test.com')
+        self.login('buyer.viewer@test.com')
+        authenticated_detail = self.client.get(f'/api/public-marketplace/offers/{visible_offer.id}')
+
+        self.assertEqual(authenticated_detail.status_code, 200)
+        self.assertFalse(authenticated_detail.data['contact']['locked'])
+        self.assertEqual(authenticated_detail.data['contact']['email'], 'seller.public.search@test.com')
+        self.assertEqual(authenticated_detail.data['contact']['phone'], '16999999999')
+        self.assertEqual(authenticated_detail.data['contact']['name'], 'Seller Public Search')
+        self.assertEqual(authenticated_detail.data['contact']['company'], 'Fazenda Publica')
 
     def test_client_dashboard_returns_backend_payload_for_seller(self):
         self.register_user('vendedor', 'Seller Dashboard', 'seller.dashboard@test.com')
@@ -944,7 +1078,7 @@ class MarketplaceRulesTests(APITestCase):
             negotiation_channel='mesa',
             mesa_commission=Decimal('1.00'),
             quality={},
-            payment_terms='A vista',
+            payment_terms='À vista',
             status='ativa',
         )
         second_offer = Offer.objects.create(
@@ -993,7 +1127,7 @@ class MarketplaceRulesTests(APITestCase):
             negotiation_channel='mesa',
             mesa_commission=Decimal('1.00'),
             quality={},
-            payment_terms='A vista',
+            payment_terms='À vista',
             status='ativa',
         )
 
@@ -1023,7 +1157,7 @@ class MarketplaceRulesTests(APITestCase):
         response = self.client.get('/api/client-dashboard/')
 
         self.assertEqual(response.status_code, 403)
-        self.assertEqual(response.data['detail'], 'Painel disponivel apenas para comprador e vendedor.')
+        self.assertEqual(response.data['detail'], 'Painel disponível apenas para comprador e vendedor.')
 
     def test_match_is_locked_to_the_broker_that_created_it(self):
         self.register_user('vendedor', 'Seller Lock', 'seller.lock@test.com')
@@ -1048,7 +1182,7 @@ class MarketplaceRulesTests(APITestCase):
                 'crop': '24/25',
                 'shipping': 'FOB',
                 'quality': {},
-                'paymentTerms': 'A vista',
+                'paymentTerms': 'À vista',
             },
             format='json',
         ).data
@@ -1108,7 +1242,7 @@ class MarketplaceRulesTests(APITestCase):
                     'crop': '24/25',
                     'shipping': 'FOB',
                     'quality': {},
-                    'paymentTerms': 'A vista',
+                    'paymentTerms': 'À vista',
                 },
                 format='json',
             ).data
@@ -1148,4 +1282,166 @@ class MarketplaceRulesTests(APITestCase):
         )
 
         self.assertEqual(blocked.status_code, 400)
-        self.assertEqual(blocked.data['detail'], 'Somente pode ter 6 negociacoes em aberto.')
+        self.assertEqual(blocked.data['detail'], 'Somente pode ter 6 negociações em aberto.')
+
+
+class BackofficeManagementTests(APITestCase):
+    def register_user(self, role, name, email, password='SenhaForte123!'):
+        response = self.client.post(
+            reverse('register', args=[role]),
+            {
+                'name': name,
+                'email': email,
+                'password': password,
+            },
+            format='json',
+        )
+        self.assertEqual(response.status_code, 201)
+        return response
+
+    def login(self, email, password='SenhaForte123!'):
+        response = self.client.post('/api/login/', {'email': email, 'password': password}, format='json')
+        self.assertEqual(response.status_code, 200)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {response.data['access']}")
+        return response.data
+
+    def test_backoffice_can_create_update_and_delete_users_with_auth_sync(self):
+        auth_user_model = get_user_model()
+        self.register_user('backoffice', 'Backoffice Manager', 'backoffice.manager@test.com')
+        self.login('backoffice.manager@test.com')
+
+        create_response = self.client.post(
+            '/api/users',
+            {
+                'name': 'Corretor Operacional',
+                'email': 'broker.ops@test.com',
+                'type': 'corretor',
+                'phone': '16999990000',
+                'company': 'Mesa Alytha',
+                'profile_segment': 'empresa_corretora',
+                'password': 'BrokerOps123!',
+            },
+            format='json',
+        )
+
+        self.assertEqual(create_response.status_code, 201)
+        created_user = User.objects.get(email='broker.ops@test.com')
+        self.assertEqual(created_user.type, 'corretor')
+        self.assertTrue(auth_user_model.objects.filter(username='broker.ops@test.com').exists())
+
+        self.client.credentials()
+        broker_login = self.client.post('/api/login/', {'email': 'broker.ops@test.com', 'password': 'BrokerOps123!'}, format='json')
+        self.assertEqual(broker_login.status_code, 200)
+
+        self.login('backoffice.manager@test.com')
+        update_response = self.client.patch(
+            f'/api/users/{created_user.id}',
+            {
+                'name': 'Corretor Operacional Senior',
+                'email': 'broker.ops.senior@test.com',
+                'company': 'Mesa Alytha Senior',
+                'password': 'NovaSenhaBroker456@',
+            },
+            format='json',
+        )
+
+        self.assertEqual(update_response.status_code, 200)
+        created_user.refresh_from_db()
+        self.assertEqual(created_user.name, 'Corretor Operacional Senior')
+        self.assertEqual(created_user.email, 'broker.ops.senior@test.com')
+        self.assertEqual(created_user.company, 'Mesa Alytha Senior')
+        self.assertFalse(auth_user_model.objects.filter(username='broker.ops@test.com').exists())
+        self.assertTrue(auth_user_model.objects.filter(username='broker.ops.senior@test.com').exists())
+
+        self.client.credentials()
+        old_login = self.client.post('/api/login/', {'email': 'broker.ops@test.com', 'password': 'BrokerOps123!'}, format='json')
+        self.assertEqual(old_login.status_code, 401)
+        new_login = self.client.post('/api/login/', {'email': 'broker.ops.senior@test.com', 'password': 'NovaSenhaBroker456@'}, format='json')
+        self.assertEqual(new_login.status_code, 200)
+
+        self.login('backoffice.manager@test.com')
+        delete_response = self.client.delete(f'/api/users/{created_user.id}')
+        self.assertEqual(delete_response.status_code, 204)
+        self.assertFalse(User.objects.filter(id=created_user.id).exists())
+        self.assertFalse(auth_user_model.objects.filter(username='broker.ops.senior@test.com').exists())
+
+    def test_backoffice_can_create_offer_and_manage_negotiation_status(self):
+        self.register_user('backoffice', 'Backoffice Desk', 'backoffice.desk@test.com')
+        self.register_user('vendedor', 'Seller Managed', 'seller.managed@test.com')
+        self.register_user('comprador', 'Buyer Managed', 'buyer.managed@test.com')
+        self.login('backoffice.desk@test.com')
+
+        seller = User.objects.get(email='seller.managed@test.com')
+        buyer = User.objects.get(email='buyer.managed@test.com')
+
+        sell_offer_response = self.client.post(
+            '/api/offers',
+            {
+                'userId': seller.id,
+                'type': 'venda',
+                'grain': 'Soja',
+                'quantity': 1000,
+                'unit': 'Sacas',
+                'price': 120,
+                'location': 'Sorriso - MT',
+                'crop': '24/25',
+                'shipping': 'FOB',
+                'negotiationChannel': 'mesa',
+                'mesaCommission': 1.5,
+                'quality': {'notes': 'Lote administrado pelo backoffice'},
+                'paymentTerms': 'A vista',
+            },
+            format='json',
+        )
+        self.assertEqual(sell_offer_response.status_code, 201)
+
+        buy_offer_response = self.client.post(
+            '/api/offers',
+            {
+                'userId': buyer.id,
+                'type': 'compra',
+                'grain': 'Soja',
+                'quantity': 800,
+                'unit': 'Sacas',
+                'price': 123,
+                'location': 'Rondonopolis - MT',
+                'crop': '24/25',
+                'shipping': 'FOB',
+                'negotiationChannel': 'direta',
+                'quality': {'notes': 'Demanda criada pelo backoffice'},
+                'paymentTerms': '7 dias',
+            },
+            format='json',
+        )
+        self.assertEqual(buy_offer_response.status_code, 201)
+
+        match_response = self.client.post(
+            '/api/negotiations/match',
+            {
+                'buyOfferId': buy_offer_response.data['id'],
+                'sellOfferId': sell_offer_response.data['id'],
+                'brokerageMode': 'percentage',
+                'brokeragePercentage': 4,
+            },
+            format='json',
+        )
+        self.assertEqual(match_response.status_code, 201)
+
+        negotiation = Negotiation.objects.get(id=match_response.data['id'])
+        self.assertEqual(negotiation.status, 'pendente')
+
+        update_response = self.client.patch(
+            f'/api/negotiations/{negotiation.id}',
+            {'status': 'aceita'},
+            format='json',
+        )
+        self.assertEqual(update_response.status_code, 200)
+
+        negotiation.refresh_from_db()
+        negotiation.offer.refresh_from_db()
+        negotiation.buy_offer.refresh_from_db()
+        self.assertEqual(negotiation.status, 'aceita')
+        self.assertEqual(negotiation.offer.status, 'finalizada')
+        self.assertEqual(negotiation.buy_offer.status, 'finalizada')
+
+

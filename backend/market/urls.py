@@ -6,6 +6,8 @@ from .views import (
     BrokerLinkView,
     ChangePasswordView,
     ClientDashboardView,
+    ForgotPasswordConfirmView,
+    ForgotPasswordRequestView,
     LoginView,
     NegotiationViewSet,
     OfferViewSet,
@@ -27,6 +29,8 @@ router.register(r'negotiations', NegotiationViewSet, basename='negotiation')
 urlpatterns = router.urls + [
     path('register/<str:role_slug>', RegisterView.as_view(), name='register'),
     path('login/', LoginView.as_view(), name='login'),
+    path('forgot-password/request/', ForgotPasswordRequestView.as_view(), name='forgot_password_request'),
+    path('forgot-password/confirm/', ForgotPasswordConfirmView.as_view(), name='forgot_password_confirm'),
     path('token/refresh', TokenRefreshView.as_view(), name='token_refresh'),
     path('change-password/', ChangePasswordView.as_view(), name='change_password'),
     path('profile/', ProfileView.as_view(), name='profile'),

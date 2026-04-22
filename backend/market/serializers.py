@@ -1,12 +1,142 @@
 from rest_framework import serializers
 
-from .models import Offer, User, Negotiation
+from .models import Negotiation, Offer, User
+
+
+BUYER_PROFILE_SEGMENTS = {
+    'industria',
+    'trading',
+    'distribuidora',
+    'granja',
+    'exportadora',
+    'cooperativa',
+    'cerealista',
+    'esmagadora',
+    'nutricao_animal',
+    'outros',
+}
+
+SELLER_PROFILE_SEGMENTS = {
+    'produtor_rural',
+    'fazenda',
+    'silos',
+    'armazens',
+    'cooperativa',
+    'originador',
+    'revenda',
+    'trading',
+    'outros',
+}
+
+BROKER_PROFILE_SEGMENTS = {
+    'autonomo',
+    'empresa_corretora',
+    'mesa_corretora',
+}
+
+DOCUMENT_TYPES = {'cpf', 'cnpj'}
+
+ROLE_SEGMENT_MAP = {
+    'comprador': BUYER_PROFILE_SEGMENTS,
+    'vendedor': SELLER_PROFILE_SEGMENTS,
+    'corretor': BROKER_PROFILE_SEGMENTS,
+}
+
+USER_PROFILE_FIELDS = [
+    'id',
+    'name',
+    'email',
+    'type',
+    'phone',
+    'company',
+    'legal_name',
+    'profile_segment',
+    'document_type',
+    'document_number',
+    'state_registration',
+    'address_zip_code',
+    'address_street',
+    'address_number',
+    'address_complement',
+    'address_district',
+    'address_city',
+    'address_state',
+    'address_country',
+    'document_notes',
+]
+
+
+def mask_email(value):
+    email = str(value or '').strip()
+    if not email:
+        return ''
+
+    local, separator, domain = email.partition('@')
+    if not separator:
+        return '***'
+
+    visible_local = local[:2]
+    masked_local = visible_local + ('*' * max(len(local) - len(visible_local), 3))
+
+    domain_name, dot, suffix = domain.partition('.')
+    if not dot:
+        visible_domain = domain_name[:1]
+        masked_domain = visible_domain + ('*' * max(len(domain_name) - len(visible_domain), 3))
+        return f'{masked_local}@{masked_domain}'
+
+    visible_domain = domain_name[:2]
+    masked_domain = visible_domain + ('*' * max(len(domain_name) - len(visible_domain), 3))
+    return f'{masked_local}@{masked_domain}.{suffix}'
+
+
+def mask_phone(value):
+    digits = ''.join(char for char in str(value or '') if char.isdigit())
+    if not digits:
+        return ''
+    return '(**) *****-****'
+
+
+def mask_name(value):
+    name = str(value or '').strip()
+    if not name:
+        return 'Acesso restrito'
+    return 'Acesso restrito'
 
 
 class UserSerializer(serializers.ModelSerializer):
+    def validate(self, attrs):
+        role = attrs.get('type') or getattr(self.instance, 'type', None)
+        profile_segment = (attrs.get('profile_segment') or getattr(self.instance, 'profile_segment', '')).strip().lower()
+        document_type = (attrs.get('document_type') or getattr(self.instance, 'document_type', '')).strip().lower()
+        address_state = attrs.get('address_state')
+        email = attrs.get('email')
+        name = attrs.get('name')
+
+        if role in ROLE_SEGMENT_MAP and profile_segment and profile_segment not in ROLE_SEGMENT_MAP[role]:
+            raise serializers.ValidationError({'profile_segment': 'Selecione uma categoria válida para este perfil.'})
+
+        if document_type and document_type not in DOCUMENT_TYPES:
+            raise serializers.ValidationError({'document_type': 'Selecione CPF ou CNPJ.'})
+
+        if email is not None:
+            attrs['email'] = str(email).strip()
+
+        if name is not None:
+            attrs['name'] = str(name).strip()
+
+        if address_state is not None:
+            attrs['address_state'] = str(address_state).strip().upper()
+
+        if 'document_type' in attrs:
+            attrs['document_type'] = str(attrs['document_type'] or '').strip().lower()
+        if 'profile_segment' in attrs:
+            attrs['profile_segment'] = str(attrs['profile_segment'] or '').strip().lower()
+
+        return attrs
+
     class Meta:
         model = User
-        fields = ['id', 'name', 'email', 'type', 'phone', 'company']
+        fields = USER_PROFILE_FIELDS
         extra_kwargs = {
             'email': {'required': True},
             'name': {'required': True},
@@ -15,9 +145,12 @@ class UserSerializer(serializers.ModelSerializer):
 
 
 class ProfileSerializer(serializers.ModelSerializer):
+    def validate(self, attrs):
+        return UserSerializer.validate(self, attrs)
+
     class Meta:
         model = User
-        fields = ['id', 'name', 'email', 'type', 'phone', 'company']
+        fields = USER_PROFILE_FIELDS
         read_only_fields = ['id', 'email', 'type']
 
 
@@ -140,9 +273,34 @@ class MarketplaceOfferSerializer(serializers.ModelSerializer):
 
 
 class PublicOfferContactSerializer(serializers.ModelSerializer):
+    name = serializers.SerializerMethodField()
+    company = serializers.SerializerMethodField()
+    email = serializers.SerializerMethodField()
+    phone = serializers.SerializerMethodField()
+    locked = serializers.SerializerMethodField()
+
+    def can_view_channels(self):
+        request = self.context.get('request')
+        return bool(request and getattr(request, 'user', None) and request.user.is_authenticated)
+
+    def get_name(self, obj):
+        return obj.name if self.can_view_channels() else mask_name(obj.name)
+
+    def get_company(self, obj):
+        return obj.company if self.can_view_channels() else ''
+
+    def get_email(self, obj):
+        return obj.email if self.can_view_channels() else mask_email(obj.email)
+
+    def get_phone(self, obj):
+        return obj.phone if self.can_view_channels() else mask_phone(obj.phone)
+
+    def get_locked(self, obj):
+        return not self.can_view_channels()
+
     class Meta:
         model = User
-        fields = ['name', 'email', 'phone', 'company']
+        fields = ['name', 'email', 'phone', 'company', 'locked']
 
 
 class PublicMarketplaceOfferListSerializer(serializers.ModelSerializer):
@@ -221,6 +379,15 @@ class PublicMarketplaceOfferDetailSerializer(serializers.ModelSerializer):
             'createdAt',
             'contact',
         ]
+
+
+class PasswordResetRequestSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+
+
+class PasswordResetConfirmSerializer(serializers.Serializer):
+    token = serializers.UUIDField()
+    new_password = serializers.CharField(min_length=8, trim_whitespace=False)
 
 
 class BrokerLinkOfferSubmissionSerializer(serializers.Serializer):

@@ -5,6 +5,7 @@ import type { OfferPixData, OfferRegistration } from '../types';
 
 type OfferType = 'venda' | 'compra';
 type OfferChannel = 'mesa' | 'direta';
+type GrainStandard = 'exportacao' | 'mercado_interno';
 
 type OfferFormProps = {
   offerType: OfferType;
@@ -29,6 +30,13 @@ type OfferFormState = {
   shipping: 'FOB' | 'CIF';
   negotiationChannel: OfferChannel;
   mesaCommission: string;
+  moisture: string;
+  impurity: string;
+  damaged: string;
+  ardidos: string;
+  ph: string;
+  protein: string;
+  grainStandard: '' | GrainStandard;
   deliveryWindow: string;
   funrural: string;
   qualityNotes: string;
@@ -61,8 +69,15 @@ const initialState: OfferFormState = {
   shipping: 'FOB',
   negotiationChannel: 'mesa',
   mesaCommission: '0.50',
+  moisture: '',
+  impurity: '',
+  damaged: '',
+  ardidos: '',
+  ph: '',
+  protein: '',
+  grainStandard: '',
   deliveryWindow: '',
-  funrural: 'A definir na negociacao',
+  funrural: 'A definir na negociação',
   qualityNotes: '',
   paymentTerms: '',
   observations: '',
@@ -71,29 +86,29 @@ const initialState: OfferFormState = {
 const formCopy = {
   venda: {
     sectionLabel: 'Oferta Alytha',
-    priceLabel: 'Base de preco / referencia por saca',
-    locationLabel: 'Praca de origem / localidade',
+    priceLabel: 'Base de preço / referência por saca',
+    locationLabel: 'Praça de origem / localidade',
     windowLabel: 'Janela de disponibilidade',
-    qualityLabel: 'Padrao de qualidade / especificacoes',
-    paymentLabel: 'Condicoes comerciais e pagamento',
-    observationsLabel: 'Observacoes comerciais',
-    qualityPlaceholder: 'Informe padrao, umidade, impurezas, avariados, bonificacoes ou descontos aplicaveis ao lote.',
-    paymentPlaceholder: 'Ex.: pagamento a vista, prazo de 7 dias, contra retirada, faturamento conforme cadastro aprovado.',
-    observationsPlaceholder: 'Registre detalhes relevantes para a mesa, como carregamento, flexibilidade de volume e estrategia comercial.',
+    qualityLabel: 'Complementos de qualidade / especificações',
+    paymentLabel: 'Condições comerciais e pagamento',
+    observationsLabel: 'Observações comerciais',
+    qualityPlaceholder: 'Use este campo para registrar bonificações, descontos, laudos ou detalhes adicionais do lote.',
+    paymentPlaceholder: 'Ex.: pagamento à vista, prazo de 7 dias, contra retirada, faturamento conforme cadastro aprovado.',
+    observationsPlaceholder: 'Registre detalhes relevantes para a mesa, como carregamento, flexibilidade de volume e estratégia comercial.',
     submitLabel: 'Salvar oferta de venda',
     publicSubmitLabel: 'Enviar oferta ao corretor',
   },
   compra: {
     sectionLabel: 'Demanda Alytha',
-    priceLabel: 'Faixa de preco de referencia',
-    locationLabel: 'Praca de entrega / retirada',
+    priceLabel: 'Faixa de preço de referência',
+    locationLabel: 'Praça de entrega / retirada',
     windowLabel: 'Janela de recebimento',
-    qualityLabel: 'Padrao de qualidade / exigencias',
-    paymentLabel: 'Condicoes comerciais e pagamento',
-    observationsLabel: 'Observacoes da demanda',
-    qualityPlaceholder: 'Descreva padrao desejado, limites de umidade, impurezas, avariados e demais requisitos da compra.',
-    paymentPlaceholder: 'Ex.: pagamento a vista, 7 dias, contra entrega, aprovacao cadastral ou condicao bancaria especifica.',
-    observationsPlaceholder: 'Inclua detalhes operacionais ou comerciais importantes para a mesa estruturar a melhor originacao.',
+    qualityLabel: 'Padrão de qualidade / exigências',
+    paymentLabel: 'Condições comerciais e pagamento',
+    observationsLabel: 'Observações da demanda',
+    qualityPlaceholder: 'Descreva o padrão desejado, limites de umidade, impurezas, avariados e demais requisitos da compra.',
+    paymentPlaceholder: 'Ex.: pagamento à vista, 7 dias, contra entrega, aprovação cadastral ou condição bancária específica.',
+    observationsPlaceholder: 'Inclua detalhes operacionais ou comerciais importantes para a mesa estruturar a melhor originação.',
     submitLabel: 'Salvar demanda (compra)',
     publicSubmitLabel: 'Enviar demanda ao corretor',
   },
@@ -103,12 +118,12 @@ const channelCards = [
   {
     id: 'mesa',
     title: 'Operar com a mesa Alytha',
-    description: 'A negociacao segue com acompanhamento comercial da mesa, e a comissao por saca fica registrada no cadastro.',
+    description: 'A negociação segue com acompanhamento comercial da mesa, e a comissão por saca fica registrada no cadastro.',
   },
   {
     id: 'direta',
     title: 'Publicar como oferta direta',
-    description: 'A oportunidade entra sem intermediacao da mesa. As 4 primeiras diretas do mes ficam sem taxa; da 5a em diante, ha cobranca de R$ 100,00.',
+    description: 'A oportunidade entra sem intermediação da mesa. As 4 primeiras diretas do mês ficam sem taxa; da 5ª em diante, há cobrança de R$ 100,00.',
   },
 ] as const;
 
@@ -116,20 +131,28 @@ const publicChannelCards = [
   {
     id: 'mesa',
     title: 'Conduzir com a mesa Alytha',
-    description: 'A oportunidade segue com apoio comercial da mesa e atendimento do corretor responsavel por este link.',
+    description: 'A oportunidade segue com apoio comercial da mesa e atendimento do corretor responsável por este link.',
   },
   {
     id: 'direta',
-    title: 'Publicar sem intermediacao da mesa',
-    description: 'O cadastro continua vinculado ao corretor deste link, mas entra sem atuacao comercial da mesa Alytha.',
+    title: 'Publicar sem intermediação da mesa',
+    description: 'O cadastro continua vinculado ao corretor deste link, mas entra sem atuação comercial da mesa Alytha.',
   },
 ] as const;
 
-const funruralOptions = ['Incluso no preco', 'Destacado no faturamento', 'A definir na negociacao'] as const;
+const funruralOptions = ['Incluso no preço', 'Destacado no faturamento', 'A definir na negociação'] as const;
+const grainStandardOptions = [
+  { value: 'exportacao', label: 'Exportação' },
+  { value: 'mercado_interno', label: 'Mercado interno' },
+] as const;
+const grainStandardLabelMap: Record<GrainStandard, string> = {
+  exportacao: 'Exportação',
+  mercado_interno: 'Mercado interno',
+};
 
 const getErrorMessage = (payload: unknown) => {
   if (!payload || typeof payload !== 'object') {
-    return 'Nao foi possivel salvar o cadastro.';
+    return 'Não foi possível salvar o cadastro.';
   }
 
   if ('detail' in payload && typeof payload.detail === 'string') {
@@ -142,11 +165,21 @@ const getErrorMessage = (payload: unknown) => {
     return firstValue[0];
   }
 
-  return 'Nao foi possivel salvar o cadastro.';
+  return 'Não foi possível salvar o cadastro.';
 };
 
 const formatCurrency = (value: number) =>
   Number(value).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+const parseOptionalNumber = (value: string) => {
+  const normalized = value.trim().replace(',', '.');
+  if (!normalized) {
+    return undefined;
+  }
+
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : undefined;
+};
 
 export default function OfferForm({
   offerType,
@@ -166,12 +199,23 @@ export default function OfferForm({
 
   const copy = formCopy[offerType];
   const isPublicLead = mode === 'broker-link';
-  const brokerDisplayLabel = brokerName || 'corretor responsavel';
+  const brokerDisplayLabel = brokerName || 'corretor responsável';
   const visibleChannelCards = isPublicLead ? publicChannelCards : channelCards;
   const shouldRegisterCommission = form.negotiationChannel === 'mesa' || isPublicLead;
+  const showPhField = offerType === 'venda' && form.grain === 'Milho';
+  const showProteinField = offerType === 'venda' && form.grain === 'Soja';
 
   const updateField = <T extends keyof OfferFormState>(name: T, value: OfferFormState[T]) => {
     setForm((previous) => ({ ...previous, [name]: value }));
+  };
+
+  const handleGrainChange = (grain: string) => {
+    setForm((previous) => ({
+      ...previous,
+      grain,
+      ph: grain === 'Milho' ? previous.ph : '',
+      protein: grain === 'Soja' ? previous.protein : '',
+    }));
   };
 
   const handleCopy = async (value: string, feedback: string) => {
@@ -180,7 +224,7 @@ export default function OfferForm({
       setCopyFeedback(feedback);
       window.setTimeout(() => setCopyFeedback(''), 2500);
     } catch {
-      setCopyFeedback('Nao foi possivel copiar neste momento.');
+      setCopyFeedback('Não foi possível copiar neste momento.');
     }
   };
 
@@ -194,6 +238,19 @@ export default function OfferForm({
     setCopyFeedback('');
 
     const endpoint = isPublicLead && brokerToken ? `/broker-links/${brokerToken}/offers` : '/offers';
+    const quality = {
+      moisture: offerType === 'venda' ? parseOptionalNumber(form.moisture) : undefined,
+      impurity: offerType === 'venda' ? parseOptionalNumber(form.impurity) : undefined,
+      damaged: offerType === 'venda' ? parseOptionalNumber(form.damaged) : undefined,
+      ardidos: offerType === 'venda' ? parseOptionalNumber(form.ardidos) : undefined,
+      ph: showPhField ? parseOptionalNumber(form.ph) : undefined,
+      protein: showProteinField ? parseOptionalNumber(form.protein) : undefined,
+      standard: offerType === 'venda' && form.grainStandard ? grainStandardLabelMap[form.grainStandard] : undefined,
+      deliveryWindow: form.deliveryWindow,
+      funrural: offerType === 'venda' ? form.funrural : undefined,
+      notes: form.qualityNotes,
+      observations: form.observations,
+    };
     const payload = {
       ...(isPublicLead
         ? {
@@ -213,12 +270,7 @@ export default function OfferForm({
       shipping: form.shipping,
       negotiationChannel: form.negotiationChannel,
       mesaCommission: shouldRegisterCommission ? Number(form.mesaCommission) : null,
-      quality: {
-        deliveryWindow: form.deliveryWindow,
-        funrural: offerType === 'venda' ? form.funrural : undefined,
-        notes: form.qualityNotes,
-        observations: form.observations,
-      },
+      quality,
       paymentTerms: form.paymentTerms,
     };
 
@@ -245,7 +297,7 @@ export default function OfferForm({
       }));
 
       if (responsePayload.status === 'aguardando_pagamento' && registrationPayload?.pix) {
-        setMessage('Cadastro recebido com sucesso. A oportunidade ficara aguardando a quitacao da taxa via PIX para liberacao.');
+        setMessage('Cadastro recebido com sucesso. A oportunidade ficará aguardando a quitação da taxa via PIX para liberação.');
       } else {
         setMessage(
           isPublicLead
@@ -285,7 +337,7 @@ export default function OfferForm({
               <div>
                 <p className="text-sm font-black text-sky-950">Atendimento vinculado a {brokerDisplayLabel}</p>
                 <p className="mt-2 text-sm leading-7 text-sky-900/80">
-                  Este envio entra direto na base privada do corretor. Voce nao precisa criar login agora para compartilhar a oportunidade.
+                  Este envio entra direto na base privada do corretor. Você não precisa criar login agora para compartilhar a oportunidade.
                 </p>
               </div>
             </div>
@@ -312,7 +364,7 @@ export default function OfferForm({
                 type="email"
                 value={form.email}
                 onChange={(event) => updateField('email', event.target.value)}
-                placeholder="voce@empresa.com.br"
+                placeholder="você@empresa.com.br"
                 className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none focus:border-emerald-500 focus:bg-white"
               />
             </label>
@@ -322,7 +374,7 @@ export default function OfferForm({
               <input
                 value={form.phone}
                 onChange={(event) => updateField('phone', event.target.value)}
-                placeholder="DDD + numero"
+                placeholder="DDD + número"
                 className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none focus:border-emerald-500 focus:bg-white"
               />
             </label>
@@ -365,23 +417,23 @@ export default function OfferForm({
           {form.negotiationChannel === 'mesa' ? (
             <div className="mt-4 rounded-[1.6rem] border border-emerald-100 bg-emerald-50/70 p-4">
               <p className="text-sm font-black text-emerald-950">
-                {isPublicLead ? 'Atendimento com apoio da mesa Alytha.' : 'Operacao com a mesa inclui comissao comercial.'}
+                {isPublicLead ? 'Atendimento com apoio da mesa Alytha.' : 'Operação com a mesa inclui comissão comercial.'}
               </p>
               <p className="mt-2 text-sm leading-6 text-emerald-900/85">
                 {isPublicLead
-                  ? 'Sua oportunidade sera registrada para atendimento do corretor e seguira com a politica comercial da mesa Alytha.'
-                  : 'A comissao por saca fica registrada no cadastro desta oportunidade e sera usada no match quando a mesa conduzir a operacao.'}
+                  ? 'Sua oportunidade será registrada para atendimento do corretor e seguirá com a política comercial da mesa Alytha.'
+                  : 'A comissão por saca fica registrada no cadastro desta oportunidade e será usada no match quando a mesa conduzir a operação.'}
               </p>
             </div>
           ) : (
             <div className="mt-4 rounded-[1.6rem] border border-amber-100 bg-amber-50/80 p-4">
               <p className="text-sm font-black text-amber-950">
-                {isPublicLead ? 'Publicacao direta vinculada ao corretor.' : 'Publicacao direta com politica comercial da plataforma.'}
+                {isPublicLead ? 'Publicação direta vinculada ao corretor.' : 'Publicação direta com política comercial da plataforma.'}
               </p>
               <p className="mt-2 text-sm leading-6 text-amber-900/85">
                 {isPublicLead
-                  ? `O cadastro continua reservado para ${brokerDisplayLabel}. As 4 primeiras publicacoes diretas do mes ficam sem taxa; a partir da 5a, o sistema gera PIX de ${formatCurrency(100)} para liberar a oportunidade.`
-                  : `As 4 primeiras publicacoes diretas do mes ficam sem taxa. A partir da 5a, o cadastro gera PIX de ${formatCurrency(100)} para liberacao da oportunidade.`}
+                  ? `O cadastro continua reservado para ${brokerDisplayLabel}. As 4 primeiras publicações diretas do mês ficam sem taxa; a partir da 5ª, o sistema gera PIX de ${formatCurrency(100)} para liberar a oportunidade.`
+                  : `As 4 primeiras publicações diretas do mês ficam sem taxa. A partir da 5ª, o cadastro gera PIX de ${formatCurrency(100)} para liberação da oportunidade.`}
               </p>
             </div>
           )}
@@ -393,16 +445,16 @@ export default function OfferForm({
               }`}
             >
               <p className={`text-sm font-black ${isPublicLead ? 'text-sky-950' : 'text-emerald-950'}`}>
-                {isPublicLead ? 'Comissao registrada no cadastro.' : 'Comissao da mesa.'}
+                {isPublicLead ? 'Comissão registrada no cadastro.' : 'Comissão da mesa.'}
               </p>
               <p className={`mt-2 text-sm leading-6 ${isPublicLead ? 'text-sky-900/85' : 'text-emerald-900/85'}`}>
                 {isPublicLead
-                  ? 'Esse valor fica salvo no cadastro e sera usado no match desta oportunidade por ter entrado por link exclusivo.'
-                  : 'Selecione abaixo a comissao por saca que deve ficar vinculada ao cadastro desta oportunidade.'}
+                  ? 'Esse valor fica salvo no cadastro e será usado no match desta oportunidade por ter entrado por link exclusivo.'
+                  : 'Selecione abaixo a comissão por saca que deve ficar vinculada ao cadastro desta oportunidade.'}
               </p>
               <label className="mt-4 block space-y-2">
                 <span className={`text-xs font-black uppercase tracking-[0.2em] ${isPublicLead ? 'text-sky-800' : 'text-emerald-800'}`}>
-                  {isPublicLead ? 'Comissao do cadastro' : 'Comissao da mesa'}
+                  {isPublicLead ? 'Comissão do cadastro' : 'Comissão da mesa'}
                 </span>
                 <select
                   value={form.mesaCommission}
@@ -427,7 +479,7 @@ export default function OfferForm({
             <span className="text-xs font-black uppercase tracking-[0.2em] text-slate-500">Produto</span>
             <select
               value={form.grain}
-              onChange={(event) => updateField('grain', event.target.value)}
+              onChange={(event) => handleGrainChange(event.target.value)}
               className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none focus:border-emerald-500 focus:bg-white"
             >
               <option value="Soja">Soja</option>
@@ -493,13 +545,13 @@ export default function OfferForm({
               required
               value={form.location}
               onChange={(event) => updateField('location', event.target.value)}
-              placeholder="Ex.: Rondonopolis - MT"
+              placeholder="Ex.: Rondonópolis - MT"
               className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none focus:border-emerald-500 focus:bg-white"
             />
           </label>
 
           <label className="space-y-2">
-            <span className="text-xs font-black uppercase tracking-[0.2em] text-slate-500">Condicao FOB / CIF</span>
+            <span className="text-xs font-black uppercase tracking-[0.2em] text-slate-500">Condição FOB / CIF</span>
             <select
               value={form.shipping}
               onChange={(event) => updateField('shipping', event.target.value as 'FOB' | 'CIF')}
@@ -522,6 +574,122 @@ export default function OfferForm({
         </div>
 
         <div className="mt-4 grid gap-4">
+          {offerType === 'venda' ? (
+            <div className="rounded-[1.8rem] border border-slate-200 bg-slate-50/80 p-5">
+              <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-500">Qualidade do grão</p>
+              <div className="mt-4 grid gap-4 md:grid-cols-2">
+                <label className="space-y-2">
+                  <span className="text-xs font-black uppercase tracking-[0.2em] text-slate-500">Umidade (%)</span>
+                  <input
+                    min="0"
+                    step="0.01"
+                    type="number"
+                    value={form.moisture}
+                    onChange={(event) => updateField('moisture', event.target.value)}
+                    placeholder="Ex.: 14"
+                    className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 outline-none focus:border-emerald-500"
+                  />
+                </label>
+
+                <label className="space-y-2">
+                  <span className="text-xs font-black uppercase tracking-[0.2em] text-slate-500">Impureza (%)</span>
+                  <input
+                    min="0"
+                    step="0.01"
+                    type="number"
+                    value={form.impurity}
+                    onChange={(event) => updateField('impurity', event.target.value)}
+                    placeholder="Ex.: 1"
+                    className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 outline-none focus:border-emerald-500"
+                  />
+                </label>
+
+                <label className="space-y-2">
+                  <span className="text-xs font-black uppercase tracking-[0.2em] text-slate-500">Avariados (%)</span>
+                  <input
+                    min="0"
+                    step="0.01"
+                    type="number"
+                    value={form.damaged}
+                    onChange={(event) => updateField('damaged', event.target.value)}
+                    placeholder="Ex.: 3"
+                    className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 outline-none focus:border-emerald-500"
+                  />
+                </label>
+
+                <label className="space-y-2">
+                  <span className="text-xs font-black uppercase tracking-[0.2em] text-slate-500">Ardidos (%)</span>
+                  <input
+                    min="0"
+                    step="0.01"
+                    type="number"
+                    value={form.ardidos}
+                    onChange={(event) => updateField('ardidos', event.target.value)}
+                    placeholder="Ex.: 2"
+                    className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 outline-none focus:border-emerald-500"
+                  />
+                </label>
+
+                {showPhField ? (
+                  <label className="space-y-2">
+                    <span className="text-xs font-black uppercase tracking-[0.2em] text-slate-500">PH (milho)</span>
+                    <input
+                      min="0"
+                      step="0.01"
+                      type="number"
+                      value={form.ph}
+                      onChange={(event) => updateField('ph', event.target.value)}
+                      placeholder="Ex.: 78"
+                      className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 outline-none focus:border-emerald-500"
+                    />
+                  </label>
+                ) : null}
+
+                {showProteinField ? (
+                  <label className="space-y-2">
+                    <span className="text-xs font-black uppercase tracking-[0.2em] text-slate-500">Proteína (soja)</span>
+                    <input
+                      min="0"
+                      step="0.01"
+                      type="number"
+                      value={form.protein}
+                      onChange={(event) => updateField('protein', event.target.value)}
+                      placeholder="Ex.: 36"
+                      className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 outline-none focus:border-emerald-500"
+                    />
+                  </label>
+                ) : null}
+              </div>
+
+              <fieldset className="mt-5">
+                <legend className="text-xs font-black uppercase tracking-[0.2em] text-slate-500">Padrão</legend>
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  {grainStandardOptions.map((option) => {
+                    const active = form.grainStandard === option.value;
+                    return (
+                      <label
+                        key={option.value}
+                        className={`flex cursor-pointer items-center gap-3 rounded-2xl border px-4 py-3 transition-colors ${
+                          active ? 'border-emerald-500 bg-white' : 'border-slate-200 bg-white/80 hover:border-slate-300'
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="grainStandard"
+                          value={option.value}
+                          checked={active}
+                          onChange={() => updateField('grainStandard', option.value)}
+                          className="h-4 w-4 border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                        />
+                        <span className="text-sm font-bold text-slate-900">{option.label}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </fieldset>
+            </div>
+          ) : null}
+
           {offerType === 'venda' ? (
             <label className="space-y-2">
               <span className="text-xs font-black uppercase tracking-[0.2em] text-slate-500">Tratativa de Funrural</span>
@@ -616,7 +784,7 @@ export default function OfferForm({
                 <p className="mt-2 text-sm font-bold text-slate-900">{pixData.pixKey}</p>
               </div>
               <div className="rounded-2xl border border-amber-200 bg-white px-4 py-4">
-                <p className="text-[10px] font-black uppercase tracking-[0.18em] text-amber-700">Referencia</p>
+                <p className="text-[10px] font-black uppercase tracking-[0.18em] text-amber-700">Referência</p>
                 <p className="mt-2 text-sm font-bold text-slate-900">{pixData.reference}</p>
               </div>
             </div>
@@ -644,35 +812,35 @@ export default function OfferForm({
             {isPublicLead ? (
               <>
                 <p>O envio feito por este link fica reservado para o atendimento de {brokerDisplayLabel} dentro da Alytha.</p>
-                <p>A comissao por saca tambem fica registrada neste cadastro e, no match, segue o valor definido aqui para o corretor.</p>
-                <p>Se voce optar pela publicacao direta, as 4 primeiras do mes nao geram taxa. A partir da 5a, o sistema apresenta a cobranca de {formatCurrency(100)}.</p>
-                <p>Quando houver cobranca, os dados do PIX aparecem logo apos o envio do cadastro.</p>
+                <p>A comissão por saca também fica registrada neste cadastro e, no match, segue o valor definido aqui para o corretor.</p>
+                <p>Se você optar pela publicação direta, as 4 primeiras do mês não geram taxa. A partir da 5ª, o sistema apresenta a cobrança de {formatCurrency(100)}.</p>
+                <p>Quando houver cobrança, os dados do PIX aparecem logo após o envio do cadastro.</p>
               </>
             ) : (
               <>
-                <p>Operacoes com a mesa exigem definicao de comissao entre R$ 0,50 e R$ 5,00 por saca.</p>
-                <p>Publicacoes diretas contam com 4 lancamentos sem taxa por mes. A partir da 5a, a plataforma gera cobranca de {formatCurrency(100)}.</p>
-                <p>Quando houver cobranca, o retorno do cadastro apresenta os dados do PIX em nome de Alytha Intermediacoes de Negocios Ltda.</p>
-                {offerType === 'venda' ? <p>Na venda, a tratativa de Funrural fica registrada no cadastro para dar mais clareza comercial a mesa e a contraparte.</p> : null}
+                <p>Operações com a mesa exigem definição de comissão entre R$ 0,50 e R$ 5,00 por saca.</p>
+                <p>Publicações diretas contam com 4 lançamentos sem taxa por mês. A partir da 5ª, a plataforma gera cobrança de {formatCurrency(100)}.</p>
+                <p>Quando houver cobrança, o retorno do cadastro apresenta os dados do PIX em nome de Alytha Intermediações de Negócios Ltda.</p>
+                {offerType === 'venda' ? <p>Na venda, a tratativa de Funrural fica registrada no cadastro para dar mais clareza comercial à mesa e à contraparte.</p> : null}
               </>
             )}
           </div>
         </div>
 
         <div className="rounded-[2rem] border border-slate-200 bg-white/90 p-5 shadow-[0_35px_100px_-70px_rgba(15,23,42,0.55)] sm:p-8">
-          <p className="text-[11px] font-black uppercase tracking-[0.28em] text-amber-700">Orientacoes</p>
+          <p className="text-[11px] font-black uppercase tracking-[0.28em] text-amber-700">Orientações</p>
           <div className="mt-4 space-y-4 text-sm leading-7 text-slate-600">
             {isPublicLead ? (
               <>
-                <p>Preencha produto, praca, volume, safra e condicoes comerciais com clareza para facilitar a avaliacao do corretor.</p>
-                <p>Use os campos de qualidade, pagamento e observacoes para registrar tudo o que pode acelerar o retorno comercial.</p>
-                <p>Apos o envio, o corretor recebe a oportunidade na base privada dele e pode seguir o atendimento com voce.</p>
+                <p>Preencha produto, praça, volume, safra e condições comerciais com clareza para facilitar a avaliação do corretor.</p>
+                <p>Use os campos de qualidade, pagamento e observações para registrar tudo o que pode acelerar o retorno comercial.</p>
+                <p>Após o envio, o corretor recebe a oportunidade na base privada dele e pode seguir o atendimento com você.</p>
               </>
             ) : (
               <>
-                <p>Preencha produto, praca, volume, safra e condicoes comerciais com clareza para acelerar a leitura da mesa.</p>
-                <p>Use os campos de qualidade e observacoes para registrar especificacoes do lote, janela e pontos sensiveis da operacao.</p>
-                <p>Quando o cadastro vier de link exclusivo, a oportunidade fica restrita a base privada do corretor proprietario.</p>
+                <p>Preencha produto, praça, volume, safra e condições comerciais com clareza para acelerar a leitura da mesa.</p>
+                <p>Use os campos de qualidade e observações para registrar especificações do lote, janela e pontos sensíveis da operação.</p>
+                <p>Quando o cadastro vier de link exclusivo, a oportunidade fica restrita à base privada do corretor proprietário.</p>
               </>
             )}
           </div>
@@ -687,12 +855,12 @@ export default function OfferForm({
 
           {registration?.mesaCommission ? (
             <div className="mt-5 rounded-[1.6rem] border border-emerald-100 bg-emerald-50 px-4 py-4 text-sm text-emerald-950">
-              <p className="font-black">Comissao registrada</p>
+              <p className="font-black">Comissão registrada</p>
               <p className="mt-2">
                 {formatCurrency(registration.mesaCommission)} por saca{' '}
                 {registration.exclusiveBrokerId
                   ? 'vinculada ao cadastro deste corretor e aplicada no match.'
-                  : 'para operacao com a mesa Alytha.'}
+                  : 'para operação com a mesa Alytha.'}
               </p>
             </div>
           ) : null}

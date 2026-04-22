@@ -16,8 +16,8 @@ export function ClientPortalPage({ routeBase, currentUser, onLogout }: ClientPor
     <div className="min-h-screen bg-[linear-gradient(180deg,#f8fafc_0%,#ffffff_100%)]">
       <ShellHeader
         eyebrow="Portal do Cliente"
-        title="Modulo inicial do cliente"
-        subtitle="O app enxuto ja reconhece o acesso do cliente e prepara a base para os proximos modulos."
+        title="Módulo inicial do cliente"
+        subtitle="O app enxuto já reconhece o acesso do cliente e prepara a base para os próximos módulos."
         user={currentUser}
         roleLabel="Cliente"
         onLogout={onLogout}
@@ -29,7 +29,7 @@ export function ClientPortalPage({ routeBase, currentUser, onLogout }: ClientPor
             <p className="text-[10px] font-black uppercase tracking-[0.24em] text-emerald-600">Base pronta</p>
             <h2 className="mt-3 text-4xl font-black tracking-tight text-slate-950">Seu login agora pousa em uma base menor e mais clara.</h2>
             <p className="mt-4 max-w-2xl text-base leading-8 text-slate-600">
-              Esta branch virou o modulo inicial da Alytha. O portal completo do cliente pode crescer depois, sem puxar
+              Esta branch virou o módulo inicial da Alytha. O portal completo do cliente pode crescer depois, sem puxar
               junto transporte, armazenagem ou backoffice.
             </p>
             <div className="mt-8 flex flex-col gap-4 sm:flex-row">
@@ -55,8 +55,8 @@ export function ClientPortalPage({ routeBase, currentUser, onLogout }: ClientPor
             <p className="mt-2 text-sm text-slate-300">{currentUser.email}</p>
             <div className="mt-6 space-y-3">
               {[
-                { icon: CircleDot, label: 'Autenticacao compartilhada com os proximos modulos.' },
-                { icon: LayoutGrid, label: 'Nucleo de navegacao reduzido para facilitar o rollout.' },
+                { icon: CircleDot, label: 'Autenticação compartilhada com os próximos módulos.' },
+                { icon: LayoutGrid, label: 'Núcleo de navegação reduzido para facilitar o rollout.' },
                 { icon: Compass, label: 'Ponto de partida consistente para novas entregas.' },
               ].map((item) => (
                 <div key={item.label} className="flex items-start gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3">

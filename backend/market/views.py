@@ -1,9 +1,10 @@
+from datetime import timedelta
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
 from django.contrib.auth import authenticate, get_user_model
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
-from django.db import IntegrityError
+from django.db import IntegrityError, transaction
 from django.db.models import Q, TextField
 from django.db.models.functions import Cast
 from django.shortcuts import get_object_or_404
@@ -15,12 +16,14 @@ from rest_framework.permissions import BasePermission, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import Negotiation, Offer, User
+from .models import Negotiation, Offer, PasswordResetToken, User
 from .serializers import (
     BrokerLinkOfferSubmissionSerializer,
     MarketplaceOfferSerializer,
     NegotiationSerializer,
     OfferSerializer,
+    PasswordResetConfirmSerializer,
+    PasswordResetRequestSerializer,
     ProfileSerializer,
     PublicMarketplaceOfferDetailSerializer,
     PublicMarketplaceOfferListSerializer,
@@ -37,7 +40,8 @@ DESK_COMMISSION_MAX = Decimal('5.00')
 MAX_OPEN_NEGOTIATIONS = 6
 PIX_CNPJ = '66.291.663/0001-10'
 PIX_CNPJ_DIGITS = '66291663000110'
-PIX_BENEFICIARY = 'Alytha Intermediacoes de Negocios Ltda'
+PIX_BENEFICIARY = 'Alytha Intermediações de Negócios Ltda'
+PASSWORD_RESET_TOKEN_TTL = timedelta(hours=1)
 ROLE_LABELS = {
     'vendedor': 'Vendedor',
     'comprador': 'Comprador',
@@ -104,7 +108,7 @@ CLIENT_DASHBOARD_CONFIG = {
             {
                 'id': 'directOffers',
                 'label': 'Oferta direta',
-                'description': 'Cadastros enviados sem intermediar pela mesa.',
+                'description': 'Cadastros enviados sem intermediação da mesa.',
                 'tone': 'amber',
             },
             {
@@ -204,7 +208,7 @@ CLIENT_DASHBOARD_CONFIG = {
             {
                 'id': 'directOffers',
                 'label': 'Oferta direta',
-                'description': 'Cadastros enviados sem intermediar pela mesa.',
+                'description': 'Cadastros enviados sem intermediação da mesa.',
                 'tone': 'amber',
             },
             {
@@ -275,6 +279,70 @@ def get_market_user(request):
     return User.objects.filter(email=request.user.email).first()
 
 
+def get_or_create_auth_user(*, email: str, name: str):
+    auth_user, created = AuthUser.objects.get_or_create(
+        username=email,
+        defaults={'email': email, 'first_name': name},
+    )
+
+    if not created:
+        updated_fields = []
+        if auth_user.email != email:
+            auth_user.email = email
+            updated_fields.append('email')
+        if name and auth_user.first_name != name:
+            auth_user.first_name = name
+            updated_fields.append('first_name')
+        if updated_fields:
+            auth_user.save(update_fields=updated_fields)
+
+    return auth_user
+
+
+def sync_auth_user_for_market_user(*, market_user: User, previous_email: str | None = None, password: str | None = None):
+    reference_email = previous_email or market_user.email
+    auth_user = AuthUser.objects.filter(username=reference_email).first() or AuthUser.objects.filter(username=market_user.email).first()
+
+    if not auth_user:
+        auth_user = get_or_create_auth_user(email=market_user.email, name=market_user.name)
+    else:
+        updated_fields = []
+        if auth_user.username != market_user.email:
+            auth_user.username = market_user.email
+            updated_fields.append('username')
+        if auth_user.email != market_user.email:
+            auth_user.email = market_user.email
+            updated_fields.append('email')
+        if market_user.name and auth_user.first_name != market_user.name:
+            auth_user.first_name = market_user.name
+            updated_fields.append('first_name')
+        if updated_fields:
+            auth_user.save(update_fields=updated_fields)
+
+    normalized_password = str(password or '').strip()
+    if normalized_password:
+        auth_user.set_password(normalized_password)
+        auth_user.save(update_fields=['password'])
+
+    return auth_user
+
+
+def expire_active_password_reset_tokens(user: User):
+    PasswordResetToken.objects.filter(user=user, used_at__isnull=True, expires_at__gt=timezone.now()).update(used_at=timezone.now())
+
+
+def build_password_reset_path(token: str):
+    return f'/redefinir-senha/{token}'
+
+
+def build_password_reset_response_payload(reset_token: PasswordResetToken | None = None):
+    payload = {'detail': 'Se o e-mail estiver cadastrado, você receberá as instruções para redefinir a senha.'}
+    if reset_token is not None:
+        payload['resetPath'] = build_password_reset_path(str(reset_token.token))
+        payload['token'] = str(reset_token.token)
+    return payload
+
+
 def is_half_step_commission(value: Decimal) -> bool:
     half_steps = value * Decimal('2')
     return half_steps == half_steps.to_integral_value()
@@ -286,7 +354,7 @@ def validate_desk_commission(value: Decimal | None) -> Decimal:
 
     commission = Decimal(str(value)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
     if commission < DESK_COMMISSION_MIN or commission > DESK_COMMISSION_MAX or not is_half_step_commission(commission):
-        raise DRFValidationError({'detail': 'Selecione uma comissao da mesa entre R$ 0,50 e R$ 5,00 em passos de R$ 0,50.'})
+        raise DRFValidationError({'detail': 'Selecione uma comissão da mesa entre R$ 0,50 e R$ 5,00 em passos de R$ 0,50.'})
     return commission
 
 
@@ -296,7 +364,7 @@ def validate_match_per_sack_commission(value: Decimal | None) -> Decimal:
 
     commission = Decimal(str(value)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
     if commission < MATCH_DESK_COMMISSION_MIN or commission > DESK_COMMISSION_MAX or not is_half_step_commission(commission):
-        raise DRFValidationError({'detail': 'Selecione uma comissao do match entre R$ 1,00 e R$ 5,00 em passos de R$ 0,50.'})
+        raise DRFValidationError({'detail': 'Selecione uma comissão do match entre R$ 1,00 e R$ 5,00 em passos de R$ 0,50.'})
     return commission
 
 
@@ -337,7 +405,7 @@ def build_pix_payload(offer: Offer):
         'reference': reference,
         'copyMessage': (
             f'PIX CNPJ {PIX_CNPJ} | Favorecido: {PIX_BENEFICIARY} | '
-            f'Valor: R$ {formatted_amount} | Referencia: {reference}'
+            f'Valor: R$ {formatted_amount} | Referência: {reference}'
         ),
     }
 
@@ -513,7 +581,7 @@ def build_public_marketplace_payload(queryset=None):
 def build_client_dashboard_payload(market_user: User):
     config = CLIENT_DASHBOARD_CONFIG.get(market_user.type)
     if not config:
-        raise PermissionDenied('Painel disponivel apenas para comprador e vendedor.')
+        raise PermissionDenied('Painel disponível apenas para comprador e vendedor.')
 
     own_queryset = Offer.objects.select_related('user', 'exclusive_broker').filter(user=market_user).order_by('-created_at')
     public_queryset = get_public_marketplace_queryset()
@@ -580,7 +648,7 @@ def build_client_dashboard_payload(market_user: User):
         'account': {
             **config['account'],
             'profileValue': ROLE_LABELS.get(market_user.type, market_user.type),
-            'companyValue': market_user.company or 'Nao informada',
+            'companyValue': market_user.company or 'Não informada',
             'marketIndicators': [
                 {
                     **item,
@@ -652,8 +720,64 @@ def build_client_dashboard_payload(market_user: User):
 class UserViewSet(viewsets.ModelViewSet):
     queryset = User.objects.all().order_by('id')
     serializer_class = UserSerializer
-    http_method_names = ['get', 'post', 'delete', 'head', 'options']
+    http_method_names = ['get', 'post', 'patch', 'delete', 'head', 'options']
     permission_classes = [IsAuthenticated, BrokerReadOnlyOrBackoffice]
+
+    def create(self, request, *args, **kwargs):
+        data = request.data.copy()
+        data.pop('password', None)
+        if 'email' in data:
+            data['email'] = str(data.get('email') or '').strip()
+
+        serializer = self.get_serializer(data=data)
+        serializer.is_valid(raise_exception=True)
+        password = str(request.data.get('password') or '').strip() or AuthUser.objects.make_random_password()
+
+        try:
+            with transaction.atomic():
+                user = serializer.save()
+                sync_auth_user_for_market_user(market_user=user, password=password)
+        except IntegrityError:
+            return Response({'detail': 'e-mail jÃ¡ cadastrado'}, status=status.HTTP_400_BAD_REQUEST)
+
+        headers = self.get_success_headers(serializer.data)
+        return Response(self.get_serializer(user).data, status=status.HTTP_201_CREATED, headers=headers)
+
+    def partial_update(self, request, *args, **kwargs):
+        instance = self.get_object()
+        previous_email = instance.email
+        data = request.data.copy()
+        data.pop('password', None)
+        if 'email' in data:
+            data['email'] = str(data.get('email') or '').strip()
+
+        serializer = self.get_serializer(instance, data=data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        password = str(request.data.get('password') or '').strip()
+
+        try:
+            with transaction.atomic():
+                user = serializer.save()
+                sync_auth_user_for_market_user(
+                    market_user=user,
+                    previous_email=previous_email,
+                    password=password or None,
+                )
+        except IntegrityError:
+            return Response({'detail': 'e-mail jÃ¡ cadastrado'}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response(self.get_serializer(user).data)
+
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        auth_user = AuthUser.objects.filter(username=instance.email).first()
+
+        with transaction.atomic():
+            response = super().destroy(request, *args, **kwargs)
+            if auth_user:
+                auth_user.delete()
+
+        return response
 
 
 class ProfileView(APIView):
@@ -662,13 +786,13 @@ class ProfileView(APIView):
     def get(self, request):
         market_user = get_market_user(request)
         if not market_user:
-            raise PermissionDenied('Usuario nao localizado.')
+            raise PermissionDenied('Usuário não localizado.')
         return Response(ProfileSerializer(market_user).data)
 
     def patch(self, request):
         market_user = get_market_user(request)
         if not market_user:
-            raise PermissionDenied('Usuario nao localizado.')
+            raise PermissionDenied('Usuário não localizado.')
 
         serializer = ProfileSerializer(market_user, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
@@ -740,6 +864,10 @@ class PublicMarketplaceOfferListView(APIView):
     def get(self, request):
         queryset = get_public_marketplace_queryset()
 
+        grain = str(request.query_params.get('grain') or '').strip()
+        if grain:
+            queryset = queryset.filter(grain__iexact=grain)
+
         offer_type = str(request.query_params.get('type') or '').strip().lower()
         if offer_type in ('venda', 'compra'):
             queryset = queryset.filter(offer_type=offer_type)
@@ -777,7 +905,7 @@ class PublicMarketplaceOfferDetailView(APIView):
 
     def get(self, request, offer_id):
         offer = get_object_or_404(get_public_marketplace_queryset(), id=offer_id)
-        return Response(PublicMarketplaceOfferDetailSerializer(offer).data)
+        return Response(PublicMarketplaceOfferDetailSerializer(offer, context={'request': request}).data)
 
 
 class ClientDashboardView(APIView):
@@ -786,9 +914,9 @@ class ClientDashboardView(APIView):
     def get(self, request):
         market_user = get_market_user(request)
         if not market_user:
-            raise PermissionDenied('Usuario nao localizado.')
+            raise PermissionDenied('Usuário não localizado.')
         if market_user.type not in ('vendedor', 'comprador'):
-            raise PermissionDenied('Painel disponivel apenas para comprador e vendedor.')
+            raise PermissionDenied('Painel disponível apenas para comprador e vendedor.')
         return Response(build_client_dashboard_payload(market_user))
 
 
@@ -823,7 +951,7 @@ class OfferViewSet(viewsets.ModelViewSet):
     def create(self, request, *args, **kwargs):
         market_user = get_market_user(request)
         if not market_user:
-            raise PermissionDenied('Usuario nao localizado.')
+            raise PermissionDenied('Usuário não localizado.')
 
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -853,7 +981,7 @@ class OfferViewSet(viewsets.ModelViewSet):
         user_role = getattr(market_user, 'type', None)
         is_privileged = request.user.is_staff or user_role in ('backoffice', 'corretor')
         if not is_privileged and instance.user != market_user:
-            raise PermissionDenied('Sem permissao para remover esta oferta.')
+            raise PermissionDenied('Sem permissão para remover esta oferta.')
         return super().destroy(request, *args, **kwargs)
 
 
@@ -875,7 +1003,7 @@ class PublicBrokerOfferCreateView(APIView):
         existing_user = User.objects.filter(email=email).first()
         if existing_user and existing_user.type != target_type:
             return Response(
-                {'detail': 'Este e-mail ja esta vinculado a um perfil diferente na Alytha.'},
+                {'detail': 'Este e-mail já está vinculado a um perfil diferente na Alytha.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -954,12 +1082,12 @@ class NegotiationViewSet(viewsets.ModelViewSet):
         if not (request.user.is_staff or user_role in ('backoffice', 'corretor')):
             raise PermissionDenied('Apenas corretores ou backoffice podem casar ofertas.')
         if not market_user:
-            raise PermissionDenied('Usuario nao localizado.')
+            raise PermissionDenied('Usuário não localizado.')
 
         open_negotiations = Negotiation.objects.filter(broker=market_user, status='pendente').count()
         if open_negotiations >= MAX_OPEN_NEGOTIATIONS:
             return Response(
-                {'detail': 'Somente pode ter 6 negociacoes em aberto.'},
+                {'detail': 'Somente pode ter 6 negociações em aberto.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -967,23 +1095,23 @@ class NegotiationViewSet(viewsets.ModelViewSet):
         sell_offer_id = request.data.get('sellOfferId')
 
         if not buy_offer_id or not sell_offer_id:
-            return Response({'detail': 'buyOfferId e sellOfferId sao obrigatorios'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'detail': 'buyOfferId e sellOfferId são obrigatórios'}, status=status.HTTP_400_BAD_REQUEST)
 
         buy_offer = get_object_or_404(Offer, pk=buy_offer_id)
         sell_offer = get_object_or_404(Offer, pk=sell_offer_id)
 
         if buy_offer.offer_type != 'compra' or sell_offer.offer_type != 'venda':
-            return Response({'detail': 'Tipos de oferta incompativeis para match'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'detail': 'Tipos de oferta incompatíveis para match'}, status=status.HTTP_400_BAD_REQUEST)
         if buy_offer.status != 'ativa' or sell_offer.status != 'ativa':
             return Response({'detail': 'Apenas ofertas ativas podem ser casadas'}, status=status.HTTP_400_BAD_REQUEST)
         if (buy_offer.grain or '').strip().lower() != (sell_offer.grain or '').strip().lower():
-            return Response({'detail': 'So e possivel casar ofertas do mesmo grao'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'detail': 'Só é possível casar ofertas do mesmo grão'}, status=status.HTTP_400_BAD_REQUEST)
 
         if user_role == 'corretor':
             exclusive_ids = {buy_offer.exclusive_broker_id, sell_offer.exclusive_broker_id} - {None}
             if exclusive_ids and exclusive_ids != {market_user.id}:
                 return Response(
-                    {'detail': 'Esta oferta exclusiva esta vinculada a outro corretor.'},
+                    {'detail': 'Esta oferta exclusiva está vinculada a outro corretor.'},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
@@ -994,18 +1122,18 @@ class NegotiationViewSet(viewsets.ModelViewSet):
         registration_commission = resolve_match_registration_commission(sell_offer, buy_offer)
         brokerage_mode = 'per_sack' if registration_commission is not None else request.data.get('brokerageMode') or 'percentage'
         if brokerage_mode not in ('percentage', 'fixed', 'per_sack', 'spread'):
-            return Response({'detail': 'brokerageMode invalido'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'detail': 'brokerageMode inválido'}, status=status.HTTP_400_BAD_REQUEST)
 
         brokerage_percentage = None
         brokerage_value = None
         brokerage_payer = request.data.get('brokeragePayer') or 'seller'
         if brokerage_payer not in ('seller', 'buyer'):
-            return Response({'detail': 'brokeragePayer invalido'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'detail': 'brokeragePayer inválido'}, status=status.HTTP_400_BAD_REQUEST)
 
         if brokerage_mode == 'percentage':
             brokerage_percentage = self._parse_decimal(request.data.get('brokeragePercentage', '1'))
             if brokerage_percentage is None:
-                return Response({'detail': 'brokeragePercentage invalido'}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({'detail': 'brokeragePercentage inválido'}, status=status.HTTP_400_BAD_REQUEST)
             if brokerage_percentage < Decimal('0') or brokerage_percentage > Decimal('100'):
                 return Response({'detail': 'brokeragePercentage deve estar entre 0 e 100'}, status=status.HTTP_400_BAD_REQUEST)
             brokerage_percentage = brokerage_percentage.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
@@ -1013,7 +1141,7 @@ class NegotiationViewSet(viewsets.ModelViewSet):
         elif brokerage_mode == 'spread':
             brokerage_value = (Decimal(buy_offer.price) - Decimal(sell_offer.price)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
             if brokerage_value <= Decimal('0'):
-                return Response({'detail': 'Spread deve ser positivo para ser usado como comissao'}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({'detail': 'Spread deve ser positivo para ser usado como comissão'}, status=status.HTTP_400_BAD_REQUEST)
             brokerage_fee = (Decimal(proposed_quantity) * brokerage_value).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
         else:
             if registration_commission is not None:
@@ -1026,7 +1154,7 @@ class NegotiationViewSet(viewsets.ModelViewSet):
 
                 brokerage_value = self._parse_decimal(raw_value)
                 if brokerage_value is None:
-                    return Response({'detail': 'brokerageValue invalido'}, status=status.HTTP_400_BAD_REQUEST)
+                    return Response({'detail': 'brokerageValue inválido'}, status=status.HTTP_400_BAD_REQUEST)
                 brokerage_value = brokerage_value.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
 
                 if brokerage_mode == 'per_sack':
@@ -1066,13 +1194,13 @@ class NegotiationViewSet(viewsets.ModelViewSet):
         full_access = request.user.is_staff or user_role == 'backoffice'
         is_participant = market_user in [instance.buyer, instance.seller, instance.broker]
         if not full_access and not is_participant:
-            raise PermissionDenied('Sem permissao para alterar esta negociacao.')
+            raise PermissionDenied('Sem permissão para alterar esta negociação.')
 
         status_value = request.data.get('status')
         if status_value:
             valid_status = {choice[0] for choice in Negotiation.STATUS_CHOICES}
             if status_value not in valid_status:
-                return Response({'detail': 'Status invalido'}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({'detail': 'Status inválido'}, status=status.HTTP_400_BAD_REQUEST)
             instance.status = status_value
             instance.save(update_fields=['status', 'updated_at'])
             if status_value == 'aceita':
@@ -1092,13 +1220,13 @@ class NegotiationViewSet(viewsets.ModelViewSet):
         full_access = request.user.is_staff or user_role == 'backoffice'
         is_participant = market_user in [instance.buyer, instance.seller, instance.broker]
         if not full_access and not is_participant:
-            raise PermissionDenied('Sem permissao para remover esta negociacao.')
+            raise PermissionDenied('Sem permissão para remover esta negociação.')
         return super().destroy(request, *args, **kwargs)
 
 
 class RegisterView(APIView):
     """
-    Registra usuarios por tipo: comprador, vendedor, corretor, transportador (corretor), armazenagem (backoffice).
+    Registra usuários por tipo: comprador, vendedor, corretor, transportador (corretor), armazenagem (backoffice).
     """
 
     ROLE_MAP = {
@@ -1116,25 +1244,80 @@ class RegisterView(APIView):
     def post(self, request, role_slug):
         role = self.ROLE_MAP.get(role_slug)
         if not role:
-            return Response({'detail': 'tipo invalido'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'detail': 'tipo inválido'}, status=status.HTTP_400_BAD_REQUEST)
         data = request.data.copy()
         data['type'] = role
         password = data.get('password') or AuthUser.objects.make_random_password()
-        email = data.get('email')
+        email = str(data.get('email') or '').strip()
+        data['email'] = email
         name = data.get('name') or data.get('username') or ''
         if not email:
-            return Response({'detail': 'email obrigatorio'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'detail': 'e-mail obrigatório'}, status=status.HTTP_400_BAD_REQUEST)
         serializer = UserSerializer(data=data)
         if serializer.is_valid():
             try:
                 user = serializer.save()
-                auth_user, _ = AuthUser.objects.get_or_create(username=email, defaults={'email': email, 'first_name': name})
+                auth_user = get_or_create_auth_user(email=email, name=name)
                 auth_user.set_password(password)
                 auth_user.save()
             except IntegrityError:
-                return Response({'detail': 'email ja cadastrado'}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({'detail': 'e-mail já cadastrado'}, status=status.HTTP_400_BAD_REQUEST)
             return Response({**UserSerializer(user).data, 'token_info': 'use /api/login para obter JWT'}, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class ForgotPasswordRequestView(APIView):
+    permission_classes = []
+
+    def post(self, request):
+        serializer = PasswordResetRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        email = serializer.validated_data['email'].strip()
+        market_user = User.objects.filter(email=email).first()
+        reset_token = None
+
+        if market_user:
+            expire_active_password_reset_tokens(market_user)
+            reset_token = PasswordResetToken.objects.create(
+                user=market_user,
+                expires_at=timezone.now() + PASSWORD_RESET_TOKEN_TTL,
+            )
+
+        return Response(build_password_reset_response_payload(reset_token), status=status.HTTP_200_OK)
+
+
+class ForgotPasswordConfirmView(APIView):
+    permission_classes = []
+
+    def post(self, request):
+        serializer = PasswordResetConfirmSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        token = serializer.validated_data['token']
+        new_password = serializer.validated_data['new_password']
+        reset_token = PasswordResetToken.objects.filter(token=token).select_related('user').first()
+
+        if not reset_token or not reset_token.is_active:
+            return Response({'detail': 'O link para redefinir senha expirou ou é inválido.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        auth_user = AuthUser.objects.filter(username=reset_token.user.email).first()
+        if not auth_user:
+            return Response({'detail': 'Conta não localizada para redefinir a senha.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            validate_password(new_password, auth_user)
+        except DjangoValidationError as exc:
+            return Response({'detail': ' '.join(exc.messages)}, status=status.HTTP_400_BAD_REQUEST)
+
+        auth_user.set_password(new_password)
+        auth_user.save(update_fields=['password'])
+
+        reset_token.used_at = timezone.now()
+        reset_token.save(update_fields=['used_at'])
+        expire_active_password_reset_tokens(reset_token.user)
+
+        return Response({'detail': 'Senha redefinida com sucesso.'}, status=status.HTTP_200_OK)
 
 
 class LoginView(APIView):
@@ -1145,13 +1328,13 @@ class LoginView(APIView):
     permission_classes = []
 
     def post(self, request):
-        email = request.data.get('email')
+        email = str(request.data.get('email') or '').strip()
         password = request.data.get('password')
         if not email or not password:
-            return Response({'detail': 'email e senha obrigatorios'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'detail': 'e-mail e senha obrigatórios'}, status=status.HTTP_400_BAD_REQUEST)
         auth_user = authenticate(username=email, password=password)
         if not auth_user:
-            return Response({'detail': 'credenciais invalidas'}, status=status.HTTP_401_UNAUTHORIZED)
+            return Response({'detail': 'credenciais inválidas'}, status=status.HTTP_401_UNAUTHORIZED)
         market_user = User.objects.filter(email=email).first()
         from rest_framework_simplejwt.tokens import RefreshToken
 
@@ -1174,7 +1357,7 @@ class ChangePasswordView(APIView):
 
         if not current_password or not new_password:
             return Response(
-                {'detail': 'current_password e new_password sao obrigatorios.'},
+                {'detail': 'current_password e new_password são obrigatórios.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -1182,7 +1365,7 @@ class ChangePasswordView(APIView):
 
         if not user.check_password(current_password):
             return Response(
-                {'detail': 'Senha atual invalida.'},
+                {'detail': 'Senha atual inválida.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 

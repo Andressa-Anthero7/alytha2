@@ -505,7 +505,7 @@ export function TradingDeskPage({ currentUser, onLogout }: TradingDeskPageProps)
       setBrokerLinkFeedback(label);
       window.setTimeout(() => setBrokerLinkFeedback(''), 2200);
     } catch {
-      setBrokerLinkFeedback('Nao foi possivel copiar o link agora.');
+      setBrokerLinkFeedback('Não foi possível copiar o link agora.');
     }
   };
 
@@ -564,7 +564,7 @@ export function TradingDeskPage({ currentUser, onLogout }: TradingDeskPageProps)
     }
 
     if (matchBrokerageMode === 'per_sack' && parsedCommissionValue < 1) {
-      setError('A comissao em reais por saca deve ser maior ou igual a 1,00.');
+      setError('A comissão em reais por saca deve ser maior ou igual a 1,00.');
       return;
     }
 
@@ -624,7 +624,7 @@ export function TradingDeskPage({ currentUser, onLogout }: TradingDeskPageProps)
 
     if (matchCommissionLocked) {
       if (!matchRegistrationCommissionSource) {
-        setError('Nao foi possivel identificar a comissao cadastrada para este match.');
+        setError('Não foi possível identificar a comissão cadastrada para este match.');
         return;
       }
 
@@ -636,41 +636,41 @@ export function TradingDeskPage({ currentUser, onLogout }: TradingDeskPageProps)
       }
 
       if (!spreadIsPositive) {
-        setError('O spread precisa ser positivo para ser usado como comissao.');
+        setError('O spread precisa ser positivo para ser usado como comissão.');
         return;
       }
     } else {
       const normalizedCommissionValue = matchBrokerageValue.replace(',', '.').trim();
       if (!normalizedCommissionValue) {
-        setError('Informe o valor da comissao para executar o match.');
+        setError('Informe o valor da comissão para executar o match.');
         return;
       }
 
       parsedCommissionValue = Number(normalizedCommissionValue);
       if (!Number.isFinite(parsedCommissionValue)) {
-        setError('Informe um valor numerico valido para a comissao.');
+        setError('Informe um valor numérico válido para a comissão.');
         return;
       }
 
       if (effectiveMatchBrokerageMode === 'percentage' && (parsedCommissionValue < 0 || parsedCommissionValue > 100)) {
-        setError('A comissao em porcentagem deve estar entre 0 e 100.');
+        setError('A comissão em porcentagem deve estar entre 0 e 100.');
         return;
       }
 
       if (effectiveMatchBrokerageMode === 'per_sack' && parsedCommissionValue < 1) {
-        setError('A comissao em reais por saca deve ser maior ou igual a 1,00.');
+        setError('A comissão em reais por saca deve ser maior ou igual a 1,00.');
         return;
       }
 
       if (effectiveMatchBrokerageMode === 'per_sack') {
         if (parsedCommissionValue > 5) {
-          setError('A comissao em reais por saca deve ser no maximo 5,00.');
+          setError('A comissão em reais por saca deve ser no máximo 5,00.');
           return;
         }
 
         const halfSteps = parsedCommissionValue * 2;
         if (Math.abs(halfSteps - Math.round(halfSteps)) > 1e-9) {
-          setError('A comissao em reais por saca deve variar de 0,50 em 0,50.');
+          setError('A comissão em reais por saca deve variar de 0,50 em 0,50.');
           return;
         }
       }
@@ -698,7 +698,7 @@ export function TradingDeskPage({ currentUser, onLogout }: TradingDeskPageProps)
 
     if (!response.ok) {
       const payloadError = await response.json().catch(() => null);
-      setError(payloadError?.detail || 'Nao foi possivel executar o match.');
+      setError(payloadError?.detail || 'Não foi possível executar o match.');
       return;
     }
 
@@ -870,7 +870,7 @@ export function TradingDeskPage({ currentUser, onLogout }: TradingDeskPageProps)
 
     return (
       <div className={`rounded-2xl border border-white/10 bg-slate-950/30 ${compact ? 'p-3' : 'p-4'}`}>
-        <p className={`font-black uppercase tracking-[0.22em] text-slate-300 ${compact ? 'text-[10px]' : 'text-[11px]'}`}>Comissao</p>
+        <p className={`font-black uppercase tracking-[0.22em] text-slate-300 ${compact ? 'text-[10px]' : 'text-[11px]'}`}>Comissão</p>
 
         <div className="mt-3 rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-3 py-3">
           <div className="flex items-start justify-between gap-3">
@@ -888,7 +888,7 @@ export function TradingDeskPage({ currentUser, onLogout }: TradingDeskPageProps)
         </div>
 
         <label className="mt-3 block rounded-xl border border-slate-700 bg-slate-900/80 px-3 py-2">
-          <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">Responsavel</span>
+          <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">Responsável</span>
           <select
             value={matchBrokeragePayer}
             onChange={(event) => setMatchBrokeragePayer(event.target.value as BrokeragePayer)}
@@ -1857,7 +1857,7 @@ export function TradingDeskPage({ currentUser, onLogout }: TradingDeskPageProps)
                 {showUserMenu && (
                   <>
                     <div className="fixed inset-0 z-40" onClick={() => setShowUserMenu(false)} />
-                    <div className="absolute right-0 z-50 mt-2 w-[22rem] origin-top-right overflow-hidden rounded-[1.6rem] border border-slate-200 bg-white shadow-2xl">
+                    <div className="absolute right-0 z-50 mt-2 flex max-h-[min(calc(100vh-7rem),38rem)] w-[min(22rem,calc(100vw-1rem))] origin-top-right flex-col overflow-hidden rounded-[1.6rem] border border-slate-200 bg-white shadow-2xl">
                       <div className="border-b border-slate-100 px-4 py-4">
                         <p className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500">Conta profissional</p>
                         <p className="mt-2 truncate text-sm font-bold text-slate-900">{currentUser.name || 'Equipe Alytha'}</p>
@@ -1867,6 +1867,7 @@ export function TradingDeskPage({ currentUser, onLogout }: TradingDeskPageProps)
                         <p className="mt-2 truncate text-xs text-slate-500">{currentUser.email}</p>
                       </div>
 
+                      <div className="custom-scrollbar min-h-0 flex-1 overflow-y-auto">
                       <div className="hidden border-b border-slate-100 bg-emerald-50/70 px-4 py-4">
                         <p className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500">Comissões (mês)</p>
                         <p className="mt-2 text-lg font-black text-emerald-700">Em apuração</p>
@@ -1960,10 +1961,15 @@ export function TradingDeskPage({ currentUser, onLogout }: TradingDeskPageProps)
                         </a>
                       </div>
 
-                      <div className="border-t border-slate-100 px-2 py-2">
+                      </div>
+
+                      <div className="border-t border-slate-100 bg-white px-2 py-2">
                         <button
                           type="button"
-                          onClick={onLogout}
+                          onClick={() => {
+                            setShowUserMenu(false);
+                            onLogout();
+                          }}
                           className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-sm font-bold text-red-600 transition-colors hover:bg-red-50"
                         >
                           <LogOut className="h-4 w-4" />

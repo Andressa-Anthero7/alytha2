@@ -4,7 +4,7 @@ import Navbar from '../components/Navbar';
 import { isAuthenticated } from '../lib/auth';
 
 const sellerSteps = [
-  'Cadastre produto, volume e praca.',
+  'Cadastre produto, volume e praça.',
   'Defina mesa Alytha ou oferta direta.',
   'Deixe sua oferta pronta para consulta.',
 ] as const;
@@ -19,7 +19,7 @@ export default function SellerLandingPage() {
       <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8 lg:py-10">
         <section className="mb-6 flex flex-col gap-3 rounded-[1.8rem] border border-white/80 bg-white/90 p-4 shadow-[0_35px_100px_-75px_rgba(15,23,42,0.55)] sm:mb-8 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:p-5">
           <div>
-            <p className="text-[10px] font-black uppercase tracking-[0.22em] text-emerald-700">Acesso rapido</p>
+            <p className="text-[10px] font-black uppercase tracking-[0.22em] text-emerald-700">Acesso rápido</p>
             <p className="mt-1.5 text-[13px] font-semibold text-slate-600 sm:text-sm">Cadastre sua oferta logo abaixo do header.</p>
           </div>
 
@@ -42,12 +42,12 @@ export default function SellerLandingPage() {
 
         <section className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
           <div className="max-w-3xl">
-            <p className="text-[10px] font-black uppercase tracking-[0.24em] text-emerald-700">Vender graos</p>
+            <p className="text-[10px] font-black uppercase tracking-[0.24em] text-emerald-700">Vender grãos</p>
             <h1 className="mt-4 text-3xl font-black leading-[1.05] tracking-tight sm:text-4xl lg:text-5xl">
               Publique soja, milho e sorgo com mais clareza comercial.
             </h1>
-            <p className="mt-4 max-w-2xl text-[14px] leading-7 text-slate-600 sm:text-base sm:leading-8">
-              Cadastre sua oferta, organize as informacoes do lote e deixe a oportunidade pronta para negociacao.
+            <p className="mt-4 max-w-2xl text-[15px] leading-7 text-slate-600 sm:text-[17px] sm:leading-8">
+              Cadastre sua oferta, organize as informações do lote e deixe a oportunidade pronta para negociação.
             </p>
           </div>
 

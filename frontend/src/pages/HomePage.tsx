@@ -1,7 +1,7 @@
-import { AlertCircle, LoaderCircle, Search } from 'lucide-react';
+import { AlertCircle, ChevronDown, ChevronUp, LoaderCircle, Menu, Search } from 'lucide-react';
 import { useEffect, useMemo, useState, type JSX } from 'react';
 import { Link } from 'react-router-dom';
-import Navbar from '../components/Navbar';
+import Navbar, { OPEN_MOBILE_NAV_EVENT } from '../components/Navbar';
 import { apiFetch } from '../lib/api';
 import type { PublicMarketplaceOfferListItem, PublicMarketplaceOffersListPayload } from '../types';
 
@@ -44,7 +44,7 @@ function OfferCard({ offer }: JSX.IntrinsicAttributes & { offer: PublicMarketpla
           </span>
           <h3 className="mt-3 text-xl font-black tracking-tight text-slate-950 sm:text-2xl">{offer.grain}</h3>
         </div>
-        <p className="text-right text-[9px] font-black uppercase tracking-[0.16em] text-slate-500">{formatDate(offer.createdAt)}</p>
+        <p className="text-right text-[11px] font-black uppercase tracking-[0.16em] text-slate-500 sm:text-xs">{formatDate(offer.createdAt)}</p>
       </div>
 
       <div className="mt-4 grid gap-2.5 text-[13px] text-slate-600 sm:text-sm">
@@ -75,7 +75,7 @@ function OfferCard({ offer }: JSX.IntrinsicAttributes & { offer: PublicMarketpla
           {channelLabel[offer.negotiationChannel]} • {offer.shipping}
         </div>
         <Link
-          to={`/oportunidade/${offer.id}`}
+          to={`/oportunidades/${offer.id}`}
           className={`inline-flex items-center justify-center rounded-full px-4 py-2.5 text-[11px] font-black uppercase tracking-[0.18em] text-white ${actionTone}`}
         >
           Acessar
@@ -92,17 +92,26 @@ function OfferCard({ offer }: JSX.IntrinsicAttributes & { offer: PublicMarketpla
 }
 
 export default function HomePage() {
+  const mobileNavLabels = ['Comprar/Vender', 'Corretores'] as const;
   const [payload, setPayload] = useState<PublicMarketplaceOffersListPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [query, setQuery] = useState('');
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
+  const [mobileNavLabelIndex, setMobileNavLabelIndex] = useState(0);
+  const [grainFilter, setGrainFilter] = useState<'todas' | 'Soja' | 'Milho' | 'Sorgo'>('todas');
   const [typeFilter, setTypeFilter] = useState<'todas' | 'venda' | 'compra'>('todas');
   const [channelFilter, setChannelFilter] = useState<'todas' | 'mesa' | 'direta'>('todas');
   const [shippingFilter, setShippingFilter] = useState<'todas' | 'FOB' | 'CIF'>('todas');
 
   const hasActiveFilters = useMemo(
-    () => Boolean(query.trim()) || typeFilter !== 'todas' || channelFilter !== 'todas' || shippingFilter !== 'todas',
-    [channelFilter, query, shippingFilter, typeFilter],
+    () =>
+      Boolean(query.trim())
+      || grainFilter !== 'todas'
+      || typeFilter !== 'todas'
+      || channelFilter !== 'todas'
+      || shippingFilter !== 'todas',
+    [channelFilter, grainFilter, query, shippingFilter, typeFilter],
   );
 
   useEffect(() => {
@@ -115,6 +124,9 @@ export default function HomePage() {
         const params = new URLSearchParams();
         if (query.trim()) {
           params.set('q', query.trim());
+        }
+        if (grainFilter !== 'todas') {
+          params.set('grain', grainFilter);
         }
         if (typeFilter !== 'todas') {
           params.set('type', typeFilter);
@@ -153,27 +165,52 @@ export default function HomePage() {
       clearTimeout(timeout);
       controller.abort();
     };
-  }, [channelFilter, query, shippingFilter, typeFilter]);
+  }, [channelFilter, grainFilter, query, shippingFilter, typeFilter]);
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      setMobileNavLabelIndex((currentValue) => (currentValue + 1) % mobileNavLabels.length);
+    }, 2400);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [mobileNavLabels.length]);
 
   const items = payload?.items ?? [];
+  const mobileNavLabel = mobileNavLabels[mobileNavLabelIndex];
+
+  const openMobileNav = () => {
+    window.dispatchEvent(new Event(OPEN_MOBILE_NAV_EVENT));
+  };
 
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top,#eef6ef_0%,#ffffff_34%,#f6efe4_100%)] text-slate-900">
       <Navbar />
 
       <main className="mx-auto max-w-7xl px-4 py-5 sm:px-6 sm:py-6 lg:px-8 lg:py-7">
-        <section className="rounded-[1.8rem] border border-white/80 bg-white/92 p-5 shadow-[0_45px_120px_-80px_rgba(15,23,42,0.55)] sm:rounded-[2.1rem] sm:p-6">
-          <div className="flex flex-col gap-2.5 sm:flex-row sm:items-end sm:justify-between">
-            <div>
-              <p className="text-[10px] font-black uppercase tracking-[0.24em] text-slate-500">Marketplace</p>
-              <h1 className="mt-2 text-2xl font-black tracking-tight text-slate-950 sm:text-3xl">Ofertas e demandas públicas</h1>
-              <p className="mt-2 max-w-3xl text-[13px] leading-6 text-slate-600 sm:text-sm sm:leading-6">
+        <section className="rounded-[1.6rem] border border-white/80 bg-white/92 p-3.5 shadow-[0_45px_120px_-80px_rgba(15,23,42,0.55)] sm:rounded-[1.9rem] sm:p-4">
+          <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+            <div className="max-w-3xl">
+              <p className="text-[10px] font-black uppercase tracking-[0.24em] text-slate-500 sm:text-[11px]">Marketplace</p>
+              <h1 className="mt-1 text-[1.85rem] font-black tracking-tight text-slate-950 sm:text-[2.05rem] lg:text-[2.15rem]">Ofertas e demandas</h1>
+              <p className="mt-0.5 max-w-3xl text-[13px] leading-6 text-slate-600 sm:text-[15px] sm:leading-7">
                 Busque por qualquer campo da oferta/demanda (grão, praça, safra, frete, modalidade, pagamento e outros).
               </p>
             </div>
 
-            <div className="flex items-center gap-3">
-              <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3.5 py-2 text-[9px] font-black uppercase tracking-[0.16em] text-slate-600">
+            <div className="flex flex-wrap items-center gap-2.5">
+              <button
+                type="button"
+                onClick={() => setMobileFiltersOpen((currentValue) => !currentValue)}
+                aria-expanded={mobileFiltersOpen}
+                aria-controls="marketplace-mobile-filters"
+                className="flex w-full items-center justify-between gap-2 rounded-full border border-slate-200 bg-white px-3.5 py-2 text-[11px] font-black uppercase tracking-[0.14em] text-slate-700 hover:bg-slate-50 sm:hidden"
+              >
+                Busca e filtros
+                {mobileFiltersOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+              </button>
+              <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.14em] text-slate-600 sm:text-xs">
                 {payload?.count ?? 0} resultado(s)
               </span>
               {hasActiveFilters ? (
@@ -181,11 +218,12 @@ export default function HomePage() {
                   type="button"
                   onClick={() => {
                     setQuery('');
+                    setGrainFilter('todas');
                     setTypeFilter('todas');
                     setChannelFilter('todas');
                     setShippingFilter('todas');
                   }}
-                  className="rounded-full border border-slate-200 bg-white px-3.5 py-2 text-[11px] font-black uppercase tracking-[0.16em] text-slate-700 hover:bg-slate-50"
+                  className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.14em] text-slate-700 hover:bg-slate-50 sm:text-xs"
                 >
                   Limpar
                 </button>
@@ -193,16 +231,33 @@ export default function HomePage() {
             </div>
           </div>
 
-          <div className="mt-4 grid gap-2.5 lg:grid-cols-[1.35fr_0.65fr_0.65fr_0.65fr]">
+          <div
+            id="marketplace-mobile-filters"
+            className={`mt-2.5 gap-2 lg:grid-cols-[1.2fr_0.6fr_0.6fr_0.6fr_0.6fr] ${mobileFiltersOpen ? 'grid' : 'hidden'} sm:grid`}
+          >
             <label className="relative block">
               <span className="sr-only">Buscar</span>
-              <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
               <input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
-                className="h-11 w-full rounded-2xl border border-slate-200 bg-white pl-10 pr-4 text-[13px] font-semibold text-slate-900 placeholder:text-slate-400 focus:border-emerald-300 focus:outline-none focus:ring-4 focus:ring-emerald-100 sm:text-sm"
+                className="h-9 w-full rounded-[1rem] border border-slate-200 bg-white pl-9 pr-3.5 text-[10px] font-semibold text-slate-900 placeholder:text-slate-400 focus:border-emerald-300 focus:outline-none focus:ring-4 focus:ring-emerald-100 sm:text-[11px]"
                 placeholder="Buscar (ex: Soja, Sinop, 26, FOB, 106,00, À vista...)"
               />
+            </label>
+
+            <label className="block">
+              <span className="sr-only">Grão</span>
+              <select
+                value={grainFilter}
+                onChange={(event) => setGrainFilter(event.target.value as typeof grainFilter)}
+                className="h-9 w-full rounded-[1rem] border border-slate-200 bg-white px-3.5 text-[10px] font-semibold text-slate-900 focus:border-emerald-300 focus:outline-none focus:ring-4 focus:ring-emerald-100 sm:text-[11px]"
+              >
+                <option value="todas">Grão</option>
+                <option value="Soja">Soja</option>
+                <option value="Milho">Milho</option>
+                <option value="Sorgo">Sorgo</option>
+              </select>
             </label>
 
             <label className="block">
@@ -210,7 +265,7 @@ export default function HomePage() {
               <select
                 value={typeFilter}
                 onChange={(event) => setTypeFilter(event.target.value as typeof typeFilter)}
-                className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-[13px] font-semibold text-slate-900 focus:border-emerald-300 focus:outline-none focus:ring-4 focus:ring-emerald-100 sm:text-sm"
+                className="h-9 w-full rounded-[1rem] border border-slate-200 bg-white px-3.5 text-[10px] font-semibold text-slate-900 focus:border-emerald-300 focus:outline-none focus:ring-4 focus:ring-emerald-100 sm:text-[11px]"
               >
                 <option value="todas">Todas</option>
                 <option value="venda">Oferta de venda</option>
@@ -223,7 +278,7 @@ export default function HomePage() {
               <select
                 value={channelFilter}
                 onChange={(event) => setChannelFilter(event.target.value as typeof channelFilter)}
-                className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-[13px] font-semibold text-slate-900 focus:border-emerald-300 focus:outline-none focus:ring-4 focus:ring-emerald-100 sm:text-sm"
+                className="h-9 w-full rounded-[1rem] border border-slate-200 bg-white px-3.5 text-[10px] font-semibold text-slate-900 focus:border-emerald-300 focus:outline-none focus:ring-4 focus:ring-emerald-100 sm:text-[11px]"
               >
                 <option value="todas">Modalidade</option>
                 <option value="mesa">Mesa</option>
@@ -236,7 +291,7 @@ export default function HomePage() {
               <select
                 value={shippingFilter}
                 onChange={(event) => setShippingFilter(event.target.value as typeof shippingFilter)}
-                className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-[13px] font-semibold text-slate-900 focus:border-emerald-300 focus:outline-none focus:ring-4 focus:ring-emerald-100 sm:text-sm"
+                className="h-9 w-full rounded-[1rem] border border-slate-200 bg-white px-3.5 text-[10px] font-semibold text-slate-900 focus:border-emerald-300 focus:outline-none focus:ring-4 focus:ring-emerald-100 sm:text-[11px]"
               >
                 <option value="todas">Frete</option>
                 <option value="FOB">FOB</option>
@@ -273,10 +328,26 @@ export default function HomePage() {
         <section className="mt-8 rounded-[1.8rem] border border-white/80 bg-white/70 p-5 text-[13px] text-slate-600 shadow-sm sm:rounded-[2.1rem] sm:p-6 sm:text-sm">
           <p className="font-bold text-slate-900">Dica de uso</p>
           <p className="mt-2 leading-6">
-            Clique em <span className="font-bold text-slate-900">Acessar</span> para ver todos os dados cadastrados e as formas de contato.
+            Clique em <span className="font-bold text-slate-900">Acessar</span> para ver os detalhes da oportunidade. Os canais de contato
+            ficam liberados ap&oacute;s login ou cadastro.
           </p>
         </section>
       </main>
+
+      <button
+        type="button"
+        onClick={openMobileNav}
+        className="fixed bottom-4 right-4 z-40 inline-flex items-center gap-2 rounded-full border border-white/80 bg-white/88 px-3.5 py-2 text-[10px] font-black uppercase tracking-[0.16em] text-slate-700 shadow-[0_20px_50px_-30px_rgba(15,23,42,0.45)] backdrop-blur-md transition-transform hover:-translate-y-0.5 sm:hidden"
+        aria-label="Abrir menu com atalhos de comprar, vender e corretores"
+      >
+        <span className="flex h-7 w-7 items-center justify-center rounded-full bg-emerald-50 text-emerald-700">
+          <Menu className="h-4 w-4" />
+        </span>
+        <span className="inline-flex items-center gap-2">
+          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+          <span>{mobileNavLabel}</span>
+        </span>
+      </button>
     </div>
   );
 }

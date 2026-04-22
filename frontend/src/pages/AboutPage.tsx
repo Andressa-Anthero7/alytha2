@@ -1,35 +1,38 @@
 import { ArrowRight, Building2, Handshake, MapPinned, Wheat } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import Navbar from '../components/Navbar';
-import { isAuthenticated } from '../lib/auth';
+import { getCurrentUser, isAuthenticated } from '../lib/auth';
+import { getPrimaryAppPath } from '../shared/appRoutes';
+import type { User } from '../types';
 
 const operationStates = ['MT', 'MS', 'GO', 'TO', 'MG', 'SP', 'PR', 'RS'] as const;
 
 const highlightCards = [
   {
     icon: Handshake,
-    title: 'Intermediacao comercial',
-    description: 'A Alytha atua conectando vendedores, compradores e oportunidades com criterio comercial e leitura de mercado.',
+    title: 'Intermediação comercial',
+    description: 'A Alytha atua conectando vendedores, compradores e oportunidades com critério comercial e leitura de mercado.',
   },
   {
     icon: Wheat,
-    title: 'Graos atendidos',
-    description: 'Soja, milho e sorgo com abordagem profissional para mercado fisico, prospeccao e organizacao da operacao.',
+    title: 'Grãos atendidos',
+    description: 'Soja, milho e sorgo com abordagem profissional para mercado físico, prospecção e organização da operação.',
   },
   {
     icon: MapPinned,
     title: 'Cobertura regional',
-    description: 'Presenca nas principais pracas agricolas de MT, MS, GO, TO, MG, SP, PR e RS.',
+    description: 'Presença nas principais praças agrícolas de MT, MS, GO, TO, MG, SP, PR e RS.',
   },
   {
     icon: Building2,
     title: 'Postura de corretora',
-    description: 'Acompanhamento comercial, apoio na conducao da negociacao e relacionamento com a cadeia produtiva.',
+    description: 'Acompanhamento comercial, apoio na condução da negociação e relacionamento com a cadeia produtiva.',
   },
 ] as const;
 
 export default function AboutPage() {
-  const dashboardHref = isAuthenticated() ? '/dashboard' : '/login';
+  const currentUser = getCurrentUser<User>();
+  const dashboardHref = isAuthenticated() ? getPrimaryAppPath(currentUser) : '/login';
 
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top,#eef8f1_0%,#ffffff_42%,#f4efe4_100%)] text-slate-900">
@@ -38,17 +41,17 @@ export default function AboutPage() {
       <main className="mx-auto max-w-7xl px-4 py-10 sm:px-6 sm:py-14 lg:px-8 lg:py-16">
         <section className="grid gap-6 lg:grid-cols-[1.08fr_0.92fr] lg:items-center">
           <div className="max-w-3xl">
-            <p className="text-[11px] font-black uppercase tracking-[0.34em] text-emerald-700">Quem somos</p>
-            <h1 className="mt-4 text-4xl font-black leading-[1.02] tracking-tight sm:text-5xl lg:text-7xl">
-              Alytha, corretora e intermediadora de graos nas principais regioes agricolas do pais.
+            <p className="text-[13px] font-black uppercase tracking-[0.34em] text-emerald-700 sm:text-[14px]">Quem somos</p>
+            <h1 className="mt-4 text-3xl font-black leading-[1.02] tracking-tight sm:text-4xl lg:text-6xl">
+              Alytha, corretora e intermediadora de grãos nas principais regiões agrícolas do país.
             </h1>
             <p className="mt-5 max-w-2xl text-base leading-8 text-slate-600 sm:text-lg">
-              Nosso trabalho e aproximar oferta e demanda com leitura de praca, relacionamento comercial e apoio para que cada
-              negociacao siga com mais clareza, velocidade e criterio.
+              Nosso trabalho é aproximar oferta e demanda com leitura de praça, relacionamento comercial e apoio para que cada
+              negociação siga com mais clareza, velocidade e critério.
             </p>
             <p className="mt-4 max-w-2xl text-sm leading-7 text-slate-500 sm:text-base">
-              A Alytha opera na conexao entre produtores, silos, armazens, compradores e corretores, com foco em soja, milho e
-              sorgo e atencao ao ritmo real do mercado fisico.
+              A Alytha opera na conexão entre produtores, silos, armazéns, compradores e corretores, com foco em soja, milho e
+              sorgo e atenção ao ritmo real do mercado físico.
             </p>
 
             <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
@@ -75,7 +78,7 @@ export default function AboutPage() {
           </div>
 
           <div className="rounded-[2rem] border border-white/80 bg-white/90 p-6 shadow-[0_50px_140px_-80px_rgba(15,23,42,0.65)] sm:rounded-[2.5rem] sm:p-8">
-            <p className="text-[11px] font-black uppercase tracking-[0.28em] text-emerald-700">Atuacao Alytha</p>
+            <p className="text-[11px] font-black uppercase tracking-[0.28em] text-emerald-700">Atuação Alytha</p>
             <div className="mt-6 grid gap-4 sm:grid-cols-2">
               {highlightCards.map((item) => (
                 <article key={item.title} className="rounded-[1.6rem] border border-slate-100 bg-slate-50 p-5">
@@ -92,11 +95,11 @@ export default function AboutPage() {
 
         <section className="mt-10 grid gap-6 lg:grid-cols-[0.95fr_1.05fr]">
           <article className="rounded-[2rem] bg-[linear-gradient(180deg,#052e2b_0%,#0f5f54_100%)] p-6 text-white shadow-[0_55px_140px_-80px_rgba(5,46,43,0.85)] sm:rounded-[2.5rem] sm:p-8">
-            <p className="text-[11px] font-black uppercase tracking-[0.3em] text-emerald-200">Proposito</p>
+            <p className="text-[11px] font-black uppercase tracking-[0.3em] text-emerald-200">Propósito</p>
             <h2 className="mt-4 text-3xl font-black tracking-tight sm:text-4xl">Ser o elo comercial entre a cadeia produtiva e a cadeia compradora.</h2>
             <p className="mt-4 text-sm leading-7 text-emerald-50/90 sm:text-base sm:leading-8">
-              A Alytha acompanha negociações de soja, milho e sorgo organizando informacoes, aproximando interesses e apoiando a
-              construcao do negocio com postura de corretora e intermediadora.
+              A Alytha acompanha negociações de soja, milho e sorgo organizando informações, aproximando interesses e apoiando a
+              construção do negócio com postura de corretora e intermediadora.
             </p>
             <div className="mt-6 flex flex-wrap gap-2">
               {['Soja', 'Milho', 'Sorgo', 'Corretagem'].map((item) => (
@@ -113,11 +116,11 @@ export default function AboutPage() {
           <article className="rounded-[2rem] border border-slate-200 bg-white/90 p-6 shadow-[0_40px_110px_-75px_rgba(15,23,42,0.55)] sm:rounded-[2.5rem] sm:p-8">
             <p className="text-[11px] font-black uppercase tracking-[0.3em] text-slate-500">Cobertura</p>
             <h2 className="mt-4 text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">
-              Presenca nas principais regioes de agricultura.
+              Presença nas principais regiões de agricultura.
             </h2>
             <p className="mt-4 text-sm leading-7 text-slate-600 sm:text-base sm:leading-8">
-              Acompanhamos pracas estrategicas do agronegocio e oportunidades comerciais em diferentes estados, com foco no
-              mercado fisico e nas janelas reais de compra e venda.
+              Acompanhamos praças estratégicas do agronegócio e oportunidades comerciais em diferentes estados, com foco no
+              mercado físico e nas janelas reais de compra e venda.
             </p>
 
             <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">

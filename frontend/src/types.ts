@@ -5,6 +5,20 @@ export interface User {
   type: 'vendedor' | 'comprador' | 'corretor' | 'backoffice';
   phone?: string;
   company?: string;
+  legal_name?: string;
+  profile_segment?: string;
+  document_type?: string;
+  document_number?: string;
+  state_registration?: string;
+  address_zip_code?: string;
+  address_street?: string;
+  address_number?: string;
+  address_complement?: string;
+  address_district?: string;
+  address_city?: string;
+  address_state?: string;
+  address_country?: string;
+  document_notes?: string;
 }
 
 export interface QualityParams {
@@ -12,6 +26,10 @@ export interface QualityParams {
   impurity?: number;
   broken?: number;
   damaged?: number;
+  ardidos?: number;
+  ph?: number;
+  protein?: number;
+  standard?: string;
   deliveryWindow?: string;
   funrural?: string;
   notes?: string;
@@ -134,6 +152,7 @@ export interface PublicMarketplaceOfferContact {
   email: string;
   phone?: string;
   company?: string;
+  locked: boolean;
 }
 
 export interface PublicMarketplaceOffersListPayload {

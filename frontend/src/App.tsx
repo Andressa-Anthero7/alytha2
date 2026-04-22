@@ -1,18 +1,23 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
 import Navbar from './components/Navbar';
 import ProtectedRoute from './components/ProtectedRoute';
+import { RegisterPage } from './modules/auth/RegisterPage';
 import AboutPage from './pages/AboutPage';
+import BackofficePage from './pages/BackofficePage';
 import BrokerExclusiveOfferPage from './pages/BrokerExclusiveOfferPage';
 import BrokerLandingPage from './pages/BrokerLandingPage';
 import BuyerLandingPage from './pages/BuyerLandingPage';
 import ChangePasswordPage from './pages/ChangePasswordPage';
 import DashboardPage from './pages/DashboardPage';
+import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import HomePage from './pages/HomePage';
 import LoginPage from './pages/LoginPage';
 import NewBuyOfferPage from './pages/NewBuyOfferPage';
 import NewSellOfferPage from './pages/NewSellOfferPage';
+import OperationsWorkspacePage from './pages/OperationsWorkspacePage';
 import ProfilePage from './pages/ProfilePage';
 import PublicMarketplaceOfferPage from './pages/PublicMarketplaceOfferPage';
+import ResetPasswordPage from './pages/ResetPasswordPage';
 import SellerLandingPage from './pages/SellerLandingPage';
 
 function NotFoundPage() {
@@ -36,6 +41,7 @@ export default function App() {
   return (
     <Routes>
       <Route path="/" element={<HomePage />} />
+      <Route path="/oportunidades/:offerId" element={<PublicMarketplaceOfferPage />} />
       <Route path="/oportunidade/:offerId" element={<PublicMarketplaceOfferPage />} />
       <Route path="/quemsomos" element={<AboutPage />} />
       <Route path="/vendedorgraos" element={<SellerLandingPage />} />
@@ -46,12 +52,33 @@ export default function App() {
       <Route path="/corretores" element={<BrokerLandingPage />} />
       <Route path="/corretor/:token/:mode" element={<BrokerExclusiveOfferPage />} />
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/cadastro" element={<Navigate to="/app/cadastro/comprador" replace />} />
+      <Route path="/esqueci-minha-senha" element={<ForgotPasswordPage />} />
+      <Route path="/redefinir-senha/:token" element={<ResetPasswordPage />} />
+      <Route path="/app/cadastro" element={<Navigate to="/app/cadastro/comprador" replace />} />
+      <Route path="/app/cadastro/:roleSlug" element={<RegisterPage routeBase="" />} />
 
       <Route
         path="/dashboard"
         element={
           <ProtectedRoute>
             <DashboardPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/mesa-operacional"
+        element={
+          <ProtectedRoute>
+            <OperationsWorkspacePage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/app/admin/backoffice"
+        element={
+          <ProtectedRoute>
+            <BackofficePage />
           </ProtectedRoute>
         }
       />
@@ -93,10 +120,9 @@ export default function App() {
       <Route path="/lp/corretor" element={<Navigate to="/corretores" replace />} />
       <Route path="/app/login" element={<Navigate to="/login" replace />} />
       <Route path="/app/login/:roleSlug" element={<Navigate to="/login" replace />} />
-      <Route path="/app/cadastro" element={<Navigate to="/login" replace />} />
-      <Route path="/app/cadastro/:roleSlug" element={<Navigate to="/login" replace />} />
+      <Route path="/backoffice" element={<Navigate to="/app/admin/backoffice" replace />} />
       <Route path="/app/cliente" element={<Navigate to="/dashboard" replace />} />
-      <Route path="/app/tradingdesk/:userId" element={<Navigate to="/dashboard" replace />} />
+      <Route path="/app/tradingdesk/:userId" element={<Navigate to="/mesa-operacional" replace />} />
       <Route path="/demo" element={<Navigate to="/" replace />} />
       <Route path="/demo/*" element={<Navigate to="/" replace />} />
 

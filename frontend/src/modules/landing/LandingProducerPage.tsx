@@ -39,14 +39,14 @@ export function LandingProducerPage({ routeBase }: LandingProducerPageProps) {
         <section>
           <div className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-white/80 px-4 py-2 text-[10px] font-black uppercase tracking-[0.24em] text-emerald-700 shadow-sm">
             <span className="h-2 w-2 rounded-full bg-emerald-500" />
-            Modulo publico do produtor
+            Módulo público do produtor
           </div>
           <h1 className="mt-6 max-w-3xl text-5xl font-black leading-[0.92] tracking-tight text-slate-950 lg:text-7xl">
-            Venda sua safra com a mesa certa do outro lado da operacao.
+            Venda sua safra com a mesa certa do outro lado da operação.
           </h1>
           <p className="mt-6 max-w-2xl text-lg leading-8 text-slate-600">
-            O modulo inicial da Alytha conecta produtor, comprador e corretor em um fluxo mais objetivo: captacao,
-            autenticacao e encaminhamento rapido para a mesa de operacoes.
+            O módulo inicial da Alytha conecta produtor, comprador e corretor em um fluxo mais objetivo: captação,
+            autenticação e encaminhamento rápido para a mesa de operações.
           </p>
 
           <div className="mt-8 flex flex-col gap-4 sm:flex-row">
@@ -54,7 +54,7 @@ export function LandingProducerPage({ routeBase }: LandingProducerPageProps) {
               onClick={() => navigate(`${routeBase}/app/cadastro/cliente`)}
               className="inline-flex items-center justify-center gap-3 rounded-2xl bg-slate-950 px-7 py-4 text-sm font-black uppercase tracking-[0.2em] text-white transition-colors hover:bg-slate-800"
             >
-              Comecar agora
+              Começar agora
               <ArrowRight className="h-4 w-4" />
             </button>
             <button
@@ -70,17 +70,17 @@ export function LandingProducerPage({ routeBase }: LandingProducerPageProps) {
               {
                 icon: TrendingUp,
                 title: 'Mercado ativo',
-                description: 'Acesso rapido a uma mesa organizada por demanda real e por janela de negocio.',
+                description: 'Acesso rápido a uma mesa organizada por demanda real e por janela de negócio.',
               },
               {
                 icon: ShieldCheck,
                 title: 'Fluxo seguro',
-                description: 'Cadastro, login e aprovacao conectados ao mesmo modulo inicial.',
+                description: 'Cadastro, login e aprovação conectados ao mesmo módulo inicial.',
               },
               {
                 icon: Headset,
                 title: 'Apoio comercial',
-                description: 'O corretor entra cedo na conversa e reduz a friccao ate o match.',
+                description: 'O corretor entra cedo na conversa e reduz a fricção até o match.',
               },
             ].map((item) => (
               <div key={item.title} className="rounded-[1.75rem] border border-white/70 bg-white/90 p-6 shadow-lg shadow-emerald-100/40">
@@ -99,7 +99,7 @@ export function LandingProducerPage({ routeBase }: LandingProducerPageProps) {
           <div className="relative overflow-hidden rounded-[2.5rem] border border-emerald-100 bg-white shadow-2xl shadow-emerald-100/50">
             <img
               src="https://images.unsplash.com/photo-1625246333195-78d9c38ad449?q=80&w=1200&auto=format&fit=crop"
-              alt="Plantacao"
+              alt="Plantação"
               className="h-[520px] w-full object-cover"
               referrerPolicy="no-referrer"
             />
@@ -110,7 +110,7 @@ export function LandingProducerPage({ routeBase }: LandingProducerPageProps) {
                 </div>
                 <div>
                   <p className="text-[10px] font-black uppercase tracking-[0.24em] text-emerald-300">Entrada simplificada</p>
-                  <p className="mt-1 text-xl font-black">Landing, cadastro e operacao ja nascem conectados.</p>
+                  <p className="mt-1 text-xl font-black">Landing, cadastro e operação já nascem conectados.</p>
                 </div>
               </div>
             </div>

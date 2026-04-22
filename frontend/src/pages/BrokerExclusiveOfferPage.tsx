@@ -27,7 +27,7 @@ export default function BrokerExclusiveOfferPage() {
         const payload = (await response.json().catch(() => null)) as PublicBrokerProfilePayload | { detail?: string } | null;
 
         if (!response.ok || !payload || !('broker' in payload)) {
-          throw new Error((payload && 'detail' in payload && payload.detail) || 'Nao foi possivel localizar este link exclusivo.');
+          throw new Error((payload && 'detail' in payload && payload.detail) || 'Não foi possível localizar este link exclusivo.');
         }
 
         setBrokerName(payload.broker.name);
@@ -47,7 +47,7 @@ export default function BrokerExclusiveOfferPage() {
   }
 
   const offerType = mode === 'vender' ? 'venda' : 'compra';
-  const brokerLabel = brokerName || 'corretor responsavel';
+  const brokerLabel = brokerName || 'corretor responsável';
   const brokerOfficeLabel = brokerCompany || 'Mesa Alytha';
   const pageTitle = mode === 'vender' ? 'Enviar oferta de venda' : 'Enviar demanda de compra';
   const pageIntro =
@@ -57,8 +57,8 @@ export default function BrokerExclusiveOfferPage() {
   const formTitle = mode === 'vender' ? 'Dados da oferta' : 'Dados da demanda';
   const formSubtitle =
     mode === 'vender'
-      ? 'Preencha produto, volume, praca, safra e condicoes comerciais para que o corretor avalie sua oportunidade com mais rapidez.'
-      : 'Preencha produto, volume, local, safra e condicoes comerciais para que o corretor avalie sua necessidade de compra com mais rapidez.';
+      ? 'Preencha produto, volume, praça, safra e condições comerciais para que o corretor avalie sua oportunidade com mais rapidez.'
+      : 'Preencha produto, volume, local, safra e condições comerciais para que o corretor avalie sua necessidade de compra com mais rapidez.';
 
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top,#eef5ff_0%,#ffffff_44%,#f6efe4_100%)]">
@@ -84,7 +84,7 @@ export default function BrokerExclusiveOfferPage() {
 
               <div className="mt-5 grid gap-3 md:grid-cols-3">
                 <div className="rounded-[1.6rem] border border-slate-200 bg-slate-50 px-4 py-4">
-                  <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">Corretor responsavel</p>
+                  <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">Corretor responsável</p>
                   <p className="mt-2 text-sm font-bold text-slate-900">{brokerLabel}</p>
                 </div>
                 <div className="rounded-[1.6rem] border border-slate-200 bg-slate-50 px-4 py-4">

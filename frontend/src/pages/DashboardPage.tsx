@@ -3,6 +3,7 @@ import { useEffect, useState, type JSX } from 'react';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { clearAuth, getCurrentUser } from '../lib/auth';
 import { TradingDeskPage } from '../modules/tradingdesk/TradingDeskPage';
+import { BACKOFFICE_PATH } from '../shared/appRoutes';
 import { apiFetch } from '../shared/api';
 import { DashboardWorkspaceHeader } from '../shared/DashboardWorkspaceHeader';
 import { formatCurrency, formatDateTime, formatNumber } from '../shared/format';
@@ -17,7 +18,7 @@ const roleLabels = {
 
 const offerTypeLabels = {
   venda: 'Oferta de venda',
-  compra: 'Intencao de compra',
+  compra: 'Intenção de compra',
 } as const;
 
 const channelLabels = {
@@ -187,7 +188,7 @@ export default function DashboardPage() {
         const payload = (await response.json().catch(() => null)) as ClientDashboardPayload | { detail?: string } | null;
 
         if (!response.ok || !payload || !('header' in payload)) {
-          throw new Error((payload && 'detail' in payload && payload.detail) || 'Nao foi possivel carregar o dashboard.');
+          throw new Error((payload && 'detail' in payload && payload.detail) || 'Não foi possível carregar o dashboard.');
         }
 
         setDashboard(payload);
@@ -211,7 +212,11 @@ export default function DashboardPage() {
     navigate('/login', { replace: true });
   };
 
-  if (user.type === 'corretor' || user.type === 'backoffice') {
+  if (user.type === 'backoffice') {
+    return <Navigate to={BACKOFFICE_PATH} replace />;
+  }
+
+  if (user.type === 'corretor') {
     return <TradingDeskPage currentUser={user} onLogout={handleLogout} />;
   }
 
@@ -229,9 +234,9 @@ export default function DashboardPage() {
   return (
     <div className="min-h-screen bg-[#F8F9FA] text-slate-900">
       <DashboardWorkspaceHeader
-        tickerItems={header?.tickerItems || ['Sincronizando painel...', 'Atualizando informacoes do perfil...']}
+        tickerItems={header?.tickerItems || ['Sincronizando painel...', 'Atualizando informações do perfil...']}
         headline={header?.title || 'Carregando painel'}
-        subtitle={header?.subtitle || 'Buscando informacoes do dashboard.'}
+        subtitle={header?.subtitle || 'Buscando informações do dashboard.'}
         roleLabel={dashboard?.roleLabel || roleLabels[user.type]}
         primaryAction={hero?.primaryAction || fallbackPrimaryAction}
         displayName={header?.userName || user.name}
@@ -252,7 +257,7 @@ export default function DashboardPage() {
           {loading || !hero ? (
             <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
               <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
-              Carregando visao principal do painel...
+              Carregando visão principal do painel...
             </div>
           ) : (
             <div className="min-w-0">
@@ -355,7 +360,7 @@ export default function DashboardPage() {
           {loading || !marketSection ? (
             <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-600">
               <LoaderCircle className="h-4 w-4 animate-spin" />
-              Carregando as ultimas oportunidades do marketplace...
+              Carregando as últimas oportunidades do marketplace...
             </div>
           ) : (
             <>

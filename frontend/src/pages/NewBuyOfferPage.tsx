@@ -9,7 +9,7 @@ export default function NewBuyOfferPage() {
         <OfferForm
           offerType="compra"
           title="Cadastrar demanda (compra)"
-          subtitle="Estruture sua demanda com produto, volume, praca, safra, faixa de preco e condicoes comerciais para facilitar a originacao e acelerar a negociacao."
+          subtitle="Estruture sua demanda com produto, volume, praça, safra, faixa de preço e condições comerciais para facilitar a originação e acelerar a negociação."
         />
       </main>
     </div>

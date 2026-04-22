@@ -1,29 +1,32 @@
 import { ArrowRight, CheckCircle2, Copy } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import Navbar from '../components/Navbar';
-import { isAuthenticated } from '../lib/auth';
+import { getCurrentUser, isAuthenticated } from '../lib/auth';
+import { getPrimaryAppPath } from '../shared/appRoutes';
+import type { User } from '../types';
 
 const highlights = [
   {
     title: 'Livro vivo de oportunidades',
-    description: 'A plataforma disponibiliza ofertas e demandas de soja, milho e sorgo para negociacao com apoio comercial.',
+    description: 'A plataforma disponibiliza ofertas e demandas de soja, milho e sorgo para negociação com apoio comercial.',
   },
   {
     title: 'Fluxo da mesa',
-    description: 'O corretor acompanha oportunidades, executa match, organiza a conversa e conduz a negociacao dentro da Alytha.',
+    description: 'O corretor acompanha oportunidades, executa match, organiza a conversa e conduz a negociação dentro da Alytha.',
   },
   {
     title: 'Link exclusivo',
-    description: 'Cada corretor tem links proprios para captar oferta e demanda com exclusividade na sua dashboard.',
+    description: 'Cada corretor tem links próprios para captar oferta e demanda com exclusividade na sua dashboard.',
   },
   {
     title: 'Entrada qualificada',
-    description: 'Inscreva-se e verifique se o seu perfil atende ao nivel comercial esperado para o corpo de corretores Alytha.',
+    description: 'Inscreva-se e verifique se o seu perfil atende ao nível comercial esperado para o corpo de corretores Alytha.',
   },
 ] as const;
 
 export default function BrokerLandingPage() {
-  const dashboardHref = isAuthenticated() ? '/dashboard' : '/login';
+  const currentUser = getCurrentUser<User>();
+  const dashboardHref = isAuthenticated() ? getPrimaryAppPath(currentUser) : '/login';
 
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top,#eef3ff_0%,#ffffff_40%,#f5efe3_100%)] text-slate-900">
@@ -33,12 +36,12 @@ export default function BrokerLandingPage() {
         <section className="grid gap-6 lg:grid-cols-[1.08fr_0.92fr] lg:items-center">
           <div className="max-w-3xl">
             <p className="text-[11px] font-black uppercase tracking-[0.34em] text-sky-700">Para corretores(as)</p>
-            <h1 className="mt-5 text-4xl font-black leading-[1.03] tracking-tight sm:text-5xl lg:text-7xl">
-              Plataforma para negociar ofertas e demandas de graos com ritmo de mesa.
+            <h1 className="mt-5 text-3xl font-black leading-[1.03] tracking-tight sm:text-4xl lg:text-6xl">
+              Plataforma para negociar ofertas e demandas de grãos com ritmo de mesa.
             </h1>
             <p className="mt-6 text-base leading-8 text-slate-600 sm:text-lg sm:leading-9">
-              A Alytha e uma corretora e intermediadora de graos com proposito de disponibilizar oportunidades de soja, milho e
-              sorgo para serem negociadas com leitura comercial, processo e mais organizacao.
+              A Alytha é uma corretora e intermediadora de grãos com o propósito de disponibilizar oportunidades de soja, milho e
+              sorgo para serem negociadas com leitura comercial, processo e mais organização.
             </p>
 
             <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
@@ -60,9 +63,9 @@ export default function BrokerLandingPage() {
 
           <div className="rounded-[2rem] bg-[linear-gradient(180deg,#0f172a_0%,#1e293b_100%)] p-6 text-white shadow-[0_55px_140px_-75px_rgba(15,23,42,0.88)] sm:rounded-[2.5rem] sm:p-8">
             <p className="text-[11px] font-black uppercase tracking-[0.3em] text-sky-200">Rotina de corretagem</p>
-            <h2 className="mt-4 text-3xl font-black">Capte, organize e negocie em uma unica operacao digital.</h2>
+            <h2 className="mt-4 text-3xl font-black">Capte, organize e negocie em uma única operação digital.</h2>
             <div className="mt-6 space-y-3">
-              {['Visualize vendas, compras e negociacoes abertas.', 'Copie seus links exclusivos para captar oferta e demanda.', 'Execute match com limite operacional e ownership por corretor.', 'Trabalhe com comissao da mesa registrada na origem do cadastro.'].map((item) => (
+              {['Visualize vendas, compras e negociações abertas.', 'Copie seus links exclusivos para captar oferta e demanda.', 'Trabalhe com comissão da mesa registrada na origem do cadastro.'].map((item) => (
                 <div key={item} className="flex items-start gap-3 rounded-2xl border border-white/10 bg-white/8 px-4 py-3 text-sm text-white">
                   <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-sky-300" />
                   <span>{item}</span>
@@ -77,7 +80,7 @@ export default function BrokerLandingPage() {
                 </div>
                 <div>
                   <p className="text-sm font-black text-white">Link exclusivo por corretor</p>
-                  <p className="mt-1 text-sm leading-6 text-slate-300">Oportunidades vindas do seu link ficam restritas a sua propria dashboard.</p>
+                  <p className="mt-1 text-sm leading-6 text-slate-300">Oportunidades vindas do seu link ficam restritas à sua própria dashboard.</p>
                 </div>
               </div>
             </div>

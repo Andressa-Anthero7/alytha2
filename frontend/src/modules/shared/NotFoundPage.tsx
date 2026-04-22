@@ -16,14 +16,14 @@ export function NotFoundPage({ routeBase }: NotFoundPageProps) {
         <p className="text-[11px] font-black uppercase tracking-[0.28em] text-emerald-600">Alytha</p>
         <h1 className="mt-3 text-5xl font-black tracking-tight text-slate-950">404</h1>
         <p className="mt-4 max-w-md text-base text-slate-500">
-          A rota que voce tentou abrir nao faz parte deste modulo inicial.
+          A rota que você tentou abrir não faz parte deste módulo inicial.
         </p>
         <div className="mt-8 flex flex-col gap-3 sm:flex-row">
           <button
             onClick={() => navigate(`${routeBase}/lp/produtor`)}
             className="inline-flex items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-6 py-3 text-sm font-black uppercase tracking-[0.22em] text-white transition-colors hover:bg-emerald-700"
           >
-            Voltar ao inicio
+            Voltar ao início
             <ArrowRight className="h-4 w-4" />
           </button>
           <button

@@ -27,7 +27,7 @@ export function AccessDeniedPage({ routeBase, requiredRole, onLogout }: AccessDe
         </div>
         <h1 className="mt-8 text-4xl font-black tracking-tight">Acesso restrito</h1>
         <p className="mt-4 max-w-md text-slate-300">
-          Esta rota pertence ao modulo {roleLabel(requiredRole)}. Troque de sessao para continuar.
+          Esta rota pertence ao módulo {roleLabel(requiredRole)}. Troque de sessão para continuar.
         </p>
         <div className="mt-8 flex flex-col gap-3 sm:flex-row">
           <button
@@ -40,7 +40,7 @@ export function AccessDeniedPage({ routeBase, requiredRole, onLogout }: AccessDe
             onClick={() => navigate(`${routeBase}/lp/produtor`)}
             className="rounded-2xl border border-white/15 px-6 py-3 text-sm font-bold text-white transition-colors hover:border-white/30 hover:bg-white/5"
           >
-            Voltar ao inicio
+            Voltar ao início
           </button>
         </div>
       </div>
