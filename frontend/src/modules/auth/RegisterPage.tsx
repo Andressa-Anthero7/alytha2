@@ -1,5 +1,5 @@
 import { type FormEvent, useMemo, useState } from 'react';
-import { AlertCircle, ArrowRight, Eye, EyeOff } from 'lucide-react';
+import { AlertCircle, ArrowLeft, ArrowRight, Eye, EyeOff } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { apiFetch } from '../../shared/api';
 import { ShellHeader } from '../../shared/ShellHeader';
@@ -38,6 +38,8 @@ const roleCards: Array<{ slug: RoleSlug; label: string; summary: string }> = [
   { slug: 'vendedor', label: 'Vendedor', summary: 'Produtor rural, fazenda, silos, armazéns e perfis vendedores.' },
   { slug: 'corretor', label: 'Corretor', summary: 'Pessoa física ou jurídica para atuação comercial com CPF ou CNPJ.' },
 ];
+
+const publicRoleCards = roleCards.filter((item) => item.slug !== 'corretor');
 
 const segmentOptions: Record<RoleSlug, Array<{ value: string; label: string }>> = {
   comprador: [
@@ -125,6 +127,12 @@ export function RegisterPage({ routeBase }: RegisterPageProps) {
   const [error, setError] = useState<string | null>(null);
 
   const selectedSegments = useMemo(() => segmentOptions[normalizedRoleSlug], [normalizedRoleSlug]);
+  const selectedRoleLabel = useMemo(
+    () => roleCards.find((item) => item.slug === normalizedRoleSlug)?.label || 'Comprador',
+    [normalizedRoleSlug],
+  );
+  const selectedRoleText = selectedRoleLabel.toLowerCase();
+  const showTrialNotice = normalizedRoleSlug === 'comprador' || normalizedRoleSlug === 'vendedor';
 
   const updateField = <K extends keyof RegisterFormState>(field: K, value: RegisterFormState[K]) => {
     setForm((previous) => ({ ...previous, [field]: value }));
@@ -192,7 +200,7 @@ export function RegisterPage({ routeBase }: RegisterPageProps) {
         replace: true,
         state: {
           prefillEmail: form.email.trim(),
-          notice: 'Conta criada com sucesso. Faça login para continuar.',
+          notice: 'Cadastro enviado com sucesso. Aguarde a validacao do backoffice para liberar seu primeiro login.',
         },
       });
     } finally {
@@ -204,16 +212,27 @@ export function RegisterPage({ routeBase }: RegisterPageProps) {
     <div className="min-h-screen bg-[linear-gradient(180deg,#f8fafc_0%,#ffffff_100%)]">
       <ShellHeader eyebrow="Cadastro" title={roleTitle[normalizedRoleSlug]} subtitle={roleSubtitle[normalizedRoleSlug]} />
 
-      <main className="mx-auto grid max-w-7xl gap-8 px-4 py-8 sm:px-6 sm:py-12 lg:grid-cols-[0.92fr_1.08fr] lg:px-8">
+      <div className="mx-auto max-w-7xl px-4 pt-5 sm:px-6 sm:pt-7 lg:px-8">
+        <button
+          type="button"
+          onClick={() => navigate('/login')}
+          className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2.5 text-xs font-black uppercase tracking-[0.18em] text-slate-700 shadow-sm transition-colors hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Voltar para login
+        </button>
+      </div>
+
+      <main className="mx-auto grid max-w-7xl gap-8 px-4 py-6 sm:px-6 sm:py-8 lg:grid-cols-[0.92fr_1.08fr] lg:px-8">
         <section className="rounded-[2rem] border border-emerald-100 bg-emerald-50/80 p-7 shadow-xl shadow-emerald-100/50 sm:rounded-[2.4rem] sm:p-8">
           <p className="text-[10px] font-black uppercase tracking-[0.24em] text-emerald-700">Perfil de cadastro</p>
           <h2 className="mt-4 text-3xl font-black leading-tight text-slate-950 sm:text-4xl">Escolha o tipo de conta e preencha os dados comerciais.</h2>
           <p className="mt-4 text-sm leading-7 text-slate-600 sm:text-base sm:leading-8">
-            O cadastro agora diferencia comprador, vendedor e corretor, com endereço e documentação para cada perfil.
+            O cadastro agora diferencia comprador e vendedor, com endereço e documentação para cada perfil.
           </p>
 
           <div className="mt-8 grid gap-3">
-            {roleCards.map((item) => {
+            {publicRoleCards.map((item) => {
               const active = item.slug === normalizedRoleSlug;
               return (
                 <button
@@ -235,12 +254,19 @@ export function RegisterPage({ routeBase }: RegisterPageProps) {
         <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-xl shadow-slate-200/60 sm:rounded-[2.4rem] sm:p-8">
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
-              <p className="text-[10px] font-black uppercase tracking-[0.24em] text-emerald-600">Criar acesso</p>
-              <h3 className="mt-2 text-3xl font-black tracking-tight text-slate-950">Abra sua conta com dados completos</h3>
+              <p className="text-[10px] font-black uppercase tracking-[0.24em] text-emerald-600">Cadastro de {selectedRoleLabel}</p>
+              <h3 className="mt-2 text-3xl font-black tracking-tight text-slate-950">Preencha os dados para conta de {selectedRoleText}</h3>
               <p className="mt-3 text-sm leading-7 text-slate-600">
-                Preencha os dados do responsável, categoria do perfil, documentação e endereço para entrar na plataforma.
+                Você está preenchendo a categoria {selectedRoleText}. Informe os dados do responsável, perfil, documentação e endereço.
               </p>
             </div>
+
+            {showTrialNotice ? (
+              <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold leading-6 text-emerald-900">
+                Cadastro com 15 dias de teste. Após esse período, o plano fica em R$ 99,90 via PIX automático ou R$ 129,90 via PIX
+                convencional.
+              </div>
+            ) : null}
 
             {error && (
               <div className="flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
@@ -496,7 +522,7 @@ export function RegisterPage({ routeBase }: RegisterPageProps) {
                 disabled={submitting}
                 className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-black uppercase tracking-[0.22em] text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {submitting ? 'Cadastrando...' : 'Cadastrar'}
+                {submitting ? 'Cadastrando...' : `Cadastrar ${selectedRoleText}`}
                 <ArrowRight className="h-4 w-4" />
               </button>
               <button
@@ -504,7 +530,7 @@ export function RegisterPage({ routeBase }: RegisterPageProps) {
                 onClick={() => navigate('/login')}
                 className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-bold text-slate-700 transition-colors hover:border-slate-300 hover:bg-slate-50"
               >
-                Já tenho conta
+                Voltar ao login
               </button>
             </div>
           </form>

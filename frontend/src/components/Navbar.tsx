@@ -2,19 +2,30 @@ import { ArrowRight, LayoutDashboard, LogOut, Menu, ShieldCheck, X } from 'lucid
 import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { clearAuth, getCurrentUser, isAuthenticated } from '../lib/auth';
-import { getPrimaryAppPath } from '../shared/appRoutes';
+import { canAccessProfileContent, getPrimaryAppPath, type AppUserType } from '../shared/appRoutes';
 import { BrandLogo } from '../shared/BrandLogo';
 import type { User } from '../types';
 
 export const OPEN_MOBILE_NAV_EVENT = 'alytha:open-mobile-menu';
 
-const navItems = [
+type NavItem = {
+  label: string;
+  to: string;
+  allowedTypes?: readonly AppUserType[];
+};
+
+const navItems: NavItem[] = [
   { label: 'Início', to: '/' },
   { label: 'Quem Somos', to: '/quemsomos' },
   { label: 'Vender grãos', to: '/vendedorgraos' },
   { label: 'Comprar grãos', to: '/compradorgraos' },
-  { label: 'Corretores', to: '/corretores' },
 ];
+
+const profileNavAllowedTypes: Record<string, readonly AppUserType[]> = {
+  '/vendedorgraos': ['vendedor'],
+  '/compradorgraos': ['comprador'],
+  '/corretores': ['corretor'],
+};
 
 const roleLabels = {
   vendedor: 'Vendedor',
@@ -29,6 +40,7 @@ export default function Navbar() {
   const user = getCurrentUser<User>();
   const loggedIn = isAuthenticated() && Boolean(user);
   const dashboardHref = getPrimaryAppPath(user);
+  const visibleNavItems = navItems.filter((item) => !loggedIn || canAccessProfileContent(user, item.allowedTypes || profileNavAllowedTypes[item.to]));
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const handleLogout = () => {
@@ -74,7 +86,7 @@ export default function Navbar() {
         </Link>
 
         <nav className="hidden items-center justify-end gap-3 text-sm font-semibold md:flex">
-          {navItems.map((item) => renderLink(item.label, item.to))}
+          {visibleNavItems.map((item) => renderLink(item.label, item.to))}
 
           {loggedIn ? (
             <>
@@ -126,7 +138,7 @@ export default function Navbar() {
       {mobileMenuOpen && (
         <div className="border-t border-slate-200 bg-white px-4 pb-4 pt-3 shadow-sm md:hidden">
           <div className="flex flex-col gap-2">
-            {navItems.map((item) => renderLink(item.label, item.to))}
+            {visibleNavItems.map((item) => renderLink(item.label, item.to))}
 
             {loggedIn ? (
               <>

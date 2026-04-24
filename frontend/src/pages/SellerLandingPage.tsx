@@ -44,7 +44,7 @@ export default function SellerLandingPage() {
           <div className="max-w-3xl">
             <p className="text-[10px] font-black uppercase tracking-[0.24em] text-emerald-700">Vender grãos</p>
             <h1 className="mt-4 text-3xl font-black leading-[1.05] tracking-tight sm:text-4xl lg:text-5xl">
-              Publique soja, milho e sorgo com mais clareza comercial.
+              Publique ofertas de soja, milho e sorgo com mais clareza comercial.
             </h1>
             <p className="mt-4 max-w-2xl text-[15px] leading-7 text-slate-600 sm:text-[17px] sm:leading-8">
               Cadastre sua oferta, organize as informações do lote e deixe a oportunidade pronta para negociação.

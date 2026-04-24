@@ -1,5 +1,6 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
 import Navbar from './components/Navbar';
+import ProfileContentRoute from './components/ProfileContentRoute';
 import ProtectedRoute from './components/ProtectedRoute';
 import { RegisterPage } from './modules/auth/RegisterPage';
 import AboutPage from './pages/AboutPage';
@@ -41,15 +42,38 @@ export default function App() {
   return (
     <Routes>
       <Route path="/" element={<HomePage />} />
+      <Route path="/home" element={<Navigate to="/" replace />} />
       <Route path="/oportunidades/:offerId" element={<PublicMarketplaceOfferPage />} />
       <Route path="/oportunidade/:offerId" element={<PublicMarketplaceOfferPage />} />
       <Route path="/quemsomos" element={<AboutPage />} />
-      <Route path="/vendedorgraos" element={<SellerLandingPage />} />
-      <Route path="/compradorgraos" element={<BuyerLandingPage />} />
+      <Route
+        path="/vendedorgraos"
+        element={
+          <ProfileContentRoute allowedTypes={['vendedor']}>
+            <SellerLandingPage />
+          </ProfileContentRoute>
+        }
+      />
+      <Route path="/vendergraos" element={<Navigate to="/vendedorgraos" replace />} />
+      <Route
+        path="/compradorgraos"
+        element={
+          <ProfileContentRoute allowedTypes={['comprador']}>
+            <BuyerLandingPage />
+          </ProfileContentRoute>
+        }
+      />
       <Route path="/vendendorgraos" element={<Navigate to="/vendedorgraos" replace />} />
       <Route path="/vender" element={<Navigate to="/vendedorgraos" replace />} />
       <Route path="/comprar" element={<Navigate to="/compradorgraos" replace />} />
-      <Route path="/corretores" element={<BrokerLandingPage />} />
+      <Route
+        path="/corretores"
+        element={
+          <ProfileContentRoute allowedTypes={['corretor']}>
+            <BrokerLandingPage />
+          </ProfileContentRoute>
+        }
+      />
       <Route path="/corretor/:token/:mode" element={<BrokerExclusiveOfferPage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/cadastro" element={<Navigate to="/app/cadastro/comprador" replace />} />
@@ -85,7 +109,7 @@ export default function App() {
       <Route
         path="/ofertas/venda/nova"
         element={
-          <ProtectedRoute>
+          <ProtectedRoute allowedTypes={['vendedor']}>
             <NewSellOfferPage />
           </ProtectedRoute>
         }
@@ -93,7 +117,7 @@ export default function App() {
       <Route
         path="/ofertas/compra/nova"
         element={
-          <ProtectedRoute>
+          <ProtectedRoute allowedTypes={['comprador']}>
             <NewBuyOfferPage />
           </ProtectedRoute>
         }

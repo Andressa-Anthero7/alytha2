@@ -2,24 +2,26 @@ import {
   AlertCircle,
   ArrowRight,
   BriefcaseBusiness,
-  Building2,
   CheckCircle2,
   FilePlus2,
   HandCoins,
   LayoutDashboard,
   LoaderCircle,
   LogOut,
+  Menu,
   PackageSearch,
   Save,
   ShieldCheck,
   Trash2,
   Users2,
+  X,
 } from 'lucide-react';
 import { useEffect, useState, type FormEvent } from 'react';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { apiFetch } from '../lib/api';
 import { clearAuth, getCurrentUser } from '../lib/auth';
 import { BACKOFFICE_PATH, OPERATIONS_PATH } from '../shared/appRoutes';
+import { BrandLogo } from '../shared/BrandLogo';
 import { formatCurrency, formatDateTime, formatNumber } from '../shared/format';
 import type { BrokerageMode, BrokeragePayer, Negotiation, Offer, User } from '../types';
 
@@ -82,6 +84,29 @@ const tabs: Array<{ id: BackofficeTab; label: string; icon: typeof LayoutDashboa
   { id: 'offers', label: 'Ofertas e demandas', icon: PackageSearch },
   { id: 'negotiations', label: 'Comissoes e negociacoes', icon: HandCoins },
 ];
+
+const tabDescriptions: Record<BackofficeTab, { title: string; description: string }> = {
+  overview: {
+    title: 'Central administrativa Alytha',
+    description:
+      'Acompanhe os principais indicadores do escritorio, revise a saude da operacao e navegue rapidamente para os fluxos do dia a dia do backoffice.',
+  },
+  users: {
+    title: 'Gestao de cadastros e perfis',
+    description:
+      'Controle compradores, vendedores, corretores e acessos de backoffice em uma tela orientada a operacao, com foco em cadastro, manutencao e auditoria.',
+  },
+  offers: {
+    title: 'Livro de ofertas e demandas',
+    description:
+      'Cadastre oportunidades, acompanhe o livro comercial da plataforma e filtre entradas por tipo, canal, status e responsavel.',
+  },
+  negotiations: {
+    title: 'Comissoes, matches e negociacoes',
+    description:
+      'Abra matches, acompanhe a corretagem por corretor e atualize o status de cada negociacao com uma visao mais proxima de CRM operacional.',
+  },
+};
 
 const roleLabels: Record<User['type'], string> = {
   vendedor: 'Vendedor',
@@ -284,27 +309,37 @@ function SummaryCard({
   tone?: 'emerald' | 'amber' | 'slate' | 'sky';
 }) {
   const toneClasses = {
-    emerald: 'border-emerald-200 bg-emerald-50 text-emerald-900',
-    amber: 'border-amber-200 bg-amber-50 text-amber-900',
-    slate: 'border-slate-200 bg-slate-50 text-slate-900',
-    sky: 'border-sky-200 bg-sky-50 text-sky-900',
+    emerald: 'border-emerald-200',
+    amber: 'border-amber-200',
+    slate: 'border-slate-200',
+    sky: 'border-sky-200',
+  } as const;
+
+  const accentClasses = {
+    emerald: 'bg-emerald-500',
+    amber: 'bg-amber-500',
+    slate: 'bg-slate-500',
+    sky: 'bg-sky-500',
   } as const;
 
   return (
-    <article className={`rounded-[1.6rem] border px-4 py-4 shadow-sm ${toneClasses[tone]}`}>
-      <p className="text-[10px] font-black uppercase tracking-[0.2em]">{label}</p>
-      <p className="mt-3 text-3xl font-black tracking-tight">{value}</p>
-      <p className="mt-2 text-sm leading-6 opacity-80">{detail}</p>
+    <article className={`rounded-xl border bg-white p-4 shadow-sm shadow-slate-200/70 ${toneClasses[tone]}`}>
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-xs font-semibold text-slate-500">{label}</p>
+        <span className={`h-2.5 w-2.5 rounded-full ${accentClasses[tone]}`} />
+      </div>
+      <p className="mt-3 text-2xl font-semibold tracking-tight text-slate-950">{value}</p>
+      <p className="mt-1 text-sm leading-5 text-slate-500">{detail}</p>
     </article>
   );
 }
 
 function SectionTitle({ eyebrow, title, description }: { eyebrow: string; title: string; description: string }) {
   return (
-    <div>
-      <p className="text-[11px] font-black uppercase tracking-[0.28em] text-emerald-700">{eyebrow}</p>
-      <h2 className="mt-3 text-2xl font-black tracking-tight text-slate-950 sm:text-3xl">{title}</h2>
-      <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-600">{description}</p>
+    <div className="border-b border-slate-200 pb-3">
+      <p className="text-xs font-semibold text-slate-500">{eyebrow}</p>
+      <h2 className="mt-1 text-base font-semibold tracking-tight text-slate-950 sm:text-lg">{title}</h2>
+      <p className="mt-1 max-w-3xl text-sm leading-5 text-slate-500">{description}</p>
     </div>
   );
 }
@@ -313,6 +348,8 @@ export default function BackofficePage() {
   const navigate = useNavigate();
   const currentUser = getCurrentUser<User>();
   const [activeTab, setActiveTab] = useState<BackofficeTab>('overview');
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [desktopSidebarVisible, setDesktopSidebarVisible] = useState(true);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [pageError, setPageError] = useState('');
@@ -326,6 +363,7 @@ export default function BackofficePage() {
   const [editingUserId, setEditingUserId] = useState<number | null>(null);
   const [userSaving, setUserSaving] = useState(false);
   const [userDeletingId, setUserDeletingId] = useState<number | null>(null);
+  const [userValidatingId, setUserValidatingId] = useState<number | null>(null);
   const [userError, setUserError] = useState('');
   const [userNotice, setUserNotice] = useState('');
 
@@ -451,6 +489,7 @@ export default function BackofficePage() {
   const sellerUsers = users.filter((user) => user.type === 'vendedor').length;
   const buyerUsers = users.filter((user) => user.type === 'comprador').length;
   const brokerUsers = users.filter((user) => user.type === 'corretor');
+  const pendingValidationUsers = users.filter((user) => user.is_validated === false);
   const activeOffers = offers.filter((offer) => offer.status === 'ativa');
   const pendingOffers = offers.filter((offer) => offer.status === 'aguardando_pagamento');
   const deskOffers = offers.filter((offer) => offer.negotiationChannel === 'mesa');
@@ -531,6 +570,216 @@ export default function BackofficePage() {
   const selectedBuyOffer = matchForm.buyOfferId ? findOfferById(offers, Number(matchForm.buyOfferId)) : null;
   const lockedCommissionOffer = [selectedSellOffer, selectedBuyOffer].find(
     (offer) => offer && (offer.negotiationChannel === 'mesa' || offer.exclusiveBrokerId != null) && offer.mesaCommission != null,
+  );
+  const activeTabInfo = tabDescriptions[activeTab];
+  const tabMetrics: Record<BackofficeTab, string> = {
+    overview: 'KPIs da operacao',
+    users: `${formatNumber(totalUsers)} cadastros`,
+    offers: `${formatNumber(offers.length)} oportunidades`,
+    negotiations: `${formatNumber(negotiations.length)} negociacoes`,
+  };
+  const totalPipelineItems = Math.max(totalUsers + activeOffers.length + negotiations.length, 1);
+  const crmPipeline = [
+    {
+      label: 'Contas cadastradas',
+      value: totalUsers,
+      detail: `${formatNumber(sellerUsers + buyerUsers)} clientes e ${formatNumber(brokerUsers.length)} corretores`,
+    },
+    {
+      label: 'Livro ativo',
+      value: activeOffers.length,
+      detail: `${formatNumber(deskOffers.length)} mesa, ${formatNumber(directOffers.length)} diretas`,
+    },
+    {
+      label: 'Negociacao em follow-up',
+      value: pendingNegotiations.length,
+      detail: formatCurrency(pendingBrokerage),
+    },
+    {
+      label: 'Ganho confirmado',
+      value: acceptedNegotiations.length,
+      detail: formatCurrency(acceptedBrokerage),
+    },
+  ];
+  const crmActionItems = [
+    {
+      label: 'Validar novos acessos',
+      value: pendingValidationUsers.length,
+      detail: 'cadastros aguardando liberacao',
+    },
+    {
+      label: 'Revisar pagamentos PIX',
+      value: pendingOffers.length,
+      detail: 'ofertas aguardando liberacao',
+    },
+    {
+      label: 'Priorizar follow-up comercial',
+      value: pendingNegotiations.length,
+      detail: 'negociacoes pendentes',
+    },
+    {
+      label: 'Atualizar base de corretores',
+      value: brokerUsers.length,
+      detail: 'perfis com comissao monitorada',
+    },
+  ];
+  const sidebarMetrics = [
+    { label: 'Usuarios', value: formatNumber(totalUsers), detail: 'base cadastrada' },
+    { label: 'Livro ativo', value: formatNumber(activeOffers.length), detail: 'oportunidades abertas' },
+    { label: 'Follow-up', value: formatNumber(pendingNegotiations.length), detail: 'negociacoes pendentes' },
+    { label: 'Receita', value: formatCurrency(acceptedBrokerage), detail: 'corretagem aceita' },
+  ];
+  const sidebarIndicators = [
+    { label: 'Validacao', value: formatNumber(pendingValidationUsers.length) },
+    { label: 'PIX pendente', value: formatNumber(pendingOffers.length) },
+    { label: 'Corretores', value: formatNumber(brokerUsers.length) },
+    { label: 'Mesa', value: formatNumber(deskOffers.length) },
+  ];
+
+  const handleSelectTab = (tab: BackofficeTab) => {
+    setActiveTab(tab);
+    setMobileMenuOpen(false);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const renderManagerSidebar = () => (
+    <div className="flex h-full flex-col p-3">
+      <div className="border-b border-slate-200 pb-3">
+        <div className="flex items-center justify-between gap-2">
+          <BrandLogo className="h-9" width={240} height={240} />
+          <div className="flex items-center gap-2">
+            <span className="rounded-md bg-slate-100 px-2 py-1 text-[11px] font-semibold text-slate-600">Manager</span>
+            <button
+              type="button"
+              onClick={() => setDesktopSidebarVisible(false)}
+              className="hidden items-center justify-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-medium text-slate-600 hover:bg-slate-50 lg:inline-flex"
+            >
+              <X className="h-3.5 w-3.5" />
+              Ocultar
+            </button>
+          </div>
+        </div>
+        <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5">
+          <p className="text-[11px] font-medium text-slate-500">Conta ativa</p>
+          <p className="mt-0.5 truncate text-sm font-semibold text-slate-950">{currentUser.name || currentUser.email}</p>
+          <p className="truncate text-[11px] text-slate-500">{currentUser.email}</p>
+        </div>
+      </div>
+
+      <div className="mt-3">
+        <p className="px-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">Gerenciador</p>
+        <nav className="mt-2 space-y-1">
+          {tabs.map((tab) => {
+            const Icon = tab.icon;
+            const active = activeTab === tab.id;
+
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => handleSelectTab(tab.id)}
+                className={`group flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 text-left transition ${
+                  active
+                    ? 'border-slate-950 bg-slate-950 text-white shadow-sm'
+                    : 'border-transparent bg-white text-slate-600 hover:border-slate-200 hover:bg-slate-50 hover:text-slate-950'
+                }`}
+              >
+                <span
+                  className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md ${
+                    active ? 'bg-white/10 text-emerald-300' : 'bg-slate-100 text-slate-500'
+                  }`}
+                >
+                  <Icon className="h-4 w-4" />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-medium">{tab.label}</span>
+                  <span className={`mt-0.5 block text-[11px] ${active ? 'text-slate-300' : 'text-slate-400'}`}>{tabMetrics[tab.id]}</span>
+                </span>
+              </button>
+            );
+          })}
+        </nav>
+      </div>
+
+      <div className="mt-3">
+        <p className="px-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">Resumo</p>
+        <div className="mt-2 grid gap-2">
+          {sidebarMetrics.map((item) => (
+            <div key={item.label} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5">
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <p className="text-[11px] font-medium text-slate-500">{item.label}</p>
+                  <p className="mt-0.5 text-[11px] text-slate-400">{item.detail}</p>
+                </div>
+                <p className="text-sm font-semibold text-slate-950">{item.value}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="mt-3">
+        <p className="px-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">Indicadores</p>
+        <div className="mt-2 grid grid-cols-2 gap-2">
+          {sidebarIndicators.map((item) => (
+            <div key={item.label} className="rounded-lg border border-slate-200 bg-white px-3 py-2.5">
+              <p className="text-[11px] text-slate-500">{item.label}</p>
+              <p className="mt-1 text-sm font-semibold text-slate-950">{item.value}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="mt-3">
+        <p className="px-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">Acoes</p>
+        <div className="mt-2 grid gap-1.5">
+          <Link
+            to={OPERATIONS_PATH}
+            onClick={() => setMobileMenuOpen(false)}
+            className="inline-flex items-center justify-between border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 hover:bg-slate-50"
+          >
+            Mesa operacional
+            <ArrowRight className="h-4 w-4" />
+          </Link>
+          <Link
+            to="/perfil"
+            onClick={() => setMobileMenuOpen(false)}
+            className="inline-flex items-center justify-between border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 hover:bg-slate-50"
+          >
+            Meu perfil
+            <ArrowRight className="h-4 w-4" />
+          </Link>
+          <button
+            type="button"
+            onClick={() => void loadData()}
+            disabled={refreshing}
+            className="inline-flex items-center justify-between border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-sm text-emerald-800 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {refreshing ? (
+              <LoaderCircle className="h-4 w-4 animate-spin" />
+            ) : (
+              <ArrowRight className="h-4 w-4" />
+            )}
+            Sincronizar
+          </button>
+        </div>
+      </div>
+
+      <div className="mt-auto pt-3">
+        <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5">
+          <p className="text-[11px] font-medium text-slate-500">Rota</p>
+          <p className="mt-1 break-all text-[11px] font-semibold text-slate-800">{BACKOFFICE_PATH}</p>
+        </div>
+        <button
+          type="button"
+          onClick={handleLogout}
+          className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-red-100 bg-red-50 px-3 py-2.5 text-sm font-medium text-red-700 hover:bg-red-100"
+        >
+          <LogOut className="h-4 w-4" />
+          Sair
+        </button>
+      </div>
+    </div>
   );
 
   const handleUserRoleChange = (role: User['type']) => {
@@ -683,6 +932,35 @@ export default function BackofficePage() {
       setUserError(error instanceof Error ? error.message : 'Erro inesperado ao remover o usuario.');
     } finally {
       setUserDeletingId(null);
+    }
+  };
+
+  const handleValidateUser = async (user: User) => {
+    if (user.is_validated !== false) {
+      return;
+    }
+
+    setUserValidatingId(user.id);
+    setUserError('');
+    setUserNotice('');
+
+    try {
+      const response = await apiFetch(`/users/${user.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ is_validated: true }),
+      });
+
+      const payload = (await response.json().catch(() => null)) as User | { detail?: string } | null;
+      if (!response.ok || !payload || !('email' in payload)) {
+        throw new Error(extractErrorMessage(payload, 'Nao foi possivel validar o cadastro.'));
+      }
+
+      setUserNotice(`Login liberado para ${payload.name}.`);
+      await loadData();
+    } catch (error) {
+      setUserError(error instanceof Error ? error.message : 'Erro inesperado ao validar o cadastro.');
+    } finally {
+      setUserValidatingId(null);
     }
   };
 
@@ -869,175 +1147,164 @@ export default function BackofficePage() {
   };
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top,#eaf6ee_0%,#ffffff_42%,#f1efe8_100%)] text-slate-900">
-      <header className="border-b border-white/70 bg-white/85 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-7xl flex-col gap-5 px-4 py-5 sm:px-6 lg:px-8">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div className="max-w-3xl">
-              <p className="text-[11px] font-black uppercase tracking-[0.3em] text-emerald-700">Backoffice Alytha</p>
-              <h1 className="mt-3 text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">
-                Controle administrativo para usuarios, operacoes, comissoes e cadastro completo da plataforma.
-              </h1>
-              <p className="mt-4 text-sm leading-7 text-slate-600 sm:text-base sm:leading-8">
-                Esta area concentra a visao do backoffice sobre os perfis, as ofertas e demandas, a mesa operacional e o
-                acompanhamento das negociacoes conduzidas dentro da Alytha.
-              </p>
-            </div>
+    <div className="min-h-screen bg-[#f5f7f9] text-slate-900">
+      <div className="mx-auto max-w-[1540px] px-3 py-4 sm:px-5 lg:px-6">
+        <div className={`grid gap-3 ${desktopSidebarVisible ? 'lg:grid-cols-[280px_minmax(0,1fr)]' : 'lg:grid-cols-[minmax(0,1fr)]'}`}>
+          <aside
+            className={`hidden overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm lg:sticky lg:top-4 lg:h-[calc(100vh-2rem)] ${
+              desktopSidebarVisible ? 'lg:block' : 'lg:hidden'
+            }`}
+          >
+            {renderManagerSidebar()}
+          </aside>
 
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              <Link
-                to={OPERATIONS_PATH}
-                className="inline-flex items-center justify-center gap-2 rounded-full bg-slate-950 px-5 py-3 text-sm font-black uppercase tracking-[0.18em] text-white shadow-lg shadow-slate-900/20 hover:bg-slate-800"
-              >
-                <BriefcaseBusiness className="h-4 w-4" />
-                Mesa operacional
-              </Link>
-              <Link
-                to="/perfil"
-                className="inline-flex items-center justify-center gap-2 rounded-full border border-slate-200 bg-white px-5 py-3 text-sm font-black uppercase tracking-[0.18em] text-slate-900 shadow-sm hover:border-slate-300"
-              >
-                <ShieldCheck className="h-4 w-4" />
-                Meu perfil
-              </Link>
+          {mobileMenuOpen ? (
+            <div className="fixed inset-0 z-50 lg:hidden" role="dialog" aria-modal="true" aria-label="Menu do gerenciador do backoffice">
               <button
                 type="button"
-                onClick={() => void loadData()}
-                disabled={refreshing}
-                className="inline-flex items-center justify-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-5 py-3 text-sm font-black uppercase tracking-[0.18em] text-emerald-800 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {refreshing ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
-                Sincronizar
-              </button>
-              <button
-                type="button"
-                onClick={handleLogout}
-                className="inline-flex items-center justify-center gap-2 rounded-full border border-red-200 bg-white px-5 py-3 text-sm font-black uppercase tracking-[0.18em] text-red-700 shadow-sm hover:bg-red-50"
-              >
-                <LogOut className="h-4 w-4" />
-                Sair
-              </button>
+                aria-label="Fechar menu"
+                onClick={() => setMobileMenuOpen(false)}
+                className="absolute inset-0 bg-slate-950/45"
+              />
+              <aside className="relative h-full w-[min(88vw,340px)] overflow-y-auto border-r border-slate-200 bg-white shadow-2xl shadow-slate-950/25">
+                <div className="absolute right-3 top-3 z-10">
+                  <button
+                    type="button"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 shadow-sm hover:bg-slate-50"
+                    aria-label="Fechar menu do gerenciador"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+                {renderManagerSidebar()}
+              </aside>
             </div>
-          </div>
+          ) : null}
 
-          <div className="flex flex-wrap gap-2">
-            {tabs.map((tab) => {
-              const Icon = tab.icon;
-              const active = activeTab === tab.id;
-
-              return (
-                <button
-                  key={tab.id}
-                  type="button"
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`inline-flex items-center gap-2 rounded-full px-4 py-3 text-sm font-black uppercase tracking-[0.18em] transition-colors ${
-                    active ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/20' : 'bg-white text-slate-700 hover:bg-slate-100'
-                  }`}
-                >
-                  <Icon className="h-4 w-4" />
-                  {tab.label}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      </header>
-
-      <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        {loading ? (
-          <div className="flex items-center gap-3 rounded-[2rem] border border-white/80 bg-white/90 px-6 py-6 shadow-[0_40px_120px_-75px_rgba(15,23,42,0.55)]">
-            <LoaderCircle className="h-5 w-5 animate-spin text-emerald-700" />
-            <span className="text-sm font-semibold text-slate-700">Carregando o backoffice...</span>
-          </div>
-        ) : (
-          <>
-            {pageError ? (
-              <div className="mb-6 flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-4 text-sm text-red-700">
-                <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" />
-                <span>{pageError}</span>
-              </div>
-            ) : null}
-
-            {activeTab === 'overview' ? (
-              <section className="space-y-6">
-                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                  <SummaryCard
-                    label="Usuarios ativos"
-                    value={formatNumber(totalUsers)}
-                    detail={`${formatNumber(sellerUsers)} vendedores, ${formatNumber(buyerUsers)} compradores e ${formatNumber(brokerUsers.length)} corretores`}
-                  />
-                  <SummaryCard
-                    label="Ofertas em operacao"
-                    value={formatNumber(activeOffers.length)}
-                    detail={`${formatNumber(deskOffers.length)} na mesa e ${formatNumber(directOffers.length)} diretas`}
-                    tone="sky"
-                  />
-                  <SummaryCard
-                    label="Negociacoes pendentes"
-                    value={formatNumber(pendingNegotiations.length)}
-                    detail={`${formatCurrency(pendingBrokerage)} em corretagem bruta ainda em aberto`}
-                    tone="amber"
-                  />
-                  <SummaryCard
-                    label="Corretagem aceita"
-                    value={formatCurrency(acceptedBrokerage)}
-                    detail={`${formatNumber(acceptedNegotiations.length)} negociacoes aceitas no livro`}
-                    tone="slate"
-                  />
+          <div className="min-w-0 space-y-3 [&_a.inline-flex]:rounded-lg [&_a.inline-flex]:font-medium [&_a.inline-flex]:normal-case [&_a.inline-flex]:tracking-normal [&_a.inline-flex]:shadow-none [&_button.inline-flex]:rounded-lg [&_button.inline-flex]:font-medium [&_button.inline-flex]:normal-case [&_button.inline-flex]:tracking-normal [&_button.inline-flex]:shadow-none [&_form_label>span]:text-xs [&_form_label>span]:font-medium [&_form_label>span]:normal-case [&_form_label>span]:tracking-normal [&_form_label>span]:text-slate-600 [&_input]:rounded-lg [&_input]:border-slate-300 [&_input]:bg-white [&_input]:px-3 [&_input]:py-2.5 [&_input]:text-sm [&_select]:rounded-lg [&_select]:border-slate-300 [&_select]:bg-white [&_select]:px-3 [&_select]:py-2.5 [&_select]:text-sm [&_textarea]:rounded-lg [&_textarea]:border-slate-300 [&_textarea]:bg-white [&_textarea]:px-3 [&_textarea]:py-2.5 [&_textarea]:text-sm">
+            <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
+              <div className="flex flex-col gap-3 px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
+                <div className="flex min-w-0 items-start gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setMobileMenuOpen(true)}
+                    className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-sm hover:bg-slate-50 lg:hidden"
+                    aria-label="Abrir menu do gerenciador"
+                  >
+                    <Menu className="h-5 w-5" />
+                  </button>
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
+                      <span>Gerenciador de backoffice</span>
+                      <span className="h-1 w-1 rounded-full bg-slate-300" />
+                      <span>{tabs.find((tab) => tab.id === activeTab)?.label}</span>
+                    </div>
+                    <h1 className="mt-1 text-lg font-semibold tracking-tight text-slate-950 sm:text-xl">{activeTabInfo.title}</h1>
+                    <p className="mt-1 max-w-3xl text-sm leading-5 text-slate-500">{activeTabInfo.description}</p>
+                  </div>
                 </div>
 
-                <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
-                  <section className="rounded-[2rem] border border-white/80 bg-white/92 p-6 shadow-[0_45px_120px_-75px_rgba(15,23,42,0.55)]">
+                <div className="flex flex-wrap gap-2">
+                  {!desktopSidebarVisible ? (
+                    <button
+                      type="button"
+                      onClick={() => setDesktopSidebarVisible(true)}
+                      className="hidden items-center justify-center gap-2 border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 lg:inline-flex"
+                    >
+                      <Menu className="h-4 w-4" />
+                      Mostrar menu
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    onClick={() => void loadData()}
+                    disabled={refreshing}
+                    className="inline-flex items-center justify-center gap-2 border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {refreshing ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
+                    Atualizar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleLogout}
+                    className="inline-flex items-center justify-center gap-2 border border-red-200 bg-white px-3 py-2 text-sm text-red-700 hover:bg-red-50"
+                  >
+                    <LogOut className="h-4 w-4" />
+                    Sair
+                  </button>
+                </div>
+              </div>
+            </section>
+
+            {loading ? (
+              <div className="flex items-center gap-3 rounded-[1.75rem] border border-slate-200 bg-white px-6 py-6 shadow-sm shadow-slate-200/80">
+                <LoaderCircle className="h-5 w-5 animate-spin text-emerald-700" />
+                <span className="text-sm font-semibold text-slate-700">Carregando o backoffice...</span>
+              </div>
+            ) : (
+              <>
+                {pageError ? (
+                  <div className="flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-4 text-sm text-red-700">
+                    <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" />
+                    <span>{pageError}</span>
+                  </div>
+                ) : null}
+
+            {activeTab === 'overview' ? (
+              <section className="space-y-3 [&_section]:rounded-xl [&_section]:border-slate-200 [&_section]:bg-white [&_section]:shadow-sm [&_section]:shadow-slate-200/70">
+                <div className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
+                  <section className="border bg-white p-4">
                     <SectionTitle
-                      eyebrow="Resumo operacional"
-                      title="Panorama do escritorio inteiro"
-                      description="Acompanhamento rapido do volume cadastrado, da base de perfis e da pressao atual sobre a mesa comercial."
+                      eyebrow="Pipeline CRM"
+                      title="Funil comercial do backoffice"
+                      description="Leitura operacional das contas, oportunidades, follow-ups e ganhos confirmados."
                     />
 
-                    <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                      <div className="rounded-[1.6rem] border border-slate-200 bg-slate-50 px-4 py-4">
-                        <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">Demandas publicadas</p>
-                        <p className="mt-3 text-2xl font-black text-slate-950">
-                          {formatNumber(offers.filter((offer) => offer.type === 'compra').length)}
-                        </p>
-                      </div>
-                      <div className="rounded-[1.6rem] border border-slate-200 bg-slate-50 px-4 py-4">
-                        <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">Ofertas publicadas</p>
-                        <p className="mt-3 text-2xl font-black text-slate-950">
-                          {formatNumber(offers.filter((offer) => offer.type === 'venda').length)}
-                        </p>
-                      </div>
-                      <div className="rounded-[1.6rem] border border-slate-200 bg-slate-50 px-4 py-4">
-                        <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">Aguardando PIX</p>
-                        <p className="mt-3 text-2xl font-black text-slate-950">{formatNumber(pendingOffers.length)}</p>
-                      </div>
-                      <div className="rounded-[1.6rem] border border-slate-200 bg-slate-50 px-4 py-4">
-                        <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">Corretagem bruta total</p>
-                        <p className="mt-3 text-2xl font-black text-slate-950">{formatCurrency(totalBrokerage)}</p>
-                      </div>
-                      <div className="rounded-[1.6rem] border border-slate-200 bg-slate-50 px-4 py-4">
-                        <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">Estimativa corretores</p>
-                        <p className="mt-3 text-2xl font-black text-slate-950">{formatCurrency(totalBrokerage * 0.3)}</p>
-                        <p className="mt-2 text-xs text-slate-500">Seguindo a regra operacional atual de 30% usada na mesa.</p>
-                      </div>
-                      <div className="rounded-[1.6rem] border border-slate-200 bg-slate-50 px-4 py-4">
-                        <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">Rota principal</p>
-                        <p className="mt-3 text-sm font-black text-slate-950">{BACKOFFICE_PATH}</p>
-                        <p className="mt-2 text-xs text-slate-500">Fluxo proprio do perfil backoffice dentro do app.</p>
-                      </div>
+                    <div className="mt-4 space-y-3">
+                      {crmPipeline.map((stage, index) => (
+                        <article key={stage.label} className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <p className="text-sm font-semibold text-slate-950">{stage.label}</p>
+                              <p className="mt-0.5 text-xs text-slate-500">{stage.detail}</p>
+                            </div>
+                            <p className="text-lg font-semibold text-slate-950">{formatNumber(stage.value)}</p>
+                          </div>
+                          <div className="mt-3 h-2 overflow-hidden rounded-full bg-white">
+                            <div
+                              className={`h-full rounded-full ${index === 2 ? 'bg-amber-500' : index === 3 ? 'bg-emerald-500' : 'bg-slate-900'}`}
+                              style={{ width: `${Math.max(8, Math.round((stage.value / totalPipelineItems) * 100))}%` }}
+                            />
+                          </div>
+                        </article>
+                      ))}
                     </div>
                   </section>
 
-                  <section className="rounded-[2rem] border border-white/80 bg-white/92 p-6 shadow-[0_45px_120px_-75px_rgba(15,23,42,0.55)]">
+                  <section className="border bg-white p-4">
                     <SectionTitle
-                      eyebrow="Acesso rapido"
-                      title="Atalhos para a operacao"
-                      description="Entradas diretas para os fluxos que o backoffice mais usa no dia a dia."
+                      eyebrow="Fila de trabalho"
+                      title="Acoes prioritarias"
+                      description="Itens que ajudam o backoffice a agir como CRM: cobrar pendencias, nutrir follow-up e manter a base limpa."
                     />
 
-                    <div className="mt-6 grid gap-3">
+                    <div className="mt-4 space-y-3">
+                      {crmActionItems.map((item) => (
+                        <div key={item.label} className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-3 py-3">
+                          <div>
+                            <p className="text-sm font-semibold text-slate-900">{item.label}</p>
+                            <p className="mt-0.5 text-xs text-slate-500">{item.detail}</p>
+                          </div>
+                          <span className="rounded-md bg-slate-100 px-2.5 py-1 text-sm font-semibold text-slate-900">{formatNumber(item.value)}</span>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="mt-4 grid gap-2">
                       <Link
                         to={OPERATIONS_PATH}
-                        className="inline-flex items-center justify-between rounded-[1.6rem] border border-slate-200 bg-slate-50 px-4 py-4 text-sm font-black text-slate-900 hover:bg-white"
+                        className="inline-flex items-center justify-between border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 hover:bg-white"
                       >
                         Abrir mesa operacional
                         <ArrowRight className="h-4 w-4" />
@@ -1048,87 +1315,76 @@ export default function BackofficePage() {
                           setActiveTab('users');
                           resetUserForm();
                         }}
-                        className="inline-flex items-center justify-between rounded-[1.6rem] border border-slate-200 bg-slate-50 px-4 py-4 text-sm font-black text-slate-900 hover:bg-white"
+                        className="inline-flex items-center justify-between border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 hover:bg-white"
                       >
-                        Criar novo cadastro de usuario
+                        Novo cadastro
                         <ArrowRight className="h-4 w-4" />
                       </button>
                       <button
                         type="button"
                         onClick={() => setActiveTab('offers')}
-                        className="inline-flex items-center justify-between rounded-[1.6rem] border border-slate-200 bg-slate-50 px-4 py-4 text-sm font-black text-slate-900 hover:bg-white"
+                        className="inline-flex items-center justify-between border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 hover:bg-white"
                       >
-                        Cadastrar oferta ou demanda
-                        <ArrowRight className="h-4 w-4" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setActiveTab('negotiations')}
-                        className="inline-flex items-center justify-between rounded-[1.6rem] border border-slate-200 bg-slate-50 px-4 py-4 text-sm font-black text-slate-900 hover:bg-white"
-                      >
-                        Gerenciar comissoes e negociacoes
+                        Nova oportunidade
                         <ArrowRight className="h-4 w-4" />
                       </button>
                     </div>
                   </section>
                 </div>
 
-                <div className="grid gap-6 xl:grid-cols-2">
-                  <section className="rounded-[2rem] border border-white/80 bg-white/92 p-6 shadow-[0_45px_120px_-75px_rgba(15,23,42,0.55)]">
+                <div className="grid gap-4 xl:grid-cols-2">
+                  <section className="border bg-white p-4">
                     <SectionTitle
-                      eyebrow="Cadastros recentes"
-                      title="Ultimos perfis adicionados"
-                      description="Visao rapida dos usuarios mais recentes para revisar categorias, contatos e segmento."
+                      eyebrow="Contas recentes"
+                      title="Ultimos cadastros"
+                      description="Lista rapida para revisar dados de relacionamento e ajustar perfis."
                     />
 
-                    <div className="mt-6 grid gap-3">
+                    <div className="mt-4 overflow-hidden rounded-lg border border-slate-200">
                       {recentUsers.map((user) => (
                         <button
                           key={user.id}
                           type="button"
                           onClick={() => handleEditUser(user)}
-                          className="flex items-start justify-between gap-3 rounded-[1.5rem] border border-slate-200 bg-slate-50 px-4 py-4 text-left hover:bg-white"
+                          className="flex w-full items-center justify-between gap-3 border-b border-slate-200 bg-white px-3 py-3 text-left last:border-b-0 hover:bg-slate-50"
                         >
-                          <div>
-                            <p className="text-sm font-black text-slate-950">{user.name}</p>
-                            <p className="mt-1 text-sm text-slate-600">{user.email}</p>
-                            <p className="mt-2 text-[11px] font-black uppercase tracking-[0.18em] text-emerald-700">
-                              {roleLabels[user.type]}
-                            </p>
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-semibold text-slate-950">{user.name}</p>
+                            <p className="mt-0.5 truncate text-xs text-slate-500">{user.email}</p>
                           </div>
-                          <ArrowRight className="mt-1 h-4 w-4 shrink-0 text-slate-400" />
+                          <span className="shrink-0 rounded-md bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">
+                            {roleLabels[user.type]}
+                          </span>
                         </button>
                       ))}
                     </div>
                   </section>
 
-                  <section className="rounded-[2rem] border border-white/80 bg-white/92 p-6 shadow-[0_45px_120px_-75px_rgba(15,23,42,0.55)]">
+                  <section className="border bg-white p-4">
                     <SectionTitle
-                      eyebrow="Comissao por corretor"
-                      title="Leitura consolidada da corretagem"
-                      description="Resumo por corretor com valores brutos e estimativa da parcela do profissional na regra atual da mesa."
+                      eyebrow="Receita por corretor"
+                      title="Comissao consolidada"
+                      description="Resumo de performance dos corretores, com estimativa de repasse pela regra atual."
                     />
 
-                    <div className="mt-6 grid gap-3">
+                    <div className="mt-4 overflow-hidden rounded-lg border border-slate-200">
                       {brokerSummaries.slice(0, 4).map((summary) => (
-                        <article key={summary.broker.id} className="rounded-[1.5rem] border border-slate-200 bg-slate-50 px-4 py-4">
+                        <article key={summary.broker.id} className="border-b border-slate-200 bg-white px-3 py-3 last:border-b-0">
                           <div className="flex items-center justify-between gap-3">
-                            <div>
-                              <p className="text-sm font-black text-slate-950">{summary.broker.name}</p>
-                              <p className="mt-1 text-xs uppercase tracking-[0.18em] text-slate-500">
-                                {formatNumber(summary.totalNegotiations)} negociacoes
-                              </p>
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-semibold text-slate-950">{summary.broker.name}</p>
+                              <p className="mt-0.5 text-xs text-slate-500">{formatNumber(summary.totalNegotiations)} negociacoes</p>
                             </div>
-                            <p className="text-sm font-black text-emerald-700">{formatCurrency(summary.estimatedAccepted)}</p>
+                            <p className="text-sm font-semibold text-emerald-700">{formatCurrency(summary.estimatedAccepted)}</p>
                           </div>
-                          <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                            <div className="rounded-2xl border border-white bg-white px-3 py-3">
-                              <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">Bruta aceita</p>
-                              <p className="mt-2 text-sm font-black text-slate-950">{formatCurrency(summary.grossAccepted)}</p>
+                          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                            <div className="rounded-lg bg-slate-50 px-3 py-2">
+                              <p className="text-xs text-slate-500">Bruta aceita</p>
+                              <p className="text-sm font-semibold text-slate-950">{formatCurrency(summary.grossAccepted)}</p>
                             </div>
-                            <div className="rounded-2xl border border-white bg-white px-3 py-3">
-                              <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">Estimativa 30%</p>
-                              <p className="mt-2 text-sm font-black text-slate-950">{formatCurrency(summary.estimatedAccepted)}</p>
+                            <div className="rounded-lg bg-slate-50 px-3 py-2">
+                              <p className="text-xs text-slate-500">Estimativa 30%</p>
+                              <p className="text-sm font-semibold text-slate-950">{formatCurrency(summary.estimatedAccepted)}</p>
                             </div>
                           </div>
                         </article>
@@ -1137,33 +1393,33 @@ export default function BackofficePage() {
                   </section>
                 </div>
 
-                <section className="rounded-[2rem] border border-white/80 bg-white/92 p-6 shadow-[0_45px_120px_-75px_rgba(15,23,42,0.55)]">
+                <section className="border bg-white p-4">
                   <SectionTitle
                     eyebrow="Livro recente"
-                    title="Ultimas oportunidades cadastradas"
-                    description="Acompanhamento das entradas mais recentes para responder rapido a novas demandas e revisar cadastros."
+                    title="Ultimas oportunidades"
+                    description="Entrada recente de ofertas e demandas para atendimento e auditoria."
                   />
 
-                  <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                  <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                     {recentOffers.map((offer) => {
                       const owner = findUserById(users, offer.userId);
                       return (
-                        <article key={offer.id} className="rounded-[1.7rem] border border-slate-200 bg-slate-50 p-5">
+                        <article key={offer.id} className="rounded-lg border border-slate-200 bg-white p-3">
                           <div className="flex items-center justify-between gap-3">
-                            <span className="rounded-full bg-white px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-slate-700">
+                            <span className="rounded-md bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">
                               {offerTypeLabels[offer.type]}
                             </span>
-                            <span className="rounded-full bg-emerald-50 px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-emerald-700">
+                            <span className="rounded-md bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">
                               {offerStatusLabels[offer.status]}
                             </span>
                           </div>
-                          <h3 className="mt-4 text-2xl font-black text-slate-950">
+                          <h3 className="mt-3 text-sm font-semibold text-slate-950">
                             {offer.grain} · {formatNumber(offer.quantity)} {offer.unit}
                           </h3>
                           <p className="mt-2 text-sm text-slate-600">{offer.location}</p>
-                          <p className="mt-4 text-sm font-semibold text-slate-900">{owner?.name || 'Usuario nao localizado'}</p>
+                          <p className="mt-3 text-sm font-medium text-slate-900">{owner?.name || 'Usuario nao localizado'}</p>
                           <p className="mt-1 text-sm text-slate-500">{formatCurrency(offer.price)}</p>
-                          <p className="mt-4 text-[11px] font-black uppercase tracking-[0.18em] text-slate-500">
+                          <p className="mt-3 text-xs font-medium text-slate-500">
                             {formatDateTime(offer.createdAt)}
                           </p>
                         </article>
@@ -1175,7 +1431,7 @@ export default function BackofficePage() {
             ) : null}
 
             {activeTab === 'users' ? (
-              <section className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
+              <section className="grid gap-4 xl:grid-cols-[0.95fr_1.05fr] [&_section]:rounded-xl [&_section]:border-slate-200 [&_section]:bg-white [&_section]:p-5 [&_section]:shadow-sm [&_section]:shadow-slate-200/70 [&_article]:rounded-lg [&_article]:border-slate-200 [&_article]:bg-slate-50/70 [&_article]:shadow-none">
                 <div className="space-y-6">
                   <section className="rounded-[2rem] border border-white/80 bg-white/92 p-6 shadow-[0_45px_120px_-75px_rgba(15,23,42,0.55)]">
                     <SectionTitle
@@ -1434,8 +1690,15 @@ export default function BackofficePage() {
                     <SectionTitle
                       eyebrow="Base de usuarios"
                       title="Pesquisar e editar categorias"
-                      description="Filtre a base por tipo de perfil e abra qualquer cadastro para atualizacao imediata."
+                      description="Filtre a base por tipo de perfil, aprove novos acessos e abra qualquer cadastro para atualizacao imediata."
                     />
+
+                    {pendingValidationUsers.length ? (
+                      <div className="mt-6 flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                        <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0" />
+                        <span>{formatNumber(pendingValidationUsers.length)} cadastro(s) aguardando validacao para liberar login.</span>
+                      </div>
+                    ) : null}
 
                     <div className="mt-6 grid gap-4 sm:grid-cols-[1fr_220px]">
                       <label className="space-y-2">
@@ -1476,6 +1739,13 @@ export default function BackofficePage() {
                                 <span className="rounded-full bg-white px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-emerald-700">
                                   {roleLabels[user.type]}
                                 </span>
+                                <span
+                                  className={`rounded-full bg-white px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] ${
+                                    user.is_validated === false ? 'text-amber-700' : 'text-sky-700'
+                                  }`}
+                                >
+                                  {user.is_validated === false ? 'Pendente validacao' : 'Login liberado'}
+                                </span>
                                 {user.profile_segment ? (
                                   <span className="rounded-full bg-white px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-slate-600">
                                     {user.profile_segment.replaceAll('_', ' ')}
@@ -1487,9 +1757,25 @@ export default function BackofficePage() {
                                   </span>
                                 ) : null}
                               </div>
+                              <p className="mt-3 text-sm text-slate-500">
+                                {user.is_validated === false
+                                  ? 'Acesso aguardando validacao do backoffice antes do primeiro login.'
+                                  : 'Acesso apto para login na plataforma.'}
+                              </p>
                             </div>
 
                             <div className="flex flex-col gap-2 sm:flex-row">
+                              {user.is_validated === false ? (
+                                <button
+                                  type="button"
+                                  onClick={() => void handleValidateUser(user)}
+                                  disabled={userValidatingId === user.id}
+                                  className="inline-flex items-center justify-center gap-2 rounded-full border border-emerald-200 bg-white px-4 py-3 text-sm font-black uppercase tracking-[0.18em] text-emerald-700 hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-60"
+                                >
+                                  {userValidatingId === user.id ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
+                                  Validar login
+                                </button>
+                              ) : null}
                               <button
                                 type="button"
                                 onClick={() => handleEditUser(user)}
@@ -1518,8 +1804,8 @@ export default function BackofficePage() {
             ) : null}
 
             {activeTab === 'offers' ? (
-              <section className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
-                <div className="space-y-6">
+              <section className="flex flex-col gap-4 [&_section]:rounded-xl [&_section]:border-slate-200 [&_section]:bg-white [&_section]:p-5 [&_section]:shadow-sm [&_section]:shadow-slate-200/70 [&_article]:rounded-lg [&_article]:border-slate-200 [&_article]:bg-slate-50/70 [&_article]:shadow-none">
+                <div className="order-2 space-y-6">
                   <section className="rounded-[2rem] border border-white/80 bg-white/92 p-6 shadow-[0_45px_120px_-75px_rgba(15,23,42,0.55)]">
                     <SectionTitle
                       eyebrow="Criacao assistida"
@@ -1768,7 +2054,7 @@ export default function BackofficePage() {
                   </section>
                 </div>
 
-                <div className="space-y-6">
+                <div className="order-1 space-y-6">
                   <section className="rounded-[2rem] border border-white/80 bg-white/92 p-6 shadow-[0_45px_120px_-75px_rgba(15,23,42,0.55)]">
                     <SectionTitle
                       eyebrow="Livro de oportunidades"
@@ -1884,7 +2170,7 @@ export default function BackofficePage() {
             ) : null}
 
             {activeTab === 'negotiations' ? (
-              <section className="space-y-6">
+              <section className="space-y-4 [&_section]:rounded-xl [&_section]:border-slate-200 [&_section]:bg-white [&_section]:p-5 [&_section]:shadow-sm [&_section]:shadow-slate-200/70">
                 <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                   <SummaryCard
                     label="Corretagem pendente"
@@ -2201,7 +2487,9 @@ export default function BackofficePage() {
             ) : null}
           </>
         )}
-      </main>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

@@ -23,6 +23,10 @@ export default defineConfig(({mode}) => {
           target: apiTarget,
           changeOrigin: true,
         },
+        '/share': {
+          target: apiTarget,
+          changeOrigin: true,
+        },
       },
     },
   };

@@ -3,6 +3,7 @@ export interface User {
   name: string;
   email: string;
   type: 'vendedor' | 'comprador' | 'corretor' | 'backoffice';
+  is_validated?: boolean;
   phone?: string;
   company?: string;
   legal_name?: string;

@@ -31,6 +31,7 @@ class User(models.Model):
     address_state = models.CharField(max_length=2, blank=True)
     address_country = models.CharField(max_length=60, blank=True, default='Brasil')
     document_notes = models.TextField(blank=True)
+    is_validated = models.BooleanField(default=True)
     broker_link_token = models.UUIDField(unique=True, editable=False, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 

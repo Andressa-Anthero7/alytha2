@@ -47,6 +47,7 @@ USER_PROFILE_FIELDS = [
     'name',
     'email',
     'type',
+    'is_validated',
     'phone',
     'company',
     'legal_name',
@@ -151,7 +152,7 @@ class ProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = USER_PROFILE_FIELDS
-        read_only_fields = ['id', 'email', 'type']
+        read_only_fields = ['id', 'email', 'type', 'is_validated']
 
 
 class OfferSerializer(serializers.ModelSerializer):
