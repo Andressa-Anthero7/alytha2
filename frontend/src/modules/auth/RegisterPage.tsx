@@ -132,7 +132,6 @@ export function RegisterPage({ routeBase }: RegisterPageProps) {
     [normalizedRoleSlug],
   );
   const selectedRoleText = selectedRoleLabel.toLowerCase();
-  const showTrialNotice = normalizedRoleSlug === 'comprador' || normalizedRoleSlug === 'vendedor';
 
   const updateField = <K extends keyof RegisterFormState>(field: K, value: RegisterFormState[K]) => {
     setForm((previous) => ({ ...previous, [field]: value }));
@@ -260,13 +259,6 @@ export function RegisterPage({ routeBase }: RegisterPageProps) {
                 Você está preenchendo a categoria {selectedRoleText}. Informe os dados do responsável, perfil, documentação e endereço.
               </p>
             </div>
-
-            {showTrialNotice ? (
-              <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold leading-6 text-emerald-900">
-                Cadastro com 15 dias de teste. Após esse período, o plano fica em R$ 99,90 via PIX automático ou R$ 129,90 via PIX
-                convencional.
-              </div>
-            ) : null}
 
             {error && (
               <div className="flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
