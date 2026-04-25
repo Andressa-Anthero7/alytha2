@@ -9,6 +9,7 @@ coverage/
 .env*
 !.env.example
 !backend/.env.example
+!backend/.env.postgres.example
 frontend/.env*
 !frontend/.env.example
 !frontend/.env.production.example
