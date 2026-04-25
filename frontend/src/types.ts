@@ -3,6 +3,7 @@ export interface User {
   name: string;
   email: string;
   type: 'vendedor' | 'comprador' | 'corretor' | 'backoffice';
+  is_validated?: boolean;
   phone?: string;
   company?: string;
   legal_name?: string;
@@ -19,6 +20,10 @@ export interface User {
   address_state?: string;
   address_country?: string;
   document_notes?: string;
+  terms_accepted_at?: string | null;
+  privacy_accepted_at?: string | null;
+  legal_version?: string;
+  legal_acceptance_ip?: string | null;
 }
 
 export interface QualityParams {
@@ -30,11 +35,12 @@ export interface QualityParams {
   ph?: number;
   protein?: number;
   standard?: string;
+  nonGmo?: boolean;
   deliveryWindow?: string;
   funrural?: string;
   notes?: string;
   observations?: string;
-  [key: string]: string | number | undefined;
+  [key: string]: string | number | boolean | undefined;
 }
 
 export interface Offer {

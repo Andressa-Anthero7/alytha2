@@ -1,14 +1,18 @@
+import json
 from datetime import timedelta
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
+from django.conf import settings
 from django.contrib.auth import authenticate, get_user_model
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import IntegrityError, transaction
 from django.db.models import Q, TextField
 from django.db.models.functions import Cast
+from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
+from django.utils.html import escape
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied, ValidationError as DRFValidationError
@@ -42,12 +46,79 @@ PIX_CNPJ = '66.291.663/0001-10'
 PIX_CNPJ_DIGITS = '66291663000110'
 PIX_BENEFICIARY = 'Alytha Intermediações de Negócios Ltda'
 PASSWORD_RESET_TOKEN_TTL = timedelta(hours=1)
+LEGAL_DOCUMENT_VERSION = '25/04/2026'
 ROLE_LABELS = {
     'vendedor': 'Vendedor',
     'comprador': 'Comprador',
     'corretor': 'Corretor',
     'backoffice': 'Backoffice',
 }
+
+
+def parse_request_bool(value):
+    if isinstance(value, (list, tuple)):
+        value = value[0] if value else False
+    if isinstance(value, bool):
+        return value
+    return str(value or '').strip().lower() in {'1', 'true', 'yes', 'on'}
+
+
+def get_client_ip(request):
+    forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR', '')
+    if forwarded_for:
+        return forwarded_for.split(',')[0].strip()
+    return request.META.get('REMOTE_ADDR') or None
+
+
+def apply_legal_acceptance_fields(target, *, accept_terms, accept_privacy, legal_version, request):
+    accepted_at = timezone.now()
+    updated_fields = []
+
+    if accept_terms:
+        target.terms_accepted_at = accepted_at
+        updated_fields.append('terms_accepted_at')
+
+    if accept_privacy:
+        target.privacy_accepted_at = accepted_at
+        updated_fields.append('privacy_accepted_at')
+
+    if accept_terms or accept_privacy:
+        target.legal_version = str(legal_version or LEGAL_DOCUMENT_VERSION).strip()[:30]
+        target.legal_acceptance_ip = get_client_ip(request)
+        updated_fields.extend(['legal_version', 'legal_acceptance_ip'])
+
+    return updated_fields
+
+
+CLIENT_OFFER_TYPE_BY_ROLE = {
+    'vendedor': 'venda',
+    'comprador': 'compra',
+}
+OFFER_TYPE_LABELS = {
+    'venda': 'oferta de venda',
+    'compra': 'demanda de compra',
+}
+CLIENT_PROFILE_DASHBOARD_COPY = {
+    'vendedor': {
+        'tickerLabel': 'Ofertas publicas',
+        'focusTitle': 'Radar de vendedores',
+        'focusDescription': 'Ofertas de venda publicas do perfil vendedor para acompanhar sua propria categoria.',
+        'marketTitle': 'Ultimas ofertas de venda cadastradas',
+        'marketDescription': 'Ofertas de venda recentes do marketplace publico, sem misturar demandas de comprador.',
+        'marketEmptyTitle': 'Sem ofertas de venda recentes por aqui.',
+        'marketEmptyDescription': 'Nenhuma oferta publica do perfil vendedor foi encontrada neste momento.',
+    },
+    'comprador': {
+        'tickerLabel': 'Demandas publicas',
+        'focusTitle': 'Radar de compradores',
+        'focusDescription': 'Demandas de compra publicas do perfil comprador para acompanhar sua propria categoria.',
+        'marketTitle': 'Ultimas demandas de compra cadastradas',
+        'marketDescription': 'Demandas de compra recentes do marketplace publico, sem misturar ofertas de vendedor.',
+        'marketEmptyTitle': 'Sem demandas de compra recentes por aqui.',
+        'marketEmptyDescription': 'Nenhuma demanda publica do perfil comprador foi encontrada neste momento.',
+    },
+}
+PENDING_VALIDATION_ROLES = {'vendedor', 'comprador', 'corretor'}
 CLIENT_DASHBOARD_CONFIG = {
     'vendedor': {
         'header': {
@@ -327,6 +398,22 @@ def sync_auth_user_for_market_user(*, market_user: User, previous_email: str | N
     return auth_user
 
 
+def requires_backoffice_validation(role: str | None) -> bool:
+    return bool(role in PENDING_VALIDATION_ROLES)
+
+
+def user_is_pending_validation(user: User | None) -> bool:
+    return bool(user and requires_backoffice_validation(user.type) and not user.is_validated)
+
+
+def validate_offer_type_for_profile(*, target_user: User, offer_type: str):
+    allowed_offer_type = CLIENT_OFFER_TYPE_BY_ROLE.get(target_user.type)
+    if allowed_offer_type and offer_type != allowed_offer_type:
+        role_label = ROLE_LABELS.get(target_user.type, target_user.type)
+        expected_label = OFFER_TYPE_LABELS.get(allowed_offer_type, allowed_offer_type)
+        raise PermissionDenied(f'Perfil {role_label} so pode cadastrar {expected_label}.')
+
+
 def expire_active_password_reset_tokens(user: User):
     PasswordResetToken.objects.filter(user=user, used_at__isnull=True, expires_at__gt=timezone.now()).update(used_at=timezone.now())
 
@@ -479,12 +566,22 @@ def create_offer_with_rules(*, validated_data, target_user: User, exclusive_brok
     return offer, registration_meta
 
 
-def get_public_marketplace_queryset():
-    return (
+def get_public_marketplace_queryset(request=None):
+    queryset = (
         Offer.objects.select_related('user', 'exclusive_broker')
         .filter(status='ativa', exclusive_broker__isnull=True)
         .order_by('-created_at')
     )
+
+    market_user = get_market_user(request) if request else None
+    user_role = getattr(market_user, 'type', None)
+    if market_user and not getattr(request.user, 'is_staff', False) and user_role != 'backoffice':
+        allowed_offer_type = CLIENT_OFFER_TYPE_BY_ROLE.get(user_role)
+        if not allowed_offer_type:
+            return queryset.none()
+        return queryset.filter(offer_type=allowed_offer_type)
+
+    return queryset
 
 
 def _parse_decimal_query_value(value):
@@ -565,7 +662,7 @@ def build_public_marketplace_stats(queryset):
 
 
 def build_public_marketplace_payload(queryset=None):
-    visible_queryset = queryset or get_public_marketplace_queryset()
+    visible_queryset = queryset if queryset is not None else get_public_marketplace_queryset()
     stats = build_public_marketplace_stats(visible_queryset)
     latest = list(visible_queryset[:12])
     latest_sell = list(visible_queryset.filter(offer_type='venda')[:6])
@@ -578,16 +675,111 @@ def build_public_marketplace_payload(queryset=None):
     }
 
 
+def format_decimal_pt_br(value, decimal_places=2, trim_integer=False):
+    decimal_value = Decimal(value).quantize(Decimal(10) ** -decimal_places, rounding=ROUND_HALF_UP)
+    if trim_integer and decimal_value == decimal_value.to_integral_value():
+        return f'{int(decimal_value):,}'.replace(',', '.')
+
+    formatted = f'{decimal_value:,.{decimal_places}f}'
+    return formatted.replace(',', '_').replace('.', ',').replace('_', '.')
+
+
+def format_currency_pt_br(value):
+    return f'R$ {format_decimal_pt_br(value)}'
+
+
+def format_quantity_pt_br(value, unit):
+    return f'{format_decimal_pt_br(value, trim_integer=True)} {unit}'
+
+
+def build_public_site_url(request, path):
+    normalized_path = path if path.startswith('/') else f'/{path}'
+    base_url = getattr(settings, 'ALYTHA_PUBLIC_SITE_URL', '')
+    if base_url:
+        return f'{base_url}{normalized_path}'
+    return request.build_absolute_uri(normalized_path)
+
+
+def build_share_image_url(request):
+    configured_url = getattr(settings, 'ALYTHA_SHARE_IMAGE_URL', '')
+    if configured_url:
+        return configured_url
+    return build_public_site_url(request, '/logo.png')
+
+
+def build_offer_share_metadata(request, offer):
+    offer_type_label = 'Oferta de venda' if offer.offer_type == 'venda' else 'Demanda de compra'
+    title = f'{offer_type_label} de {offer.grain} | Alytha'
+    description = (
+        f'{offer_type_label} em {offer.location}: '
+        f'{format_quantity_pt_br(offer.quantity, offer.unit)}, '
+        f'{format_currency_pt_br(offer.price)}, safra {offer.crop}, frete {offer.shipping}.'
+    )
+    frontend_url = build_public_site_url(request, f'/oportunidades/{offer.id}')
+    share_url = request.build_absolute_uri(request.path)
+    image_url = build_share_image_url(request)
+    return {
+        'title': title,
+        'description': description,
+        'frontend_url': frontend_url,
+        'share_url': share_url,
+        'image_url': image_url,
+    }
+
+
+def render_offer_share_html(metadata):
+    title = escape(metadata['title'])
+    description = escape(metadata['description'])
+    frontend_url = escape(metadata['frontend_url'])
+    share_url = escape(metadata['share_url'])
+    image_url = escape(metadata['image_url'])
+    redirect_target = json.dumps(metadata['frontend_url'])
+
+    return f"""<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{title}</title>
+    <meta name="description" content="{description}">
+    <meta property="og:locale" content="pt_BR">
+    <meta property="og:site_name" content="Alytha">
+    <meta property="og:type" content="article">
+    <meta property="og:title" content="{title}">
+    <meta property="og:description" content="{description}">
+    <meta property="og:url" content="{share_url}">
+    <meta property="og:image" content="{image_url}">
+    <meta property="og:image:alt" content="{title}">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="{title}">
+    <meta name="twitter:description" content="{description}">
+    <meta name="twitter:image" content="{image_url}">
+    <link rel="canonical" href="{frontend_url}">
+    <meta http-equiv="refresh" content="0; url={frontend_url}">
+  </head>
+  <body>
+    <p>Redirecionando para <a href="{frontend_url}">{title}</a>.</p>
+    <script>window.location.replace({redirect_target});</script>
+  </body>
+</html>"""
+
+
 def build_client_dashboard_payload(market_user: User):
     config = CLIENT_DASHBOARD_CONFIG.get(market_user.type)
     if not config:
         raise PermissionDenied('Painel disponível apenas para comprador e vendedor.')
 
-    own_queryset = Offer.objects.select_related('user', 'exclusive_broker').filter(user=market_user).order_by('-created_at')
+    primary_offer_type = CLIENT_OFFER_TYPE_BY_ROLE[market_user.type]
+    dashboard_copy = CLIENT_PROFILE_DASHBOARD_COPY[market_user.type]
+    own_queryset = (
+        Offer.objects.select_related('user', 'exclusive_broker')
+        .filter(user=market_user, offer_type=primary_offer_type)
+        .order_by('-created_at')
+    )
     public_queryset = get_public_marketplace_queryset()
-    public_stats = build_public_marketplace_stats(public_queryset)
-    primary_offer_type = 'venda' if market_user.type == 'vendedor' else 'compra'
-    market_offer_type = config['market']['offerType']
+    profile_public_queryset = public_queryset.filter(offer_type=primary_offer_type)
+    public_stats = build_public_marketplace_stats(profile_public_queryset)
+    market_offer_type = primary_offer_type
 
     total_offers = own_queryset.count()
     active_offers = own_queryset.filter(status='ativa').count()
@@ -595,11 +787,12 @@ def build_client_dashboard_payload(market_user: User):
     desk_offers = own_queryset.filter(negotiation_channel='mesa').count()
     pending_pix_offers = own_queryset.filter(status='aguardando_pagamento').count()
     primary_offers = own_queryset.filter(offer_type=primary_offer_type).count()
-    secondary_offers = own_queryset.exclude(offer_type=primary_offer_type).count()
+    secondary_offers = 0
     market_total = public_stats['buyOffers'] if market_offer_type == 'compra' else public_stats['sellOffers']
 
     own_latest = list(own_queryset[:6])
-    market_latest = list(public_queryset.filter(offer_type=market_offer_type)[:6])
+    market_latest = list(profile_public_queryset[:6])
+    profile_market_indicator_id = 'sellOffers' if market_offer_type == 'venda' else 'buyOffers'
 
     summary_metric_values = {
         'totalOffers': total_offers,
@@ -615,7 +808,7 @@ def build_client_dashboard_payload(market_user: User):
             'userName': market_user.name,
             'userCompany': market_user.company or ROLE_LABELS.get(market_user.type, market_user.type),
             'tickerItems': [
-                f"{config['market']['tickerLabel']}: {market_total}",
+                f"{dashboard_copy['tickerLabel']}: {market_total}",
                 f"Cadastros do perfil: {total_offers}",
                 f"Ofertas ativas: {active_offers}",
                 f"Aguardando PIX: {pending_pix_offers}",
@@ -647,6 +840,8 @@ def build_client_dashboard_payload(market_user: User):
         },
         'account': {
             **config['account'],
+            'focusTitle': dashboard_copy['focusTitle'],
+            'focusDescription': dashboard_copy['focusDescription'],
             'profileValue': ROLE_LABELS.get(market_user.type, market_user.type),
             'companyValue': market_user.company or 'Não informada',
             'marketIndicators': [
@@ -655,6 +850,7 @@ def build_client_dashboard_payload(market_user: User):
                     'value': public_stats['locations'] if item['id'] == 'locations' else public_stats[item['id']],
                 }
                 for item in config['account']['marketIndicators']
+                if item['id'] in (profile_market_indicator_id, 'locations')
             ],
         },
         'summaryCards': [
@@ -683,21 +879,15 @@ def build_client_dashboard_payload(market_user: User):
                     'value': primary_offers,
                     'tone': 'emerald',
                 },
-                {
-                    'id': 'secondary',
-                    'label': config['ownOffers']['badges']['secondary'],
-                    'value': secondary_offers,
-                    'tone': 'amber',
-                },
             ],
             'items': OfferSerializer(own_latest, many=True).data,
         },
         'marketSection': {
             'eyebrow': config['market']['eyebrow'],
-            'title': config['market']['title'],
-            'description': config['market']['description'],
-            'emptyTitle': config['market']['emptyTitle'],
-            'emptyDescription': config['market']['emptyDescription'],
+            'title': dashboard_copy['marketTitle'],
+            'description': dashboard_copy['marketDescription'],
+            'emptyTitle': dashboard_copy['marketEmptyTitle'],
+            'emptyDescription': dashboard_copy['marketEmptyDescription'],
             'badges': [
                 {
                     'id': 'total',
@@ -848,7 +1038,7 @@ class PublicMarketplaceView(APIView):
     permission_classes = []
 
     def get(self, request):
-        return Response(build_public_marketplace_payload())
+        return Response(build_public_marketplace_payload(get_public_marketplace_queryset(request)))
 
 
 class PublicMarketplaceOfferListView(APIView):
@@ -862,7 +1052,7 @@ class PublicMarketplaceOfferListView(APIView):
             return default
 
     def get(self, request):
-        queryset = get_public_marketplace_queryset()
+        queryset = get_public_marketplace_queryset(request)
 
         grain = str(request.query_params.get('grain') or '').strip()
         if grain:
@@ -904,8 +1094,18 @@ class PublicMarketplaceOfferDetailView(APIView):
     permission_classes = []
 
     def get(self, request, offer_id):
-        offer = get_object_or_404(get_public_marketplace_queryset(), id=offer_id)
+        offer = get_object_or_404(get_public_marketplace_queryset(request), id=offer_id)
         return Response(PublicMarketplaceOfferDetailSerializer(offer, context={'request': request}).data)
+
+
+class PublicMarketplaceOfferShareView(APIView):
+    permission_classes = []
+    authentication_classes = []
+
+    def get(self, request, offer_id):
+        offer = get_object_or_404(get_public_marketplace_queryset(), id=offer_id)
+        metadata = build_offer_share_metadata(request, offer)
+        return HttpResponse(render_offer_share_html(metadata), content_type='text/html; charset=utf-8')
 
 
 class ClientDashboardView(APIView):
@@ -941,6 +1141,8 @@ class OfferViewSet(viewsets.ModelViewSet):
             visible = queryset
         elif user_role == 'corretor':
             visible = queryset.filter(Q(exclusive_broker__isnull=True) | Q(exclusive_broker=market_user))
+        elif user_role in CLIENT_OFFER_TYPE_BY_ROLE:
+            visible = queryset.filter(user=market_user, offer_type=CLIENT_OFFER_TYPE_BY_ROLE[user_role])
         else:
             visible = queryset.filter(user=market_user)
 
@@ -964,6 +1166,8 @@ class OfferViewSet(viewsets.ModelViewSet):
             target_user = requested_user or market_user
         else:
             target_user = market_user
+
+        validate_offer_type_for_profile(target_user=target_user, offer_type=validated_data['offer_type'])
 
         offer, registration_meta = create_offer_with_rules(
             validated_data=validated_data,
@@ -998,6 +1202,9 @@ class PublicBrokerOfferCreateView(APIView):
         name = validated_data.pop('name')
         phone = validated_data.pop('phone', '')
         company = validated_data.pop('company', '')
+        accept_terms = validated_data.pop('accept_terms', False)
+        accept_privacy = validated_data.pop('accept_privacy', False)
+        legal_version = validated_data.pop('legal_version', LEGAL_DOCUMENT_VERSION)
         target_type = 'comprador' if validated_data['offer_type'] == 'compra' else 'vendedor'
 
         existing_user = User.objects.filter(email=email).first()
@@ -1019,8 +1226,17 @@ class PublicBrokerOfferCreateView(APIView):
             if company and target_user.company != company:
                 target_user.company = company
                 updated_fields.append('company')
+            updated_fields.extend(
+                apply_legal_acceptance_fields(
+                    target_user,
+                    accept_terms=accept_terms,
+                    accept_privacy=accept_privacy,
+                    legal_version=legal_version,
+                    request=request,
+                ),
+            )
             if updated_fields:
-                target_user.save(update_fields=updated_fields)
+                target_user.save(update_fields=list(dict.fromkeys(updated_fields)))
         else:
             target_user = User.objects.create(
                 name=name,
@@ -1029,6 +1245,15 @@ class PublicBrokerOfferCreateView(APIView):
                 phone=phone,
                 company=company,
             )
+            legal_updated_fields = apply_legal_acceptance_fields(
+                target_user,
+                accept_terms=accept_terms,
+                accept_privacy=accept_privacy,
+                legal_version=legal_version,
+                request=request,
+            )
+            if legal_updated_fields:
+                target_user.save(update_fields=legal_updated_fields)
 
         auth_user, created = AuthUser.objects.get_or_create(
             username=email,
@@ -1246,7 +1471,14 @@ class RegisterView(APIView):
         if not role:
             return Response({'detail': 'tipo inválido'}, status=status.HTTP_400_BAD_REQUEST)
         data = request.data.copy()
+        accept_terms = parse_request_bool(data.pop('accept_terms', False))
+        accept_privacy = parse_request_bool(data.pop('accept_privacy', False))
+        legal_version = data.pop('legal_version', LEGAL_DOCUMENT_VERSION)
+        if isinstance(legal_version, (list, tuple)):
+            legal_version = legal_version[0] if legal_version else LEGAL_DOCUMENT_VERSION
         data['type'] = role
+        if requires_backoffice_validation(role):
+            data['is_validated'] = False
         password = data.get('password') or AuthUser.objects.make_random_password()
         email = str(data.get('email') or '').strip()
         data['email'] = email
@@ -1256,10 +1488,20 @@ class RegisterView(APIView):
         serializer = UserSerializer(data=data)
         if serializer.is_valid():
             try:
-                user = serializer.save()
-                auth_user = get_or_create_auth_user(email=email, name=name)
-                auth_user.set_password(password)
-                auth_user.save()
+                with transaction.atomic():
+                    user = serializer.save()
+                    legal_updated_fields = apply_legal_acceptance_fields(
+                        user,
+                        accept_terms=accept_terms,
+                        accept_privacy=accept_privacy,
+                        legal_version=legal_version,
+                        request=request,
+                    )
+                    if legal_updated_fields:
+                        user.save(update_fields=legal_updated_fields)
+                    auth_user = get_or_create_auth_user(email=email, name=name)
+                    auth_user.set_password(password)
+                    auth_user.save(update_fields=['password'])
             except IntegrityError:
                 return Response({'detail': 'e-mail já cadastrado'}, status=status.HTTP_400_BAD_REQUEST)
             return Response({**UserSerializer(user).data, 'token_info': 'use /api/login para obter JWT'}, status=status.HTTP_201_CREATED)
@@ -1336,6 +1578,11 @@ class LoginView(APIView):
         if not auth_user:
             return Response({'detail': 'credenciais inválidas'}, status=status.HTTP_401_UNAUTHORIZED)
         market_user = User.objects.filter(email=email).first()
+        if user_is_pending_validation(market_user):
+            return Response(
+                {'detail': 'Seu cadastro ainda aguarda validacao do backoffice antes do primeiro login.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         from rest_framework_simplejwt.tokens import RefreshToken
 
         refresh = RefreshToken.for_user(auth_user)

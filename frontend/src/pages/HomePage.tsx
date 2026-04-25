@@ -2,7 +2,10 @@ import { AlertCircle, ChevronDown, ChevronUp, LoaderCircle, Menu, Search } from 
 import { useEffect, useMemo, useState, type JSX } from 'react';
 import { Link } from 'react-router-dom';
 import Navbar, { OPEN_MOBILE_NAV_EVENT } from '../components/Navbar';
+import { OfferShareButton } from '../components/OfferShareButton';
 import { apiFetch } from '../lib/api';
+import { useDocumentMetadata } from '../shared/metadata';
+import { buildMarketplaceDocumentMetadata } from '../shared/share';
 import type { PublicMarketplaceOfferListItem, PublicMarketplaceOffersListPayload } from '../types';
 
 const formatCurrency = (value: number) =>
@@ -49,7 +52,7 @@ function OfferCard({ offer }: JSX.IntrinsicAttributes & { offer: PublicMarketpla
 
       <div className="mt-4 grid gap-2.5 text-[13px] text-slate-600 sm:text-sm">
         <div className="flex items-center justify-between gap-4">
-          <span>Praça</span>
+          <span>Localidade</span>
           <span className="font-bold text-slate-900">{offer.location}</span>
         </div>
         <div className="flex items-center justify-between gap-4">
@@ -74,25 +77,23 @@ function OfferCard({ offer }: JSX.IntrinsicAttributes & { offer: PublicMarketpla
         <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3.5 py-2 text-[9px] font-black uppercase tracking-[0.16em] text-slate-600">
           {channelLabel[offer.negotiationChannel]} • {offer.shipping}
         </div>
-        <Link
-          to={`/oportunidades/${offer.id}`}
-          className={`inline-flex items-center justify-center rounded-full px-4 py-2.5 text-[11px] font-black uppercase tracking-[0.18em] text-white ${actionTone}`}
-        >
-          Acessar
-        </Link>
-      </div>
-
-      {offer.negotiationChannel === 'mesa' && offer.mesaCommission ? (
-        <div className="mt-3 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-[11px] font-bold text-slate-700">
-          Comissão da mesa: {formatCurrency(offer.mesaCommission)} por saca
+        <div className="flex flex-wrap items-center gap-2">
+          <OfferShareButton offer={offer} />
+          <Link
+            to={`/oportunidades/${offer.id}`}
+            className={`inline-flex h-10 items-center justify-center rounded-full px-4 text-[11px] font-black uppercase tracking-[0.18em] text-white ${actionTone}`}
+          >
+            Acessar
+          </Link>
         </div>
-      ) : null}
+      </div>
     </article>
   );
 }
 
 export default function HomePage() {
-  const mobileNavLabels = ['Comprar/Vender', 'Corretores'] as const;
+  const marketplaceMetadata = useMemo(() => buildMarketplaceDocumentMetadata(), []);
+  const mobileNavLabels = ['Comprar/Vender'] as const;
   const [payload, setPayload] = useState<PublicMarketplaceOffersListPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -103,6 +104,8 @@ export default function HomePage() {
   const [typeFilter, setTypeFilter] = useState<'todas' | 'venda' | 'compra'>('todas');
   const [channelFilter, setChannelFilter] = useState<'todas' | 'mesa' | 'direta'>('todas');
   const [shippingFilter, setShippingFilter] = useState<'todas' | 'FOB' | 'CIF'>('todas');
+
+  useDocumentMetadata(marketplaceMetadata);
 
   const hasActiveFilters = useMemo(
     () =>
@@ -193,7 +196,7 @@ export default function HomePage() {
           <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
             <div className="max-w-3xl">
               <p className="text-[10px] font-black uppercase tracking-[0.24em] text-slate-500 sm:text-[11px]">Marketplace</p>
-              <h1 className="mt-1 text-[1.85rem] font-black tracking-tight text-slate-950 sm:text-[2.05rem] lg:text-[2.15rem]">Ofertas e demandas</h1>
+              <h1 className="mt-1 text-[1.55rem] font-black tracking-tight text-slate-950 sm:text-[1.75rem] lg:text-[1.9rem]">Ofertas e Demandas</h1>
               <p className="mt-0.5 max-w-3xl text-[13px] leading-6 text-slate-600 sm:text-[15px] sm:leading-7">
                 Busque por qualquer campo da oferta/demanda (grão, praça, safra, frete, modalidade, pagamento e outros).
               </p>
@@ -329,7 +332,7 @@ export default function HomePage() {
           <p className="font-bold text-slate-900">Dica de uso</p>
           <p className="mt-2 leading-6">
             Clique em <span className="font-bold text-slate-900">Acessar</span> para ver os detalhes da oportunidade. Os canais de contato
-            ficam liberados ap&oacute;s login ou cadastro.
+            ficam liberados após login ou cadastro.
           </p>
         </section>
       </main>
@@ -338,7 +341,7 @@ export default function HomePage() {
         type="button"
         onClick={openMobileNav}
         className="fixed bottom-4 right-4 z-40 inline-flex items-center gap-2 rounded-full border border-white/80 bg-white/88 px-3.5 py-2 text-[10px] font-black uppercase tracking-[0.16em] text-slate-700 shadow-[0_20px_50px_-30px_rgba(15,23,42,0.45)] backdrop-blur-md transition-transform hover:-translate-y-0.5 sm:hidden"
-        aria-label="Abrir menu com atalhos de comprar, vender e corretores"
+        aria-label="Abrir menu com atalhos de comprar e vender"
       >
         <span className="flex h-7 w-7 items-center justify-center rounded-full bg-emerald-50 text-emerald-700">
           <Menu className="h-4 w-4" />

@@ -3,9 +3,8 @@ import { useState, type FormEvent } from 'react';
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { apiFetch } from '../lib/api';
 import { getCurrentUser, isAuthenticated, saveAuth } from '../lib/auth';
-import { getPrimaryAppPath } from '../shared/appRoutes';
 import { supportEmail, supportWhatsAppDisplay, supportWhatsAppHref } from '../shared/api';
-import type { User } from '../types';
+import { HOME_PATH } from '../shared/appRoutes';
 
 type LoginResponse = {
   access: string;
@@ -23,17 +22,15 @@ export default function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const locationState = location.state as LoginLocationState;
-  const currentUser = getCurrentUser<User>();
+  const currentUser = getCurrentUser();
   const [email, setEmail] = useState(locationState?.prefillEmail || '');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const redirectTo = locationState?.from || getPrimaryAppPath(currentUser);
-
   if (isAuthenticated() && currentUser) {
-    return <Navigate to={getPrimaryAppPath(currentUser)} replace />;
+    return <Navigate to={HOME_PATH} replace />;
   }
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -53,7 +50,7 @@ export default function LoginPage() {
       }
 
       saveAuth(payload.access, payload.refresh, payload.user);
-      navigate(locationState?.from || getPrimaryAppPath(payload.user as User | null), { replace: true });
+      navigate(HOME_PATH, { replace: true });
     } catch (loginError) {
       setError(loginError instanceof Error ? loginError.message : 'Erro inesperado ao entrar.');
     } finally {
@@ -63,7 +60,24 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top,#e6f4eb_0%,#ffffff_42%,#f7f2e8_100%)]">
-      <main className="mx-auto grid max-w-7xl gap-6 px-4 py-8 sm:px-6 sm:py-12 lg:grid-cols-[0.95fr_1.05fr] lg:items-stretch lg:px-8 lg:py-16">
+      <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-center gap-2 px-4 pt-5 sm:px-6 sm:justify-end sm:pt-7 lg:px-8">
+        {[
+          { label: 'Início', to: HOME_PATH },
+          { label: 'Quem Somos', to: '/quemsomos' },
+          { label: 'Vender grãos', to: '/vendedorgraos' },
+          { label: 'Comprar grãos', to: '/compradorgraos' },
+        ].map((item) => (
+          <Link
+            key={item.to}
+            to={item.to}
+            className="inline-flex min-h-10 items-center justify-center rounded-full border border-white/80 bg-white/88 px-4 py-2 text-[11px] font-black uppercase tracking-[0.16em] text-slate-700 shadow-sm transition-colors hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700"
+          >
+            {item.label}
+          </Link>
+        ))}
+      </div>
+
+      <main className="mx-auto grid max-w-7xl gap-6 px-4 py-6 sm:px-6 sm:py-8 lg:grid-cols-[0.95fr_1.05fr] lg:items-stretch lg:px-8 lg:py-12">
         <section className="rounded-[2rem] bg-[linear-gradient(180deg,#052e2b_0%,#0f5f54_100%)] p-7 text-white shadow-[0_55px_140px_-75px_rgba(5,46,43,0.88)] sm:rounded-[2.5rem] sm:p-10">
           <p className="text-[11px] font-black uppercase tracking-[0.3em] text-emerald-200">Acesso Alytha</p>
           <h1 className="mt-4 text-3xl font-black tracking-tight sm:text-4xl">Entre para acompanhar a operação comercial com segurança.</h1>

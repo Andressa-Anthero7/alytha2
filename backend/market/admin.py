@@ -5,7 +5,7 @@ from .models import Negotiation, Offer, PasswordResetToken, User
 
 @admin.register(User)
 class UserAdmin(admin.ModelAdmin):
-    list_display = ('id', 'name', 'email', 'type', 'profile_segment', 'company')
+    list_display = ('id', 'name', 'email', 'type', 'is_validated', 'profile_segment', 'company')
     search_fields = ('name', 'email', 'company', 'legal_name', 'document_number')
 
 

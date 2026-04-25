@@ -1,7 +1,9 @@
 import { AlertCircle, CheckCircle2, Copy, LoaderCircle, ShieldCheck } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 import { apiFetch } from '../lib/api';
+import { LEGAL_DOCUMENT_VERSION } from '../shared/legal';
 import type { OfferPixData, OfferRegistration } from '../types';
+import LegalAgreementCheckbox from './LegalAgreementCheckbox';
 
 type OfferType = 'venda' | 'compra';
 type OfferChannel = 'mesa' | 'direta';
@@ -30,6 +32,7 @@ type OfferFormState = {
   shipping: 'FOB' | 'CIF';
   negotiationChannel: OfferChannel;
   mesaCommission: string;
+  nonGmo: boolean;
   moisture: string;
   impurity: string;
   damaged: string;
@@ -68,7 +71,8 @@ const initialState: OfferFormState = {
   crop: '',
   shipping: 'FOB',
   negotiationChannel: 'mesa',
-  mesaCommission: '0.50',
+  mesaCommission: '1.00',
+  nonGmo: false,
   moisture: '',
   impurity: '',
   damaged: '',
@@ -196,6 +200,7 @@ export default function OfferForm({
   const [pixData, setPixData] = useState<OfferPixData | null>(null);
   const [registration, setRegistration] = useState<OfferRegistration | null>(null);
   const [copyFeedback, setCopyFeedback] = useState('');
+  const [legalAccepted, setLegalAccepted] = useState(false);
 
   const copy = formCopy[offerType];
   const isPublicLead = mode === 'broker-link';
@@ -237,6 +242,12 @@ export default function OfferForm({
     setRegistration(null);
     setCopyFeedback('');
 
+    if (isPublicLead && !legalAccepted) {
+      setLoading(false);
+      setError('Para enviar a oportunidade, confirme a leitura e aceite do contrato Alytha e da politica de LGPD.');
+      return;
+    }
+
     const endpoint = isPublicLead && brokerToken ? `/broker-links/${brokerToken}/offers` : '/offers';
     const quality = {
       moisture: offerType === 'venda' ? parseOptionalNumber(form.moisture) : undefined,
@@ -246,6 +257,7 @@ export default function OfferForm({
       ph: showPhField ? parseOptionalNumber(form.ph) : undefined,
       protein: showProteinField ? parseOptionalNumber(form.protein) : undefined,
       standard: offerType === 'venda' && form.grainStandard ? grainStandardLabelMap[form.grainStandard] : undefined,
+      nonGmo: form.nonGmo ? true : undefined,
       deliveryWindow: form.deliveryWindow,
       funrural: offerType === 'venda' ? form.funrural : undefined,
       notes: form.qualityNotes,
@@ -258,6 +270,9 @@ export default function OfferForm({
             email: form.email,
             phone: form.phone,
             company: form.company,
+            accept_terms: true,
+            accept_privacy: true,
+            legal_version: LEGAL_DOCUMENT_VERSION,
           }
         : {}),
       type: offerType,
@@ -475,7 +490,7 @@ export default function OfferForm({
         </div>
 
         <div className="mt-8 grid gap-4 md:grid-cols-2">
-          <label className="space-y-2">
+          <div className="space-y-2">
             <span className="text-xs font-black uppercase tracking-[0.2em] text-slate-500">Produto</span>
             <select
               value={form.grain}
@@ -484,9 +499,18 @@ export default function OfferForm({
             >
               <option value="Soja">Soja</option>
               <option value="Milho">Milho</option>
-              <option value="Sorgo">Sorgo</option>
-            </select>
-          </label>
+                <option value="Sorgo">Sorgo</option>
+              </select>
+            <label className="flex cursor-pointer items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-800 hover:bg-slate-50">
+              <input
+                type="checkbox"
+                checked={form.nonGmo}
+                onChange={(event) => updateField('nonGmo', event.target.checked)}
+                className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+              />
+              Non GMO
+            </label>
+          </div>
 
           <label className="space-y-2">
             <span className="text-xs font-black uppercase tracking-[0.2em] text-slate-500">Safra</span>
@@ -794,6 +818,8 @@ export default function OfferForm({
         {copyFeedback && (
           <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">{copyFeedback}</div>
         )}
+
+        {isPublicLead ? <LegalAgreementCheckbox checked={legalAccepted} onChange={setLegalAccepted} className="mt-6" /> : null}
 
         <button
           type="submit"

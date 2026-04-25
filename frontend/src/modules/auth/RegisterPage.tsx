@@ -1,7 +1,9 @@
-import { type FormEvent, useMemo, useState } from 'react';
-import { AlertCircle, ArrowRight, Eye, EyeOff } from 'lucide-react';
+import { type FormEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { AlertCircle, ArrowLeft, ArrowRight, Eye, EyeOff } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
+import LegalAgreementCheckbox from '../../components/LegalAgreementCheckbox';
 import { apiFetch } from '../../shared/api';
+import { LEGAL_DOCUMENT_VERSION } from '../../shared/legal';
 import { ShellHeader } from '../../shared/ShellHeader';
 
 type RegisterPageProps = {
@@ -38,6 +40,8 @@ const roleCards: Array<{ slug: RoleSlug; label: string; summary: string }> = [
   { slug: 'vendedor', label: 'Vendedor', summary: 'Produtor rural, fazenda, silos, armazéns e perfis vendedores.' },
   { slug: 'corretor', label: 'Corretor', summary: 'Pessoa física ou jurídica para atuação comercial com CPF ou CNPJ.' },
 ];
+
+const publicRoleCards = roleCards.filter((item) => item.slug !== 'corretor');
 
 const segmentOptions: Record<RoleSlug, Array<{ value: string; label: string }>> = {
   comprador: [
@@ -83,6 +87,75 @@ const roleSubtitle: Record<RoleSlug, string> = {
 };
 
 const brazilStates = ['AC', 'AL', 'AM', 'AP', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MG', 'MS', 'MT', 'PA', 'PB', 'PE', 'PI', 'PR', 'RJ', 'RN', 'RO', 'RR', 'RS', 'SC', 'SE', 'SP', 'TO'] as const;
+const brazilMobileAreaCodes = new Set([
+  '11',
+  '12',
+  '13',
+  '14',
+  '15',
+  '16',
+  '17',
+  '18',
+  '19',
+  '21',
+  '22',
+  '24',
+  '27',
+  '28',
+  '31',
+  '32',
+  '33',
+  '34',
+  '35',
+  '37',
+  '38',
+  '41',
+  '42',
+  '43',
+  '44',
+  '45',
+  '46',
+  '47',
+  '48',
+  '49',
+  '51',
+  '53',
+  '54',
+  '55',
+  '61',
+  '62',
+  '63',
+  '64',
+  '65',
+  '66',
+  '67',
+  '68',
+  '69',
+  '71',
+  '73',
+  '74',
+  '75',
+  '77',
+  '79',
+  '81',
+  '82',
+  '83',
+  '84',
+  '85',
+  '86',
+  '87',
+  '88',
+  '89',
+  '91',
+  '92',
+  '93',
+  '94',
+  '95',
+  '96',
+  '97',
+  '98',
+  '99',
+]);
 
 const emptyForm = (): RegisterFormState => ({
   name: '',
@@ -113,6 +186,102 @@ const normalizeRoleSlug = (roleSlug?: string): RoleSlug => {
   return 'comprador';
 };
 
+const getWhatsAppLocalDigits = (value: string) => {
+  const digits = value.replace(/\D/g, '');
+  const localDigits = digits.startsWith('55') && digits.length > 11 ? digits.slice(2) : digits;
+  return localDigits.slice(0, 11);
+};
+
+const formatWhatsApp = (value: string) => {
+  const localDigits = getWhatsAppLocalDigits(value);
+  if (!localDigits) return '';
+
+  const areaCode = localDigits.slice(0, 2);
+  const firstPart = localDigits.slice(2, 7);
+  const secondPart = localDigits.slice(7, 11);
+
+  if (localDigits.length <= 2) return `+55 (${areaCode}`;
+  if (localDigits.length <= 7) return `+55 (${areaCode}) ${firstPart}`;
+  return `+55 (${areaCode}) ${firstPart}-${secondPart}`;
+};
+
+const validateWhatsApp = (value: string) => {
+  const localDigits = getWhatsAppLocalDigits(value);
+  const areaCode = localDigits.slice(0, 2);
+  const repeatedDigits = /^(\d)\1+$/.test(localDigits);
+
+  return {
+    formatted: formatWhatsApp(localDigits),
+    isValid: localDigits.length === 11 && brazilMobileAreaCodes.has(areaCode) && localDigits[2] === '9' && !repeatedDigits,
+  };
+};
+
+const getDocumentDigits = (value: string) => value.replace(/\D/g, '');
+
+const formatDocumentNumber = (documentType: RegisterFormState['documentType'], value: string) => {
+  const digits = getDocumentDigits(value);
+
+  if (documentType === 'cpf') {
+    const cpf = digits.slice(0, 11);
+    if (cpf.length <= 3) return cpf;
+    if (cpf.length <= 6) return `${cpf.slice(0, 3)}.${cpf.slice(3)}`;
+    if (cpf.length <= 9) return `${cpf.slice(0, 3)}.${cpf.slice(3, 6)}.${cpf.slice(6)}`;
+    return `${cpf.slice(0, 3)}.${cpf.slice(3, 6)}.${cpf.slice(6, 9)}-${cpf.slice(9)}`;
+  }
+
+  if (documentType === 'cnpj') {
+    const cnpj = digits.slice(0, 14);
+    if (cnpj.length <= 2) return cnpj;
+    if (cnpj.length <= 5) return `${cnpj.slice(0, 2)}.${cnpj.slice(2)}`;
+    if (cnpj.length <= 8) return `${cnpj.slice(0, 2)}.${cnpj.slice(2, 5)}.${cnpj.slice(5)}`;
+    if (cnpj.length <= 12) return `${cnpj.slice(0, 2)}.${cnpj.slice(2, 5)}.${cnpj.slice(5, 8)}/${cnpj.slice(8)}`;
+    return `${cnpj.slice(0, 2)}.${cnpj.slice(2, 5)}.${cnpj.slice(5, 8)}/${cnpj.slice(8, 12)}-${cnpj.slice(12)}`;
+  }
+
+  return digits.slice(0, 14);
+};
+
+const hasRepeatedDigits = (value: string) => Boolean(value) && new Set(value).size === 1;
+
+const isValidCpf = (value: string) => {
+  const digits = getDocumentDigits(value);
+  if (digits.length !== 11 || hasRepeatedDigits(digits)) return false;
+
+  for (const digitPosition of [9, 10]) {
+    let total = 0;
+    for (let index = 0; index < digitPosition; index += 1) {
+      total += Number(digits[index]) * (digitPosition + 1 - index);
+    }
+    let checkDigit = (total * 10) % 11;
+    if (checkDigit === 10) checkDigit = 0;
+    if (checkDigit !== Number(digits[digitPosition])) return false;
+  }
+
+  return true;
+};
+
+const isValidCnpj = (value: string) => {
+  const digits = getDocumentDigits(value);
+  if (digits.length !== 14 || hasRepeatedDigits(digits)) return false;
+
+  const firstWeights = [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+  const secondWeights = [6, ...firstWeights];
+  const calculateDigit = (weights: number[]) => {
+    const total = weights.reduce((sum, weight, index) => sum + Number(digits[index]) * weight, 0);
+    const checkDigit = 11 - (total % 11);
+    return checkDigit >= 10 ? 0 : checkDigit;
+  };
+
+  return calculateDigit(firstWeights) === Number(digits[12]) && calculateDigit(secondWeights) === Number(digits[13]);
+};
+
+const validateDocument = (documentType: RegisterFormState['documentType'], documentNumber: string) => {
+  if (!documentType) return 'Selecione CPF ou CNPJ.';
+  if (documentType === 'cpf' && !isValidCpf(documentNumber)) return 'Informe um CPF valido.';
+  if (documentType === 'cnpj' && !isValidCnpj(documentNumber)) return 'Informe um CNPJ valido.';
+  return '';
+};
+
 export function RegisterPage({ routeBase }: RegisterPageProps) {
   const navigate = useNavigate();
   const { roleSlug } = useParams();
@@ -122,9 +291,27 @@ export function RegisterPage({ routeBase }: RegisterPageProps) {
   const [submitting, setSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [legalAccepted, setLegalAccepted] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const errorRef = useRef<HTMLDivElement | null>(null);
 
   const selectedSegments = useMemo(() => segmentOptions[normalizedRoleSlug], [normalizedRoleSlug]);
+  const selectedRoleLabel = useMemo(
+    () => roleCards.find((item) => item.slug === normalizedRoleSlug)?.label || 'Comprador',
+    [normalizedRoleSlug],
+  );
+  const selectedRoleText = selectedRoleLabel.toLowerCase();
+
+  useEffect(() => {
+    if (!error) return undefined;
+
+    const focusTimer = window.setTimeout(() => {
+      errorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      errorRef.current?.focus({ preventScroll: true });
+    }, 50);
+
+    return () => window.clearTimeout(focusTimer);
+  }, [error]);
 
   const updateField = <K extends keyof RegisterFormState>(field: K, value: RegisterFormState[K]) => {
     setForm((previous) => ({ ...previous, [field]: value }));
@@ -149,6 +336,26 @@ export function RegisterPage({ routeBase }: RegisterPageProps) {
       return;
     }
 
+    if (!legalAccepted) {
+      setSubmitting(false);
+      setError('Para concluir o cadastro, confirme a leitura e aceite do contrato Alytha e da politica de LGPD.');
+      return;
+    }
+
+    const whatsapp = validateWhatsApp(form.phone);
+    if (!whatsapp.isValid) {
+      setSubmitting(false);
+      setError('Informe um WhatsApp valido com DDD e 9 digitos. Ex.: +55 (16) 99999-9999.');
+      return;
+    }
+
+    const documentError = validateDocument(form.documentType, form.documentNumber);
+    if (documentError) {
+      setSubmitting(false);
+      setError(documentError);
+      return;
+    }
+
     try {
       const response = await apiFetch(`/register/${normalizedRoleSlug}`, {
         method: 'POST',
@@ -156,12 +363,12 @@ export function RegisterPage({ routeBase }: RegisterPageProps) {
         body: JSON.stringify({
           name: form.name.trim(),
           email: form.email.trim(),
-          phone: form.phone.trim(),
+          phone: whatsapp.formatted,
           company: form.company.trim(),
           legal_name: form.legalName.trim(),
           profile_segment: form.profileSegment,
           document_type: form.documentType,
-          document_number: form.documentNumber.trim(),
+          document_number: formatDocumentNumber(form.documentType, form.documentNumber),
           state_registration: form.stateRegistration.trim(),
           address_zip_code: form.zipCode.trim(),
           address_street: form.street.trim(),
@@ -173,6 +380,9 @@ export function RegisterPage({ routeBase }: RegisterPageProps) {
           address_country: form.country.trim(),
           document_notes: form.documentNotes.trim(),
           password: form.password,
+          accept_terms: true,
+          accept_privacy: true,
+          legal_version: LEGAL_DOCUMENT_VERSION,
         }),
       });
 
@@ -181,7 +391,9 @@ export function RegisterPage({ routeBase }: RegisterPageProps) {
         const detailMessage =
           payload?.detail
           || payload?.email?.[0]
+          || payload?.phone?.[0]
           || payload?.document_type?.[0]
+          || payload?.document_number?.[0]
           || payload?.profile_segment?.[0]
           || 'Não foi possível concluir o cadastro.';
         setError(detailMessage);
@@ -192,7 +404,7 @@ export function RegisterPage({ routeBase }: RegisterPageProps) {
         replace: true,
         state: {
           prefillEmail: form.email.trim(),
-          notice: 'Conta criada com sucesso. Faça login para continuar.',
+          notice: 'Cadastro enviado com sucesso. Aguarde a validacao do backoffice para liberar seu primeiro login.',
         },
       });
     } finally {
@@ -204,16 +416,27 @@ export function RegisterPage({ routeBase }: RegisterPageProps) {
     <div className="min-h-screen bg-[linear-gradient(180deg,#f8fafc_0%,#ffffff_100%)]">
       <ShellHeader eyebrow="Cadastro" title={roleTitle[normalizedRoleSlug]} subtitle={roleSubtitle[normalizedRoleSlug]} />
 
-      <main className="mx-auto grid max-w-7xl gap-8 px-4 py-8 sm:px-6 sm:py-12 lg:grid-cols-[0.92fr_1.08fr] lg:px-8">
+      <div className="mx-auto max-w-7xl px-4 pt-5 sm:px-6 sm:pt-7 lg:px-8">
+        <button
+          type="button"
+          onClick={() => navigate('/login')}
+          className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2.5 text-xs font-black uppercase tracking-[0.18em] text-slate-700 shadow-sm transition-colors hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Voltar para login
+        </button>
+      </div>
+
+      <main className="mx-auto grid max-w-7xl gap-8 px-4 py-6 sm:px-6 sm:py-8 lg:grid-cols-[0.92fr_1.08fr] lg:px-8">
         <section className="rounded-[2rem] border border-emerald-100 bg-emerald-50/80 p-7 shadow-xl shadow-emerald-100/50 sm:rounded-[2.4rem] sm:p-8">
           <p className="text-[10px] font-black uppercase tracking-[0.24em] text-emerald-700">Perfil de cadastro</p>
           <h2 className="mt-4 text-3xl font-black leading-tight text-slate-950 sm:text-4xl">Escolha o tipo de conta e preencha os dados comerciais.</h2>
           <p className="mt-4 text-sm leading-7 text-slate-600 sm:text-base sm:leading-8">
-            O cadastro agora diferencia comprador, vendedor e corretor, com endereço e documentação para cada perfil.
+            O cadastro agora diferencia comprador e vendedor, com endereço e documentação para cada perfil.
           </p>
 
           <div className="mt-8 grid gap-3">
-            {roleCards.map((item) => {
+            {publicRoleCards.map((item) => {
               const active = item.slug === normalizedRoleSlug;
               return (
                 <button
@@ -235,15 +458,20 @@ export function RegisterPage({ routeBase }: RegisterPageProps) {
         <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-xl shadow-slate-200/60 sm:rounded-[2.4rem] sm:p-8">
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
-              <p className="text-[10px] font-black uppercase tracking-[0.24em] text-emerald-600">Criar acesso</p>
-              <h3 className="mt-2 text-3xl font-black tracking-tight text-slate-950">Abra sua conta com dados completos</h3>
+              <p className="text-[10px] font-black uppercase tracking-[0.24em] text-emerald-600">Cadastro de {selectedRoleLabel}</p>
+              <h3 className="mt-2 text-3xl font-black tracking-tight text-slate-950">Preencha os dados para conta de {selectedRoleText}</h3>
               <p className="mt-3 text-sm leading-7 text-slate-600">
-                Preencha os dados do responsável, categoria do perfil, documentação e endereço para entrar na plataforma.
+                Você está preenchendo a categoria {selectedRoleText}. Informe os dados do responsável, perfil, documentação e endereço.
               </p>
             </div>
 
             {error && (
-              <div className="flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              <div
+                ref={errorRef}
+                role="alert"
+                tabIndex={-1}
+                className="flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 outline-none ring-red-200 focus:ring-4"
+              >
                 <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
                 <span>{error}</span>
               </div>
@@ -272,13 +500,18 @@ export function RegisterPage({ routeBase }: RegisterPageProps) {
               </label>
 
               <label className="block space-y-2">
-                <span className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-500">Telefone</span>
+                <span className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-500">WhatsApp</span>
                 <input
+                  type="tel"
+                  inputMode="tel"
+                  autoComplete="tel"
                   required
+                  placeholder="+55 (16) 99999-9999"
                   value={form.phone}
-                  onChange={(event) => updateField('phone', event.target.value)}
+                  onChange={(event) => updateField('phone', formatWhatsApp(event.target.value))}
                   className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition-colors focus:border-emerald-500 focus:bg-white"
                 />
+                <p className="text-xs leading-5 text-slate-500">Use um WhatsApp brasileiro com DDD. O numero deve ser celular e comecar com 9.</p>
               </label>
 
               <label className="block space-y-2">
@@ -322,7 +555,14 @@ export function RegisterPage({ routeBase }: RegisterPageProps) {
                 <select
                   required
                   value={form.documentType}
-                  onChange={(event) => updateField('documentType', event.target.value as RegisterFormState['documentType'])}
+                  onChange={(event) => {
+                    const nextDocumentType = event.target.value as RegisterFormState['documentType'];
+                    setForm((previous) => ({
+                      ...previous,
+                      documentType: nextDocumentType,
+                      documentNumber: formatDocumentNumber(nextDocumentType, previous.documentNumber),
+                    }));
+                  }}
                   className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition-colors focus:border-emerald-500 focus:bg-white"
                 >
                   <option value="">Selecione</option>
@@ -336,9 +576,11 @@ export function RegisterPage({ routeBase }: RegisterPageProps) {
                 <input
                   required
                   value={form.documentNumber}
-                  onChange={(event) => updateField('documentNumber', event.target.value)}
+                  onChange={(event) => updateField('documentNumber', formatDocumentNumber(form.documentType, event.target.value))}
+                  placeholder={form.documentType === 'cnpj' ? '00.000.000/0000-00' : '000.000.000-00'}
                   className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition-colors focus:border-emerald-500 focus:bg-white"
                 />
+                <p className="text-xs leading-5 text-slate-500">Somente um cadastro e permitido por CPF/CNPJ.</p>
               </label>
 
               <label className="block space-y-2">
@@ -490,13 +732,15 @@ export function RegisterPage({ routeBase }: RegisterPageProps) {
               </label>
             </div>
 
+            <LegalAgreementCheckbox checked={legalAccepted} onChange={setLegalAccepted} />
+
             <div className="flex flex-col gap-3 sm:flex-row">
               <button
                 type="submit"
                 disabled={submitting}
                 className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-black uppercase tracking-[0.22em] text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {submitting ? 'Cadastrando...' : 'Cadastrar'}
+                {submitting ? 'Cadastrando...' : `Cadastrar ${selectedRoleText}`}
                 <ArrowRight className="h-4 w-4" />
               </button>
               <button
@@ -504,7 +748,7 @@ export function RegisterPage({ routeBase }: RegisterPageProps) {
                 onClick={() => navigate('/login')}
                 className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-bold text-slate-700 transition-colors hover:border-slate-300 hover:bg-slate-50"
               >
-                Já tenho conta
+                Voltar ao login
               </button>
             </div>
           </form>

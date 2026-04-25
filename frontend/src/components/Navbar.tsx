@@ -2,19 +2,30 @@ import { ArrowRight, LayoutDashboard, LogOut, Menu, ShieldCheck, X } from 'lucid
 import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { clearAuth, getCurrentUser, isAuthenticated } from '../lib/auth';
-import { getPrimaryAppPath } from '../shared/appRoutes';
+import { canAccessProfileContent, getPrimaryAppPath, HOME_PATH, OPERATIONS_PATH, type AppUserType } from '../shared/appRoutes';
 import { BrandLogo } from '../shared/BrandLogo';
 import type { User } from '../types';
 
 export const OPEN_MOBILE_NAV_EVENT = 'alytha:open-mobile-menu';
 
-const navItems = [
-  { label: 'Início', to: '/' },
+type NavItem = {
+  label: string;
+  to: string;
+  allowedTypes?: readonly AppUserType[];
+};
+
+const navItems: NavItem[] = [
+  { label: 'Início', to: HOME_PATH },
   { label: 'Quem Somos', to: '/quemsomos' },
   { label: 'Vender grãos', to: '/vendedorgraos' },
   { label: 'Comprar grãos', to: '/compradorgraos' },
-  { label: 'Corretores', to: '/corretores' },
 ];
+
+const profileNavAllowedTypes: Record<string, readonly AppUserType[]> = {
+  '/vendedorgraos': ['vendedor'],
+  '/compradorgraos': ['comprador'],
+  '/corretores': ['corretor'],
+};
 
 const roleLabels = {
   vendedor: 'Vendedor',
@@ -29,6 +40,7 @@ export default function Navbar() {
   const user = getCurrentUser<User>();
   const loggedIn = isAuthenticated() && Boolean(user);
   const dashboardHref = getPrimaryAppPath(user);
+  const visibleNavItems = navItems.filter((item) => !loggedIn || canAccessProfileContent(user, item.allowedTypes || profileNavAllowedTypes[item.to]));
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const handleLogout = () => {
@@ -69,12 +81,12 @@ export default function Navbar() {
   return (
     <header className="sticky top-0 z-50 border-b border-white/70 bg-white/90 backdrop-blur-xl">
       <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
-        <Link to="/" className="flex items-center gap-3">
+        <Link to={HOME_PATH} className="flex items-center gap-3">
           <BrandLogo className="h-10 sm:h-12" width={220} height={220} />
         </Link>
 
         <nav className="hidden items-center justify-end gap-3 text-sm font-semibold md:flex">
-          {navItems.map((item) => renderLink(item.label, item.to))}
+          {visibleNavItems.map((item) => renderLink(item.label, item.to))}
 
           {loggedIn ? (
             <>
@@ -89,6 +101,18 @@ export default function Navbar() {
                 <LayoutDashboard className="h-4 w-4" />
                 Dashboard
               </Link>
+              {user?.type === 'backoffice' ? (
+                <Link
+                  to={OPERATIONS_PATH}
+                  className={`inline-flex items-center gap-2 rounded-full px-4 py-2.5 ${
+                    location.pathname === OPERATIONS_PATH
+                      ? 'bg-slate-900 text-white shadow-lg shadow-slate-900/15'
+                      : 'bg-slate-50 text-slate-700 hover:bg-slate-100'
+                  }`}
+                >
+                  Mesa de negociação
+                </Link>
+              ) : null}
               <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-xs font-black uppercase tracking-[0.22em] text-slate-500">
                 <ShieldCheck className="h-4 w-4 text-emerald-600" />
                 {roleLabels[user?.type as keyof typeof roleLabels] || 'Conta'}
@@ -126,7 +150,7 @@ export default function Navbar() {
       {mobileMenuOpen && (
         <div className="border-t border-slate-200 bg-white px-4 pb-4 pt-3 shadow-sm md:hidden">
           <div className="flex flex-col gap-2">
-            {navItems.map((item) => renderLink(item.label, item.to))}
+            {visibleNavItems.map((item) => renderLink(item.label, item.to))}
 
             {loggedIn ? (
               <>
@@ -142,6 +166,17 @@ export default function Navbar() {
                   <LayoutDashboard className="h-4 w-4" />
                   Dashboard
                 </Link>
+                {user?.type === 'backoffice' ? (
+                  <Link
+                    to={OPERATIONS_PATH}
+                    onClick={closeMobileMenu}
+                    className={`inline-flex items-center justify-center gap-2 rounded-full px-4 py-3 text-sm font-semibold ${
+                      location.pathname === OPERATIONS_PATH ? 'bg-slate-900 text-white shadow-lg shadow-slate-900/15' : 'bg-slate-50 text-slate-700'
+                    }`}
+                  >
+                    Mesa de negociação
+                  </Link>
+                ) : null}
                 <div className="inline-flex items-center justify-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-4 py-3 text-xs font-black uppercase tracking-[0.22em] text-slate-500">
                   <ShieldCheck className="h-4 w-4 text-emerald-600" />
                   {roleLabels[user?.type as keyof typeof roleLabels] || 'Conta'}

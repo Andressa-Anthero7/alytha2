@@ -10,6 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
+import os
 from pathlib import Path
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -151,3 +152,7 @@ CORS_ALLOWED_ORIGINS = [
 ]
 
 APPEND_SLASH = False
+
+# Public frontend URL used by share-preview HTML pages.
+ALYTHA_PUBLIC_SITE_URL = os.environ.get('ALYTHA_PUBLIC_SITE_URL', 'https://plataforma.alytha.agr.br').rstrip('/')
+ALYTHA_SHARE_IMAGE_URL = os.environ.get('ALYTHA_SHARE_IMAGE_URL', f'{ALYTHA_PUBLIC_SITE_URL}/logo.png').rstrip('/')

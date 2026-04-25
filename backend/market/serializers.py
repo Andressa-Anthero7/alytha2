@@ -47,6 +47,7 @@ USER_PROFILE_FIELDS = [
     'name',
     'email',
     'type',
+    'is_validated',
     'phone',
     'company',
     'legal_name',
@@ -63,6 +64,10 @@ USER_PROFILE_FIELDS = [
     'address_state',
     'address_country',
     'document_notes',
+    'terms_accepted_at',
+    'privacy_accepted_at',
+    'legal_version',
+    'legal_acceptance_ip',
 ]
 
 
@@ -103,11 +108,85 @@ def mask_name(value):
     return 'Acesso restrito'
 
 
+def document_digits(value):
+    return ''.join(char for char in str(value or '') if char.isdigit())
+
+
+def has_repeated_digits(value):
+    return bool(value) and len(set(value)) == 1
+
+
+def is_valid_cpf(value):
+    digits = document_digits(value)
+    if len(digits) != 11 or has_repeated_digits(digits):
+        return False
+
+    for digit_position in (9, 10):
+        total = sum(int(digits[index]) * (digit_position + 1 - index) for index in range(digit_position))
+        check_digit = (total * 10) % 11
+        if check_digit == 10:
+            check_digit = 0
+        if check_digit != int(digits[digit_position]):
+            return False
+
+    return True
+
+
+def is_valid_cnpj(value):
+    digits = document_digits(value)
+    if len(digits) != 14 or has_repeated_digits(digits):
+        return False
+
+    first_weights = [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]
+    second_weights = [6, *first_weights]
+
+    first_total = sum(int(digits[index]) * first_weights[index] for index in range(12))
+    first_check_digit = 11 - (first_total % 11)
+    if first_check_digit >= 10:
+        first_check_digit = 0
+    if first_check_digit != int(digits[12]):
+        return False
+
+    second_total = sum(int(digits[index]) * second_weights[index] for index in range(13))
+    second_check_digit = 11 - (second_total % 11)
+    if second_check_digit >= 10:
+        second_check_digit = 0
+
+    return second_check_digit == int(digits[13])
+
+
+def format_document_number(document_type, value):
+    digits = document_digits(value)
+    if document_type == 'cpf' and len(digits) == 11:
+        return f'{digits[:3]}.{digits[3:6]}.{digits[6:9]}-{digits[9:]}'
+    if document_type == 'cnpj' and len(digits) == 14:
+        return f'{digits[:2]}.{digits[2:5]}.{digits[5:8]}/{digits[8:12]}-{digits[12:]}'
+    return str(value or '').strip()
+
+
+def find_duplicate_document(document_number, instance=None):
+    target_digits = document_digits(document_number)
+    if not target_digits:
+        return None
+
+    queryset = User.objects.exclude(document_number='').only('id', 'document_number')
+    if instance:
+        queryset = queryset.exclude(pk=instance.pk)
+
+    for user in queryset:
+        if document_digits(user.document_number) == target_digits:
+            return user
+
+    return None
+
+
 class UserSerializer(serializers.ModelSerializer):
     def validate(self, attrs):
         role = attrs.get('type') or getattr(self.instance, 'type', None)
         profile_segment = (attrs.get('profile_segment') or getattr(self.instance, 'profile_segment', '')).strip().lower()
         document_type = (attrs.get('document_type') or getattr(self.instance, 'document_type', '')).strip().lower()
+        document_is_being_updated = 'document_number' in attrs or 'document_type' in attrs
+        document_number = attrs.get('document_number', getattr(self.instance, 'document_number', ''))
         address_state = attrs.get('address_state')
         email = attrs.get('email')
         name = attrs.get('name')
@@ -115,8 +194,25 @@ class UserSerializer(serializers.ModelSerializer):
         if role in ROLE_SEGMENT_MAP and profile_segment and profile_segment not in ROLE_SEGMENT_MAP[role]:
             raise serializers.ValidationError({'profile_segment': 'Selecione uma categoria válida para este perfil.'})
 
-        if document_type and document_type not in DOCUMENT_TYPES:
+        if document_is_being_updated and document_type and document_type not in DOCUMENT_TYPES:
             raise serializers.ValidationError({'document_type': 'Selecione CPF ou CNPJ.'})
+
+        if document_is_being_updated and document_number:
+            if not document_type:
+                raise serializers.ValidationError({'document_type': 'Selecione CPF ou CNPJ.'})
+
+            digits = document_digits(document_number)
+            if document_type == 'cpf' and not is_valid_cpf(digits):
+                raise serializers.ValidationError({'document_number': 'CPF invalido.'})
+            if document_type == 'cnpj' and not is_valid_cnpj(digits):
+                raise serializers.ValidationError({'document_number': 'CNPJ invalido.'})
+
+            if find_duplicate_document(digits, self.instance):
+                raise serializers.ValidationError({'document_number': 'CPF/CNPJ ja cadastrado. Somente um cadastro e permitido por documento.'})
+
+            attrs['document_number'] = format_document_number(document_type, digits)
+        elif document_is_being_updated and 'document_number' in attrs:
+            attrs['document_number'] = ''
 
         if email is not None:
             attrs['email'] = str(email).strip()
@@ -137,6 +233,7 @@ class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = USER_PROFILE_FIELDS
+        read_only_fields = ['id', 'terms_accepted_at', 'privacy_accepted_at', 'legal_version', 'legal_acceptance_ip']
         extra_kwargs = {
             'email': {'required': True},
             'name': {'required': True},
@@ -151,7 +248,16 @@ class ProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = USER_PROFILE_FIELDS
-        read_only_fields = ['id', 'email', 'type']
+        read_only_fields = [
+            'id',
+            'email',
+            'type',
+            'is_validated',
+            'terms_accepted_at',
+            'privacy_accepted_at',
+            'legal_version',
+            'legal_acceptance_ip',
+        ]
 
 
 class OfferSerializer(serializers.ModelSerializer):
@@ -396,6 +502,9 @@ class BrokerLinkOfferSubmissionSerializer(serializers.Serializer):
     type = serializers.ChoiceField(choices=Offer.OFFER_TYPES, source='offer_type')
     phone = serializers.CharField(max_length=20, required=False, allow_blank=True)
     company = serializers.CharField(max_length=150, required=False, allow_blank=True)
+    accept_terms = serializers.BooleanField(required=False, default=False, write_only=True)
+    accept_privacy = serializers.BooleanField(required=False, default=False, write_only=True)
+    legal_version = serializers.CharField(max_length=30, required=False, allow_blank=True, write_only=True)
     grain = serializers.CharField(max_length=50)
     quantity = serializers.DecimalField(max_digits=15, decimal_places=2, coerce_to_string=False)
     unit = serializers.CharField(max_length=20, required=False)
