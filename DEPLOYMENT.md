@@ -84,3 +84,43 @@ pg_restore --clean --if-exists --dbname "$DATABASE_URL_TESTE_RESTORE" backups/ar
 
 - Antes de publicar: `npm run lint`, `npm run build`, `python manage.py test market`, `python manage.py makemigrations --check --dry-run`, `python manage.py check --deploy`.
 - Criar commit/tag de release depois dos testes passarem.
+
+## Checklist final no servidor
+
+Com `backend/.env` real configurado e `DATABASE_URL` apontando para PostgreSQL:
+
+```bash
+cd backend
+python manage.py migrate
+python manage.py audit_documents --fix
+python manage.py ensure_backoffice_user --superuser
+python manage.py predeploy_check
+python manage.py check_smtp seu-email-de-teste@dominio.com.br
+```
+
+Para base de producao limpa, nao rode `loaddata`. Basta aplicar `migrate` e criar o primeiro backoffice com `ensure_backoffice_user`.
+
+No frontend, antes de enviar o build:
+
+```bash
+cd frontend
+npm ci
+npm run lint
+npm run build
+```
+
+Depois de publicar, testar manualmente:
+
+- Login com o backoffice inicial.
+- Cadastro comprador e vendedor.
+- Validacao de login no backoffice.
+- Recuperacao de senha recebendo e-mail real.
+- `/home`, `/mesa-operacional`, `/perfil` e `/app/admin/backoffice`.
+- Compartilhamento Facebook em `/share/oportunidades/{id}`.
+
+## Pontos que dependem do provedor
+
+- Criar o PostgreSQL real e copiar a `DATABASE_URL`.
+- Criar credenciais SMTP reais e validar com `check_smtp`.
+- Configurar DNS/HTTPS para `plataforma.alytha.agr.br`.
+- Configurar backup diario com `pg_dump` ou backup gerenciado do provedor.
