@@ -4,6 +4,7 @@ import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { apiFetch } from '../lib/api';
 import { getCurrentUser, isAuthenticated, saveAuth } from '../lib/auth';
 import { supportEmail, supportWhatsAppDisplay, supportWhatsAppHref } from '../shared/api';
+import { HOME_PATH } from '../shared/appRoutes';
 
 type LoginResponse = {
   access: string;
@@ -29,7 +30,7 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
 
   if (isAuthenticated() && currentUser) {
-    return <Navigate to="/" replace />;
+    return <Navigate to={HOME_PATH} replace />;
   }
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -49,7 +50,7 @@ export default function LoginPage() {
       }
 
       saveAuth(payload.access, payload.refresh, payload.user);
-      navigate('/', { replace: true });
+      navigate(HOME_PATH, { replace: true });
     } catch (loginError) {
       setError(loginError instanceof Error ? loginError.message : 'Erro inesperado ao entrar.');
     } finally {
@@ -61,7 +62,7 @@ export default function LoginPage() {
     <div className="min-h-screen bg-[radial-gradient(circle_at_top,#e6f4eb_0%,#ffffff_42%,#f7f2e8_100%)]">
       <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-center gap-2 px-4 pt-5 sm:px-6 sm:justify-end sm:pt-7 lg:px-8">
         {[
-          { label: 'Início', to: '/' },
+          { label: 'Início', to: HOME_PATH },
           { label: 'Quem Somos', to: '/quemsomos' },
           { label: 'Vender grãos', to: '/vendedorgraos' },
           { label: 'Comprar grãos', to: '/compradorgraos' },

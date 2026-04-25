@@ -3,8 +3,10 @@ import {
   ArrowRight,
   BriefcaseBusiness,
   CheckCircle2,
+  Eye,
   FilePlus2,
   HandCoins,
+  Home,
   LayoutDashboard,
   LoaderCircle,
   LogOut,
@@ -20,7 +22,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { apiFetch } from '../lib/api';
 import { clearAuth, getCurrentUser } from '../lib/auth';
-import { BACKOFFICE_PATH, OPERATIONS_PATH } from '../shared/appRoutes';
+import { BACKOFFICE_PATH, HOME_PATH, OPERATIONS_PATH } from '../shared/appRoutes';
 import { BrandLogo } from '../shared/BrandLogo';
 import { formatCurrency, formatDateTime, formatNumber } from '../shared/format';
 import type { BrokerageMode, BrokeragePayer, Negotiation, Offer, User } from '../types';
@@ -62,6 +64,7 @@ type OfferFormState = {
   shipping: Offer['shipping'];
   negotiationChannel: Offer['negotiationChannel'];
   mesaCommission: string;
+  nonGmo: boolean;
   deliveryWindow: string;
   qualityStandard: string;
   qualityNotes: string;
@@ -77,6 +80,8 @@ type MatchFormState = {
   brokerageValue: string;
   brokeragePayer: BrokeragePayer;
 };
+
+type UserFilter = 'todos' | 'novos' | User['type'];
 
 const tabs: Array<{ id: BackofficeTab; label: string; icon: typeof LayoutDashboard }> = [
   { id: 'overview', label: 'Visao geral', icon: LayoutDashboard },
@@ -237,6 +242,7 @@ function createEmptyOfferForm(): OfferFormState {
     shipping: 'FOB',
     negotiationChannel: 'mesa',
     mesaCommission: '1.00',
+    nonGmo: false,
     deliveryWindow: '',
     qualityStandard: '',
     qualityNotes: '',
@@ -323,12 +329,12 @@ function SummaryCard({
   } as const;
 
   return (
-    <article className={`rounded-xl border bg-white p-4 shadow-sm shadow-slate-200/70 ${toneClasses[tone]}`}>
+    <article className={`rounded-xl border bg-white p-3 shadow-sm ${toneClasses[tone]}`}>
       <div className="flex items-center justify-between gap-3">
         <p className="text-xs font-semibold text-slate-500">{label}</p>
-        <span className={`h-2.5 w-2.5 rounded-full ${accentClasses[tone]}`} />
+        <span className={`h-2 w-2 rounded-sm ${accentClasses[tone]}`} />
       </div>
-      <p className="mt-3 text-2xl font-semibold tracking-tight text-slate-950">{value}</p>
+      <p className="mt-2 text-xl font-semibold tracking-tight text-slate-950">{value}</p>
       <p className="mt-1 text-sm leading-5 text-slate-500">{detail}</p>
     </article>
   );
@@ -337,8 +343,8 @@ function SummaryCard({
 function SectionTitle({ eyebrow, title, description }: { eyebrow: string; title: string; description: string }) {
   return (
     <div className="border-b border-slate-200 pb-3">
-      <p className="text-xs font-semibold text-slate-500">{eyebrow}</p>
-      <h2 className="mt-1 text-base font-semibold tracking-tight text-slate-950 sm:text-lg">{title}</h2>
+      <p className="text-[11px] font-medium text-slate-500">{eyebrow}</p>
+      <h2 className="mt-1 text-base font-semibold tracking-tight text-slate-950">{title}</h2>
       <p className="mt-1 max-w-3xl text-sm leading-5 text-slate-500">{description}</p>
     </div>
   );
@@ -358,9 +364,10 @@ export default function BackofficePage() {
   const [negotiations, setNegotiations] = useState<Negotiation[]>([]);
 
   const [userSearch, setUserSearch] = useState('');
-  const [userRoleFilter, setUserRoleFilter] = useState<'todos' | User['type']>('todos');
+  const [userRoleFilter, setUserRoleFilter] = useState<UserFilter>('todos');
   const [userForm, setUserForm] = useState<UserFormState>(createEmptyUserForm());
   const [editingUserId, setEditingUserId] = useState<number | null>(null);
+  const [viewingUser, setViewingUser] = useState<User | null>(null);
   const [userSaving, setUserSaving] = useState(false);
   const [userDeletingId, setUserDeletingId] = useState<number | null>(null);
   const [userValidatingId, setUserValidatingId] = useState<number | null>(null);
@@ -523,7 +530,10 @@ export default function BackofficePage() {
   const recentOffers = [...offers].slice(0, 6);
 
   const visibleUsers = users.filter((user) => {
-    if (userRoleFilter !== 'todos' && user.type !== userRoleFilter) {
+    if (userRoleFilter === 'novos' && user.is_validated !== false) {
+      return false;
+    }
+    if (userRoleFilter !== 'todos' && userRoleFilter !== 'novos' && user.type !== userRoleFilter) {
       return false;
     }
 
@@ -635,9 +645,34 @@ export default function BackofficePage() {
     { label: 'Corretores', value: formatNumber(brokerUsers.length) },
     { label: 'Mesa', value: formatNumber(deskOffers.length) },
   ];
+  const viewingUserDetails = viewingUser
+    ? [
+        { label: 'Nome', value: viewingUser.name || 'Nao informado' },
+        { label: 'E-mail', value: viewingUser.email || 'Nao informado' },
+        { label: 'Perfil', value: roleLabels[viewingUser.type] },
+        { label: 'Status de login', value: viewingUser.is_validated === false ? 'Pendente validacao' : 'Login liberado' },
+        { label: 'Telefone / WhatsApp', value: viewingUser.phone || 'Nao informado' },
+        { label: 'Empresa', value: viewingUser.company || 'Nao informado' },
+        { label: 'Razao social', value: viewingUser.legal_name || 'Nao informado' },
+        { label: 'Categoria', value: viewingUser.profile_segment ? viewingUser.profile_segment.replaceAll('_', ' ') : 'Nao informado' },
+        { label: 'Documento', value: viewingUser.document_type ? viewingUser.document_type.toUpperCase() : 'Nao informado' },
+        { label: 'Numero do documento', value: viewingUser.document_number || 'Nao informado' },
+        { label: 'Inscricao estadual', value: viewingUser.state_registration || 'Nao informado' },
+        { label: 'CEP', value: viewingUser.address_zip_code || 'Nao informado' },
+        {
+          label: 'Endereco',
+          value: [viewingUser.address_street, viewingUser.address_number, viewingUser.address_district].filter(Boolean).join(', ') || 'Nao informado',
+        },
+        { label: 'Cidade / UF', value: [viewingUser.address_city, viewingUser.address_state].filter(Boolean).join(' / ') || 'Nao informado' },
+        { label: 'Aceite contrato', value: viewingUser.terms_accepted_at ? formatDateTime(viewingUser.terms_accepted_at) : 'Nao registrado' },
+        { label: 'Aceite LGPD', value: viewingUser.privacy_accepted_at ? formatDateTime(viewingUser.privacy_accepted_at) : 'Nao registrado' },
+        { label: 'Versao legal', value: viewingUser.legal_version || 'Nao registrada' },
+      ]
+    : [];
 
   const handleSelectTab = (tab: BackofficeTab) => {
     setActiveTab(tab);
+    setViewingUser(null);
     setMobileMenuOpen(false);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -734,11 +769,19 @@ export default function BackofficePage() {
         <p className="px-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">Acoes</p>
         <div className="mt-2 grid gap-1.5">
           <Link
+            to={HOME_PATH}
+            onClick={() => setMobileMenuOpen(false)}
+            className="inline-flex items-center justify-between border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 hover:bg-slate-50"
+          >
+            Home
+            <Home className="h-4 w-4" />
+          </Link>
+          <Link
             to={OPERATIONS_PATH}
             onClick={() => setMobileMenuOpen(false)}
             className="inline-flex items-center justify-between border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 hover:bg-slate-50"
           >
-            Mesa operacional
+            Mesa de negociacao
             <ArrowRight className="h-4 w-4" />
           </Link>
           <Link
@@ -792,6 +835,7 @@ export default function BackofficePage() {
 
   const handleEditUser = (user: User) => {
     setActiveTab('users');
+    setViewingUser(null);
     setEditingUserId(user.id);
     setUserError('');
     setUserNotice('');
@@ -926,6 +970,9 @@ export default function BackofficePage() {
       if (editingUserId === user.id) {
         resetUserForm();
       }
+      if (viewingUser?.id === user.id) {
+        setViewingUser(null);
+      }
       setUserNotice('Cadastro removido com sucesso.');
       await loadData();
     } catch (error) {
@@ -992,6 +1039,7 @@ export default function BackofficePage() {
           negotiationChannel: offerForm.negotiationChannel,
           mesaCommission: offerForm.negotiationChannel === 'mesa' ? Number(offerForm.mesaCommission) : null,
           quality: {
+            nonGmo: offerForm.nonGmo ? true : undefined,
             deliveryWindow: offerForm.deliveryWindow.trim() || undefined,
             standard: offerForm.qualityStandard.trim() || undefined,
             notes: offerForm.qualityNotes.trim() || undefined,
@@ -1147,7 +1195,7 @@ export default function BackofficePage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#f5f7f9] text-slate-900">
+    <div className="backoffice-crm backoffice-font-scale min-h-screen bg-[#f5f7f9] text-slate-900">
       <div className="mx-auto max-w-[1540px] px-3 py-4 sm:px-5 lg:px-6">
         <div className={`grid gap-3 ${desktopSidebarVisible ? 'lg:grid-cols-[280px_minmax(0,1fr)]' : 'lg:grid-cols-[minmax(0,1fr)]'}`}>
           <aside
@@ -1206,6 +1254,20 @@ export default function BackofficePage() {
                 </div>
 
                 <div className="flex flex-wrap gap-2">
+                  <Link
+                    to={HOME_PATH}
+                    className="inline-flex items-center justify-center gap-2 border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                  >
+                    <Home className="h-4 w-4" />
+                    Home
+                  </Link>
+                  <Link
+                    to={OPERATIONS_PATH}
+                    className="inline-flex items-center justify-center gap-2 border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                  >
+                    Mesa de negociacao
+                    <ArrowRight className="h-4 w-4" />
+                  </Link>
                   {!desktopSidebarVisible ? (
                     <button
                       type="button"
@@ -1235,6 +1297,37 @@ export default function BackofficePage() {
                   </button>
                 </div>
               </div>
+            </section>
+
+            <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              {[
+                {
+                  label: 'Base de usuarios',
+                  value: formatNumber(users.length),
+                  detail: `${formatNumber(pendingValidationUsers.length)} novo(s) aguardando validacao`,
+                },
+                {
+                  label: 'Livro comercial',
+                  value: formatNumber(activeOffers.length),
+                  detail: `${formatNumber(deskOffers.length)} mesa / ${formatNumber(directOffers.length)} diretas`,
+                },
+                {
+                  label: 'Negociacoes abertas',
+                  value: formatNumber(pendingNegotiations.length),
+                  detail: `${formatCurrency(pendingBrokerage)} em corretagem pendente`,
+                },
+                {
+                  label: 'Receita aceita',
+                  value: formatCurrency(acceptedBrokerage),
+                  detail: `${formatNumber(acceptedNegotiations.length)} negociacao(oes) aceitas`,
+                },
+              ].map((item) => (
+                <article key={item.label} className="rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+                  <p className="text-xs font-medium text-slate-500">{item.label}</p>
+                  <p className="mt-1 text-xl font-semibold tracking-tight text-slate-950">{item.value}</p>
+                  <p className="mt-1 text-xs text-slate-500">{item.detail}</p>
+                </article>
+              ))}
             </section>
 
             {loading ? (
@@ -1431,16 +1524,16 @@ export default function BackofficePage() {
             ) : null}
 
             {activeTab === 'users' ? (
-              <section className="grid gap-4 xl:grid-cols-[0.95fr_1.05fr] [&_section]:rounded-xl [&_section]:border-slate-200 [&_section]:bg-white [&_section]:p-5 [&_section]:shadow-sm [&_section]:shadow-slate-200/70 [&_article]:rounded-lg [&_article]:border-slate-200 [&_article]:bg-slate-50/70 [&_article]:shadow-none">
-                <div className="space-y-6">
-                  <section className="rounded-[2rem] border border-white/80 bg-white/92 p-6 shadow-[0_45px_120px_-75px_rgba(15,23,42,0.55)]">
+              <section className="grid gap-4 xl:h-[calc(150vh-330px)] xl:min-h-0 xl:grid-cols-[0.95fr_1.05fr] xl:items-stretch [&_section]:rounded-xl [&_section]:border-slate-200 [&_section]:bg-white [&_section]:p-5 [&_section]:shadow-sm [&_section]:shadow-slate-200/70 [&_article]:rounded-lg [&_article]:border-slate-200 [&_article]:bg-slate-50/70 [&_article]:shadow-none">
+                <div className="min-h-0 space-y-6 xl:h-full">
+                  <section className="rounded-[2rem] border border-white/80 bg-white/92 p-6 shadow-[0_45px_120px_-75px_rgba(15,23,42,0.55)] xl:flex xl:h-full xl:min-h-0 xl:flex-col xl:overflow-hidden">
                     <SectionTitle
                       eyebrow="Categorias de perfil"
                       title="Cadastro completo de compradores, vendedores, corretores e backoffice"
                       description="Use esta area para criar novos perfis, ajustar informacoes cadastrais, redefinir senha e manter a base de usuarios organizada."
                     />
 
-                    <form onSubmit={handleSaveUser} className="mt-6 space-y-4">
+                    <form onSubmit={handleSaveUser} className="mt-6 space-y-4 xl:min-h-0 xl:flex-1 xl:overflow-y-auto xl:pr-2 custom-scrollbar">
                       <div className="grid gap-4 sm:grid-cols-2">
                         <label className="space-y-2">
                           <span className="text-xs font-black uppercase tracking-[0.18em] text-slate-500">Perfil</span>
@@ -1685,8 +1778,8 @@ export default function BackofficePage() {
                   </section>
                 </div>
 
-                <div className="space-y-6">
-                  <section className="rounded-[2rem] border border-white/80 bg-white/92 p-6 shadow-[0_45px_120px_-75px_rgba(15,23,42,0.55)]">
+                <div className="min-h-0 space-y-6 xl:h-full">
+                  <section className="rounded-[2rem] border border-white/80 bg-white/92 p-6 shadow-[0_45px_120px_-75px_rgba(15,23,42,0.55)] xl:flex xl:h-full xl:min-h-0 xl:flex-col xl:overflow-hidden">
                     <SectionTitle
                       eyebrow="Base de usuarios"
                       title="Pesquisar e editar categorias"
@@ -1715,10 +1808,11 @@ export default function BackofficePage() {
                         <span className="text-xs font-black uppercase tracking-[0.18em] text-slate-500">Filtro por perfil</span>
                         <select
                           value={userRoleFilter}
-                          onChange={(event) => setUserRoleFilter(event.target.value as 'todos' | User['type'])}
+                          onChange={(event) => setUserRoleFilter(event.target.value as UserFilter)}
                           className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none focus:border-emerald-500 focus:bg-white"
                         >
                           <option value="todos">Todos</option>
+                          <option value="novos">Novos</option>
                           {userRoleOptions.map((option) => (
                             <option key={option.value} value={option.value}>
                               {option.label}
@@ -1728,79 +1822,154 @@ export default function BackofficePage() {
                       </label>
                     </div>
 
-                    <div className="mt-6 grid gap-3">
-                      {visibleUsers.map((user) => (
-                        <article key={user.id} className="rounded-[1.6rem] border border-slate-200 bg-slate-50 px-4 py-4">
-                          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                            <div>
-                              <p className="text-lg font-black text-slate-950">{user.name}</p>
-                              <p className="mt-1 text-sm text-slate-600">{user.email}</p>
-                              <div className="mt-3 flex flex-wrap gap-2">
-                                <span className="rounded-full bg-white px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-emerald-700">
-                                  {roleLabels[user.type]}
-                                </span>
-                                <span
-                                  className={`rounded-full bg-white px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] ${
-                                    user.is_validated === false ? 'text-amber-700' : 'text-sky-700'
-                                  }`}
-                                >
-                                  {user.is_validated === false ? 'Pendente validacao' : 'Login liberado'}
-                                </span>
-                                {user.profile_segment ? (
-                                  <span className="rounded-full bg-white px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-slate-600">
-                                    {user.profile_segment.replaceAll('_', ' ')}
+                    <div className="mt-6 max-h-[930px] min-h-0 overflow-y-auto pr-2 custom-scrollbar xl:max-h-none xl:flex-1">
+                      <div className="grid gap-3">
+                        {visibleUsers.map((user) => (
+                          <article key={user.id} className="rounded-[1.6rem] border border-slate-200 bg-slate-50 px-4 py-4">
+                            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                              <div>
+                                <p className="text-lg font-black text-slate-950">{user.name}</p>
+                                <p className="mt-1 text-sm text-slate-600">{user.email}</p>
+                                <div className="mt-3 flex flex-wrap gap-2">
+                                  <span className="rounded-full bg-white px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-emerald-700">
+                                    {roleLabels[user.type]}
                                   </span>
-                                ) : null}
-                                {user.company ? (
-                                  <span className="rounded-full bg-white px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-slate-600">
-                                    {user.company}
+                                  <span
+                                    className={`rounded-full bg-white px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] ${
+                                      user.is_validated === false ? 'text-amber-700' : 'text-sky-700'
+                                    }`}
+                                  >
+                                    {user.is_validated === false ? 'Pendente validacao' : 'Login liberado'}
                                   </span>
-                                ) : null}
+                                  {user.profile_segment ? (
+                                    <span className="rounded-full bg-white px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-slate-600">
+                                      {user.profile_segment.replaceAll('_', ' ')}
+                                    </span>
+                                  ) : null}
+                                  {user.company ? (
+                                    <span className="rounded-full bg-white px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-slate-600">
+                                      {user.company}
+                                    </span>
+                                  ) : null}
+                                </div>
+                                <p className="mt-3 text-sm text-slate-500">
+                                  {user.is_validated === false
+                                    ? 'Acesso aguardando validacao do backoffice antes do primeiro login.'
+                                    : 'Acesso apto para login na plataforma.'}
+                                </p>
                               </div>
-                              <p className="mt-3 text-sm text-slate-500">
-                                {user.is_validated === false
-                                  ? 'Acesso aguardando validacao do backoffice antes do primeiro login.'
-                                  : 'Acesso apto para login na plataforma.'}
-                              </p>
-                            </div>
 
-                            <div className="flex flex-col gap-2 sm:flex-row">
-                              {user.is_validated === false ? (
+                              <div className="flex flex-col gap-2 sm:flex-row">
+                                {user.is_validated === false ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => void handleValidateUser(user)}
+                                    disabled={userValidatingId === user.id}
+                                    className="inline-flex items-center justify-center gap-2 rounded-full border border-emerald-200 bg-white px-4 py-3 text-sm font-black uppercase tracking-[0.18em] text-emerald-700 hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-60"
+                                  >
+                                    {userValidatingId === user.id ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
+                                    Validar login
+                                  </button>
+                                ) : null}
                                 <button
                                   type="button"
-                                  onClick={() => void handleValidateUser(user)}
-                                  disabled={userValidatingId === user.id}
-                                  className="inline-flex items-center justify-center gap-2 rounded-full border border-emerald-200 bg-white px-4 py-3 text-sm font-black uppercase tracking-[0.18em] text-emerald-700 hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-60"
+                                  onClick={() => setViewingUser(user)}
+                                  className="inline-flex items-center justify-center gap-2 rounded-full border border-sky-200 bg-white px-4 py-3 text-sm font-black uppercase tracking-[0.18em] text-sky-700 hover:bg-sky-50"
                                 >
-                                  {userValidatingId === user.id ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
-                                  Validar login
+                                  <Eye className="h-4 w-4" />
+                                  Ver
                                 </button>
-                              ) : null}
-                              <button
-                                type="button"
-                                onClick={() => handleEditUser(user)}
-                                className="inline-flex items-center justify-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-3 text-sm font-black uppercase tracking-[0.18em] text-slate-900 hover:bg-slate-50"
-                              >
-                                <Users2 className="h-4 w-4" />
-                                Editar
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => void handleDeleteUser(user)}
-                                disabled={userDeletingId === user.id || user.id === currentUser.id}
-                                className="inline-flex items-center justify-center gap-2 rounded-full border border-red-200 bg-white px-4 py-3 text-sm font-black uppercase tracking-[0.18em] text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
-                              >
-                                {userDeletingId === user.id ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-                                Remover
-                              </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleEditUser(user)}
+                                  className="inline-flex items-center justify-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-3 text-sm font-black uppercase tracking-[0.18em] text-slate-900 hover:bg-slate-50"
+                                >
+                                  <Users2 className="h-4 w-4" />
+                                  Editar
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => void handleDeleteUser(user)}
+                                  disabled={userDeletingId === user.id || user.id === currentUser.id}
+                                  className="inline-flex items-center justify-center gap-2 rounded-full border border-red-200 bg-white px-4 py-3 text-sm font-black uppercase tracking-[0.18em] text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+                                >
+                                  {userDeletingId === user.id ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                                  Remover
+                                </button>
+                              </div>
                             </div>
+                          </article>
+                        ))}
+                        {!visibleUsers.length ? (
+                          <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-center text-sm font-semibold text-slate-500">
+                            Nenhum usuario encontrado com os filtros atuais.
                           </div>
-                        </article>
-                      ))}
+                        ) : null}
+                      </div>
                     </div>
                   </section>
                 </div>
               </section>
+            ) : null}
+
+            {viewingUser ? (
+              <div className="fixed inset-0 z-[80] overflow-y-auto bg-slate-950/45 px-4 py-6 backdrop-blur-sm">
+                <div className="mx-auto max-w-4xl rounded-xl border border-slate-200 bg-white p-5 shadow-2xl shadow-slate-950/30">
+                  <div className="flex flex-col gap-4 border-b border-slate-200 pb-4 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                      <p className="text-[11px] font-black uppercase tracking-[0.18em] text-sky-700">Visualizacao do usuario</p>
+                      <h2 className="mt-2 text-2xl font-black text-slate-950">{viewingUser.name}</h2>
+                      <p className="mt-1 text-sm text-slate-500">{viewingUser.email}</p>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <span className="rounded-full bg-emerald-50 px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-emerald-700">
+                          {roleLabels[viewingUser.type]}
+                        </span>
+                        <span
+                          className={`rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] ${
+                            viewingUser.is_validated === false ? 'bg-amber-50 text-amber-700' : 'bg-sky-50 text-sky-700'
+                          }`}
+                        >
+                          {viewingUser.is_validated === false ? 'Pendente validacao' : 'Login liberado'}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleEditUser(viewingUser)}
+                        className="inline-flex items-center justify-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-3 text-sm font-black uppercase tracking-[0.18em] text-slate-900 hover:bg-slate-50"
+                      >
+                        <Users2 className="h-4 w-4" />
+                        Editar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setViewingUser(null)}
+                        className="inline-flex items-center justify-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-black uppercase tracking-[0.18em] text-slate-700 hover:bg-white"
+                      >
+                        <X className="h-4 w-4" />
+                        Fechar
+                      </button>
+                    </div>
+                  </div>
+
+                  <dl className="mt-5 grid gap-3 sm:grid-cols-2">
+                    {viewingUserDetails.map((item) => (
+                      <div key={item.label} className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+                        <dt className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">{item.label}</dt>
+                        <dd className="mt-2 break-words text-sm font-semibold text-slate-900">{item.value}</dd>
+                      </div>
+                    ))}
+                    <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 sm:col-span-2">
+                      <dt className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">Observacoes documentais</dt>
+                      <dd className="mt-2 whitespace-pre-wrap text-sm font-semibold leading-6 text-slate-900">
+                        {viewingUser.document_notes || 'Nao informado'}
+                      </dd>
+                    </div>
+                  </dl>
+                </div>
+              </div>
             ) : null}
 
             {activeTab === 'offers' ? (
@@ -1843,8 +2012,8 @@ export default function BackofficePage() {
                           </select>
                         </label>
 
-                        <label className="space-y-2">
-                          <span className="text-xs font-black uppercase tracking-[0.18em] text-slate-500">Grao</span>
+                        <div className="space-y-2">
+                          <span className="text-xs font-black uppercase tracking-[0.18em] text-slate-500">Produto</span>
                           <select
                             value={offerForm.grain}
                             onChange={(event) => setOfferForm((current) => ({ ...current, grain: event.target.value }))}
@@ -1856,7 +2025,16 @@ export default function BackofficePage() {
                               </option>
                             ))}
                           </select>
-                        </label>
+                          <label className="flex cursor-pointer items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-800 hover:bg-slate-50">
+                            <input
+                              type="checkbox"
+                              checked={offerForm.nonGmo}
+                              onChange={(event) => setOfferForm((current) => ({ ...current, nonGmo: event.target.checked }))}
+                              className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                            />
+                            Non GMO
+                          </label>
+                        </div>
 
                         <label className="space-y-2">
                           <span className="text-xs font-black uppercase tracking-[0.18em] text-slate-500">Quantidade</span>

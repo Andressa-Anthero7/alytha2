@@ -46,12 +46,50 @@ PIX_CNPJ = '66.291.663/0001-10'
 PIX_CNPJ_DIGITS = '66291663000110'
 PIX_BENEFICIARY = 'Alytha Intermediações de Negócios Ltda'
 PASSWORD_RESET_TOKEN_TTL = timedelta(hours=1)
+LEGAL_DOCUMENT_VERSION = '25/04/2026'
 ROLE_LABELS = {
     'vendedor': 'Vendedor',
     'comprador': 'Comprador',
     'corretor': 'Corretor',
     'backoffice': 'Backoffice',
 }
+
+
+def parse_request_bool(value):
+    if isinstance(value, (list, tuple)):
+        value = value[0] if value else False
+    if isinstance(value, bool):
+        return value
+    return str(value or '').strip().lower() in {'1', 'true', 'yes', 'on'}
+
+
+def get_client_ip(request):
+    forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR', '')
+    if forwarded_for:
+        return forwarded_for.split(',')[0].strip()
+    return request.META.get('REMOTE_ADDR') or None
+
+
+def apply_legal_acceptance_fields(target, *, accept_terms, accept_privacy, legal_version, request):
+    accepted_at = timezone.now()
+    updated_fields = []
+
+    if accept_terms:
+        target.terms_accepted_at = accepted_at
+        updated_fields.append('terms_accepted_at')
+
+    if accept_privacy:
+        target.privacy_accepted_at = accepted_at
+        updated_fields.append('privacy_accepted_at')
+
+    if accept_terms or accept_privacy:
+        target.legal_version = str(legal_version or LEGAL_DOCUMENT_VERSION).strip()[:30]
+        target.legal_acceptance_ip = get_client_ip(request)
+        updated_fields.extend(['legal_version', 'legal_acceptance_ip'])
+
+    return updated_fields
+
+
 CLIENT_OFFER_TYPE_BY_ROLE = {
     'vendedor': 'venda',
     'comprador': 'compra',
@@ -1164,6 +1202,9 @@ class PublicBrokerOfferCreateView(APIView):
         name = validated_data.pop('name')
         phone = validated_data.pop('phone', '')
         company = validated_data.pop('company', '')
+        accept_terms = validated_data.pop('accept_terms', False)
+        accept_privacy = validated_data.pop('accept_privacy', False)
+        legal_version = validated_data.pop('legal_version', LEGAL_DOCUMENT_VERSION)
         target_type = 'comprador' if validated_data['offer_type'] == 'compra' else 'vendedor'
 
         existing_user = User.objects.filter(email=email).first()
@@ -1185,8 +1226,17 @@ class PublicBrokerOfferCreateView(APIView):
             if company and target_user.company != company:
                 target_user.company = company
                 updated_fields.append('company')
+            updated_fields.extend(
+                apply_legal_acceptance_fields(
+                    target_user,
+                    accept_terms=accept_terms,
+                    accept_privacy=accept_privacy,
+                    legal_version=legal_version,
+                    request=request,
+                ),
+            )
             if updated_fields:
-                target_user.save(update_fields=updated_fields)
+                target_user.save(update_fields=list(dict.fromkeys(updated_fields)))
         else:
             target_user = User.objects.create(
                 name=name,
@@ -1195,6 +1245,15 @@ class PublicBrokerOfferCreateView(APIView):
                 phone=phone,
                 company=company,
             )
+            legal_updated_fields = apply_legal_acceptance_fields(
+                target_user,
+                accept_terms=accept_terms,
+                accept_privacy=accept_privacy,
+                legal_version=legal_version,
+                request=request,
+            )
+            if legal_updated_fields:
+                target_user.save(update_fields=legal_updated_fields)
 
         auth_user, created = AuthUser.objects.get_or_create(
             username=email,
@@ -1412,6 +1471,11 @@ class RegisterView(APIView):
         if not role:
             return Response({'detail': 'tipo inválido'}, status=status.HTTP_400_BAD_REQUEST)
         data = request.data.copy()
+        accept_terms = parse_request_bool(data.pop('accept_terms', False))
+        accept_privacy = parse_request_bool(data.pop('accept_privacy', False))
+        legal_version = data.pop('legal_version', LEGAL_DOCUMENT_VERSION)
+        if isinstance(legal_version, (list, tuple)):
+            legal_version = legal_version[0] if legal_version else LEGAL_DOCUMENT_VERSION
         data['type'] = role
         if requires_backoffice_validation(role):
             data['is_validated'] = False
@@ -1426,6 +1490,15 @@ class RegisterView(APIView):
             try:
                 with transaction.atomic():
                     user = serializer.save()
+                    legal_updated_fields = apply_legal_acceptance_fields(
+                        user,
+                        accept_terms=accept_terms,
+                        accept_privacy=accept_privacy,
+                        legal_version=legal_version,
+                        request=request,
+                    )
+                    if legal_updated_fields:
+                        user.save(update_fields=legal_updated_fields)
                     auth_user = get_or_create_auth_user(email=email, name=name)
                     auth_user.set_password(password)
                     auth_user.save(update_fields=['password'])

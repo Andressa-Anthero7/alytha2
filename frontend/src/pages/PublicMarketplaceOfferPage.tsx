@@ -56,6 +56,7 @@ const qualityFieldLabels: Record<string, string> = {
   ph: 'PH (milho)',
   protein: 'Proteina (soja)',
   standard: 'Padrao',
+  nonGmo: 'Non GMO',
   deliveryWindow: 'Janela de disponibilidade',
   funrural: 'Tratativa de Funrural',
   notes: 'Especificacoes',
@@ -63,6 +64,9 @@ const qualityFieldLabels: Record<string, string> = {
 };
 
 const formatQualityValue = (key: string, value: unknown) => {
+  if (typeof value === 'boolean') {
+    return value ? 'Sim' : 'Nao';
+  }
   if (typeof value === 'number' && percentQualityKeys.has(key)) {
     return `${value}%`;
   }

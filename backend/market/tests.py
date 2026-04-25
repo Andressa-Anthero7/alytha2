@@ -811,7 +811,7 @@ class AuthFlowTests(ValidatedRegistrationAPITestCase):
             'legal_name': 'Trading Horizonte Ltda',
             'profile_segment': 'trading',
             'document_type': 'cnpj',
-            'document_number': '12.345.678/0001-90',
+            'document_number': '04.252.011/0001-10',
             'state_registration': '123456789',
             'address_zip_code': '01452-000',
             'address_street': 'Avenida das Nações',
@@ -822,6 +822,9 @@ class AuthFlowTests(ValidatedRegistrationAPITestCase):
             'address_state': 'sp',
             'address_country': 'Brasil',
             'document_notes': 'Comprador habilitado para mercado interno e exportação.',
+            'accept_terms': True,
+            'accept_privacy': True,
+            'legal_version': '2026-04-24',
         }, format='json')
 
         self.assertEqual(response.status_code, 201)
@@ -829,12 +832,48 @@ class AuthFlowTests(ValidatedRegistrationAPITestCase):
         self.assertEqual(user.type, 'comprador')
         self.assertEqual(user.profile_segment, 'trading')
         self.assertEqual(user.document_type, 'cnpj')
-        self.assertEqual(user.document_number, '12.345.678/0001-90')
+        self.assertEqual(user.document_number, '04.252.011/0001-10')
         self.assertEqual(user.legal_name, 'Trading Horizonte Ltda')
         self.assertEqual(user.address_state, 'SP')
         self.assertEqual(user.address_city, 'São Paulo')
+        self.assertIsNotNone(user.terms_accepted_at)
+        self.assertIsNotNone(user.privacy_accepted_at)
+        self.assertEqual(user.legal_version, '2026-04-24')
         self.assertEqual(response.data['profile_segment'], 'trading')
         self.assertEqual(response.data['document_type'], 'cnpj')
+
+    def test_register_rejects_invalid_cpf(self):
+        response = self.client.post(reverse('register', args=['comprador']), {
+            'name': 'Comprador CPF Invalido',
+            'email': 'comprador.cpf.invalido@test.com',
+            'password': 'PerfilCompleto123!',
+            'document_type': 'cpf',
+            'document_number': '111.111.111-11',
+        }, format='json')
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('document_number', response.data)
+
+    def test_register_rejects_duplicate_cpf_or_cnpj(self):
+        first = self.client.post(reverse('register', args=['comprador']), {
+            'name': 'Comprador CPF',
+            'email': 'comprador.cpf@test.com',
+            'password': 'PerfilCompleto123!',
+            'document_type': 'cpf',
+            'document_number': '529.982.247-25',
+        }, format='json')
+        self.assertEqual(first.status_code, 201)
+
+        second = self.client.post(reverse('register', args=['vendedor']), {
+            'name': 'Vendedor CPF Duplicado',
+            'email': 'vendedor.cpf.duplicado@test.com',
+            'password': 'PerfilCompleto123!',
+            'document_type': 'cpf',
+            'document_number': '52998224725',
+        }, format='json')
+
+        self.assertEqual(second.status_code, 400)
+        self.assertIn('document_number', second.data)
 
     def test_forgot_password_request_and_confirm_flow(self):
         self.client.post(reverse('register', args=['vendedor']), {
