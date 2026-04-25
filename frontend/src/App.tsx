@@ -114,7 +114,7 @@ export default function App() {
         <Route
           path="/app/admin/backoffice"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute allowedTypes={['backoffice']}>
               <BackofficePage />
             </ProtectedRoute>
           }

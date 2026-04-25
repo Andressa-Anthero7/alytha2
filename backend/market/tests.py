@@ -52,6 +52,12 @@ class ValidatedRegistrationAPITestCase(APITestCase):
         self._raw_post = self.client.post
 
         def wrapped_post(path, data=None, *args, **kwargs):
+            if isinstance(path, str) and path.startswith('/api/register/') and isinstance(data, dict):
+                data = {
+                    **data,
+                    'accept_terms': data.get('accept_terms', True),
+                    'accept_privacy': data.get('accept_privacy', True),
+                }
             response = self._raw_post(path, data=data, *args, **kwargs)
             if (
                 isinstance(path, str)
@@ -66,6 +72,11 @@ class ValidatedRegistrationAPITestCase(APITestCase):
         self.client.post = wrapped_post
 
     def register_without_auto_validation(self, role, payload):
+        payload = {
+            **payload,
+            'accept_terms': payload.get('accept_terms', True),
+            'accept_privacy': payload.get('accept_privacy', True),
+        }
         return self._raw_post(reverse('register', args=[role]), payload, format='json')
 
 
@@ -259,10 +270,13 @@ class AuthFlowTests(ValidatedRegistrationAPITestCase):
         res = self.client.get('/api/users')
 
         self.assertEqual(res.status_code, 200)
+        names = [user['name'] for user in res.data]
         emails = [user['email'] for user in res.data]
-        self.assertIn('seller.users@test.com', emails)
-        self.assertIn('buyer.users@test.com', emails)
-        self.assertIn('broker.users@test.com', emails)
+        self.assertIn('Seller Users', names)
+        self.assertIn('Buyer Users', names)
+        self.assertIn('Broker Users', names)
+        self.assertNotIn('seller.users@test.com', emails)
+        self.assertNotIn('buyer.users@test.com', emails)
 
     def test_broker_can_match_with_value_per_sack_commission(self):
         self.client.post(reverse('register', args=['vendedor']), {
@@ -452,6 +466,8 @@ class AuthFlowTests(ValidatedRegistrationAPITestCase):
                 'mesaCommission': 1.5,
                 'quality': {'notes': 'Exclusivo'},
                 'paymentTerms': '14 dias',
+                'accept_terms': True,
+                'accept_privacy': True,
             },
             format='json',
         )
@@ -875,6 +891,7 @@ class AuthFlowTests(ValidatedRegistrationAPITestCase):
         self.assertEqual(second.status_code, 400)
         self.assertIn('document_number', second.data)
 
+    @override_settings(ALYTHA_EXPOSE_PASSWORD_RESET_TOKEN=True)
     def test_forgot_password_request_and_confirm_flow(self):
         self.client.post(reverse('register', args=['vendedor']), {
             'name': 'Seller Recover',
@@ -1152,6 +1169,8 @@ class MarketplaceRulesTests(ValidatedRegistrationAPITestCase):
                 'mesaCommission': 1.5,
                 'quality': {'notes': 'Exclusivo'},
                 'paymentTerms': '14 dias',
+                'accept_terms': True,
+                'accept_privacy': True,
             },
             format='json',
         )

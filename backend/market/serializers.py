@@ -169,9 +169,13 @@ def find_duplicate_document(document_number, instance=None):
     if not target_digits:
         return None
 
-    queryset = User.objects.exclude(document_number='').only('id', 'document_number')
+    queryset = User.objects.exclude(document_number_digits='').only('id', 'document_number', 'document_number_digits')
     if instance:
         queryset = queryset.exclude(pk=instance.pk)
+
+    exact_match = queryset.filter(document_number_digits=target_digits).first()
+    if exact_match:
+        return exact_match
 
     for user in queryset:
         if document_digits(user.document_number) == target_digits:
@@ -239,6 +243,22 @@ class UserSerializer(serializers.ModelSerializer):
             'name': {'required': True},
             'type': {'required': True},
         }
+
+
+class BrokerUserSummarySerializer(serializers.ModelSerializer):
+    email = serializers.SerializerMethodField()
+    phone = serializers.SerializerMethodField()
+
+    class Meta:
+        model = User
+        fields = ['id', 'name', 'email', 'type', 'is_validated', 'phone', 'company']
+        read_only_fields = fields
+
+    def get_email(self, obj):
+        return mask_email(obj.email)
+
+    def get_phone(self, obj):
+        return mask_phone(obj.phone)
 
 
 class ProfileSerializer(serializers.ModelSerializer):

@@ -1,4 +1,5 @@
 import json
+import logging
 from datetime import timedelta
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
@@ -6,6 +7,7 @@ from django.conf import settings
 from django.contrib.auth import authenticate, get_user_model
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django.core.mail import send_mail
 from django.db import IntegrityError, transaction
 from django.db.models import Q, TextField
 from django.db.models.functions import Cast
@@ -23,6 +25,7 @@ from rest_framework.views import APIView
 from .models import Negotiation, Offer, PasswordResetToken, User
 from .serializers import (
     BrokerLinkOfferSubmissionSerializer,
+    BrokerUserSummarySerializer,
     MarketplaceOfferSerializer,
     NegotiationSerializer,
     OfferSerializer,
@@ -35,6 +38,7 @@ from .serializers import (
 )
 
 AuthUser = get_user_model()
+logger = logging.getLogger(__name__)
 
 DIRECT_FREE_OFFERS_PER_MONTH = 4
 DIRECT_OFFER_FEE = Decimal('100.00')
@@ -88,6 +92,14 @@ def apply_legal_acceptance_fields(target, *, accept_terms, accept_privacy, legal
         updated_fields.extend(['legal_version', 'legal_acceptance_ip'])
 
     return updated_fields
+
+
+def enforce_legal_acceptance(*, accept_terms, accept_privacy):
+    if accept_terms and accept_privacy:
+        return
+    raise DRFValidationError({
+        'detail': 'Para continuar, confirme a leitura e aceite do contrato Alytha e da politica de LGPD.'
+    })
 
 
 CLIENT_OFFER_TYPE_BY_ROLE = {
@@ -424,10 +436,34 @@ def build_password_reset_path(token: str):
 
 def build_password_reset_response_payload(reset_token: PasswordResetToken | None = None):
     payload = {'detail': 'Se o e-mail estiver cadastrado, você receberá as instruções para redefinir a senha.'}
-    if reset_token is not None:
+    if reset_token is not None and getattr(settings, 'ALYTHA_EXPOSE_PASSWORD_RESET_TOKEN', False):
         payload['resetPath'] = build_password_reset_path(str(reset_token.token))
         payload['token'] = str(reset_token.token)
     return payload
+
+
+def build_password_reset_url(token: str):
+    base_url = getattr(settings, 'ALYTHA_PUBLIC_SITE_URL', '').rstrip('/')
+    path = build_password_reset_path(token)
+    return f'{base_url}{path}' if base_url else path
+
+
+def send_password_reset_email(market_user: User, reset_token: PasswordResetToken):
+    reset_url = build_password_reset_url(str(reset_token.token))
+    subject = 'Redefinicao de senha | Alytha'
+    message = (
+        f'Ola, {market_user.name or "cliente"}.\n\n'
+        'Recebemos uma solicitacao para redefinir a senha da sua conta Alytha.\n'
+        f'Acesse o link abaixo em ate 1 hora:\n\n{reset_url}\n\n'
+        'Se voce nao solicitou essa alteracao, ignore esta mensagem.'
+    )
+    send_mail(
+        subject,
+        message,
+        settings.DEFAULT_FROM_EMAIL,
+        [market_user.email],
+        fail_silently=False,
+    )
 
 
 def is_half_step_commission(value: Decimal) -> bool:
@@ -913,6 +949,23 @@ class UserViewSet(viewsets.ModelViewSet):
     http_method_names = ['get', 'post', 'patch', 'delete', 'head', 'options']
     permission_classes = [IsAuthenticated, BrokerReadOnlyOrBackoffice]
 
+    def get_queryset(self):
+        queryset = User.objects.all().order_by('id')
+        market_user = get_market_user(self.request)
+        user_role = getattr(market_user, 'type', None)
+
+        if getattr(self.request.user, 'is_staff', False) or user_role == 'backoffice':
+            return queryset
+        if self.request.method in ('GET', 'HEAD', 'OPTIONS') and user_role == 'corretor':
+            return queryset.only('id', 'name', 'email', 'type', 'is_validated', 'phone', 'company')
+        return User.objects.none()
+
+    def get_serializer_class(self):
+        market_user = get_market_user(self.request)
+        if self.request.method in ('GET', 'HEAD', 'OPTIONS') and getattr(market_user, 'type', None) == 'corretor':
+            return BrokerUserSummarySerializer
+        return UserSerializer
+
     def create(self, request, *args, **kwargs):
         data = request.data.copy()
         data.pop('password', None)
@@ -1205,6 +1258,7 @@ class PublicBrokerOfferCreateView(APIView):
         accept_terms = validated_data.pop('accept_terms', False)
         accept_privacy = validated_data.pop('accept_privacy', False)
         legal_version = validated_data.pop('legal_version', LEGAL_DOCUMENT_VERSION)
+        enforce_legal_acceptance(accept_terms=accept_terms, accept_privacy=accept_privacy)
         target_type = 'comprador' if validated_data['offer_type'] == 'compra' else 'vendedor'
 
         existing_user = User.objects.filter(email=email).first()
@@ -1474,6 +1528,7 @@ class RegisterView(APIView):
         accept_terms = parse_request_bool(data.pop('accept_terms', False))
         accept_privacy = parse_request_bool(data.pop('accept_privacy', False))
         legal_version = data.pop('legal_version', LEGAL_DOCUMENT_VERSION)
+        enforce_legal_acceptance(accept_terms=accept_terms, accept_privacy=accept_privacy)
         if isinstance(legal_version, (list, tuple)):
             legal_version = legal_version[0] if legal_version else LEGAL_DOCUMENT_VERSION
         data['type'] = role
@@ -1525,6 +1580,14 @@ class ForgotPasswordRequestView(APIView):
                 user=market_user,
                 expires_at=timezone.now() + PASSWORD_RESET_TOKEN_TTL,
             )
+            try:
+                send_password_reset_email(market_user, reset_token)
+            except Exception:
+                logger.exception('Falha ao enviar e-mail de redefinicao de senha para usuario %s.', market_user.id)
+                reset_token.delete()
+                if getattr(settings, 'DEBUG', False):
+                    raise
+                reset_token = None
 
         return Response(build_password_reset_response_payload(reset_token), status=status.HTTP_200_OK)
 

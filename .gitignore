@@ -8,8 +8,10 @@ coverage/
 *.log
 .env*
 !.env.example
+!backend/.env.example
 frontend/.env*
 !frontend/.env.example
+!frontend/.env.production.example
 __pycache__/
 */__pycache__/
 backend/db.sqlite3

@@ -1,7 +1,12 @@
 import uuid
 
 from django.db import models
+from django.db.models import Q
 from django.utils import timezone
+
+
+def only_digits(value):
+    return ''.join(char for char in str(value or '') if char.isdigit())
 
 
 class User(models.Model):
@@ -21,6 +26,7 @@ class User(models.Model):
     profile_segment = models.CharField(max_length=40, blank=True)
     document_type = models.CharField(max_length=10, blank=True)
     document_number = models.CharField(max_length=30, blank=True)
+    document_number_digits = models.CharField(max_length=14, blank=True, db_index=True)
     state_registration = models.CharField(max_length=30, blank=True)
     address_zip_code = models.CharField(max_length=12, blank=True)
     address_street = models.CharField(max_length=160, blank=True)
@@ -45,7 +51,17 @@ class User(models.Model):
     def save(self, *args, **kwargs):
         if not self.broker_link_token:
             self.broker_link_token = uuid.uuid4()
+        self.document_number_digits = only_digits(self.document_number)[:14]
         super().save(*args, **kwargs)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['document_number_digits'],
+                condition=~Q(document_number_digits=''),
+                name='unique_user_document_number_digits',
+            )
+        ]
 
 
 class PasswordResetToken(models.Model):
