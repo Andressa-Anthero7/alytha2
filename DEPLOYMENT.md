@@ -128,5 +128,6 @@ Depois de publicar, testar manualmente:
 ## AWS EC2
 
 Para EC2 Ubuntu com Nginx, Gunicorn e systemd, usar o roteiro em `deploy/aws-ec2/README.md`.
+Se a instancia ja tem Nginx, dominio e SSL com pagina de "aguarde inauguracao", usar o snippet `deploy/aws-ec2/nginx-existing-ssl-snippet.conf` dentro do server block HTTPS existente.
 
 Recomendacao profissional: usar EC2 para aplicacao e AWS RDS PostgreSQL para banco. Se o PostgreSQL ficar na propria EC2 no inicio, manter backup diario externo em S3 e planejar migracao para RDS.

@@ -126,7 +126,9 @@ journalctl -u alytha -f
 
 ## Nginx e HTTPS
 
-Antes do certificado, apontar o DNS `plataforma.alytha.agr.br` para o Elastic IP da EC2.
+Se a EC2 ainda nao tiver Nginx/SSL, use o fluxo completo abaixo. Se ela ja tem a pagina de "aguarde inauguracao" com dominio e certificado ativo, pule para "Aproveitar Nginx/SSL existente".
+
+Antes do certificado novo, apontar o DNS `plataforma.alytha.agr.br` para o Elastic IP da EC2.
 
 Instalar config:
 
@@ -143,6 +145,45 @@ sudo certbot --nginx -d plataforma.alytha.agr.br
 sudo nginx -t
 sudo systemctl reload nginx
 ```
+
+### Aproveitar Nginx/SSL existente
+
+Como o dominio e o certificado ja estao funcionando na instancia, nao rode `certbot` de novo sem necessidade. O caminho mais seguro e editar o server block HTTPS atual da pagina de "aguarde inauguracao".
+
+1. Localize o arquivo ativo:
+
+```bash
+sudo nginx -T | grep -n "server_name plataforma.alytha.agr.br" -B 20 -A 80
+ls -la /etc/nginx/sites-enabled/
+```
+
+2. Faca backup da configuracao atual:
+
+```bash
+sudo cp /etc/nginx/sites-available/SEU_ARQUIVO_ATUAL /etc/nginx/sites-available/SEU_ARQUIVO_ATUAL.backup-$(date +%F-%H%M)
+```
+
+3. Dentro do `server { listen 443 ssl ... }` existente, substitua o bloco que aponta para a pagina de aguarde pelo conteudo de:
+
+```bash
+/srv/alytha/deploy/aws-ec2/nginx-existing-ssl-snippet.conf
+```
+
+4. Mantenha as linhas atuais de certificado, por exemplo:
+
+```nginx
+ssl_certificate /etc/letsencrypt/live/plataforma.alytha.agr.br/fullchain.pem;
+ssl_certificate_key /etc/letsencrypt/live/plataforma.alytha.agr.br/privkey.pem;
+```
+
+5. Valide e recarregue:
+
+```bash
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+6. Se precisar voltar para a pagina de aguarde, restaure o backup e recarregue o Nginx.
 
 ## Checklist final
 
