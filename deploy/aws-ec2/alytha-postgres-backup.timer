@@ -1,0 +1,10 @@
+[Unit]
+Description=Run Alytha PostgreSQL backup daily
+
+[Timer]
+OnCalendar=*-*-* 03:10:00
+Persistent=true
+Unit=alytha-postgres-backup.service
+
+[Install]
+WantedBy=timers.target

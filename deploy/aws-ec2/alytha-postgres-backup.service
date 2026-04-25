@@ -1,0 +1,8 @@
+[Unit]
+Description=Alytha PostgreSQL backup
+
+[Service]
+Type=oneshot
+User=ubuntu
+EnvironmentFile=-/srv/alytha/backend/.env
+ExecStart=/srv/alytha/deploy/aws-ec2/backup-postgres.sh

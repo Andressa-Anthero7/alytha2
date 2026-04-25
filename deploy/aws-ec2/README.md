@@ -1,36 +1,61 @@
 # Deploy Alytha em AWS EC2
 
-Este roteiro assume Ubuntu 22.04/24.04 na EC2, domínio `plataforma.alytha.agr.br`, Nginx servindo o frontend e Gunicorn servindo o Django em `127.0.0.1:8000`.
+Roteiro para Ubuntu 22.04/24.04 em EC2, dominio `plataforma.alytha.agr.br`, Nginx ja instalado com SSL ativo, frontend estatico e Django/Gunicorn em `127.0.0.1:8000`.
 
-## Arquitetura recomendada
+## Arquitetura escolhida
 
-- EC2: aplicação Django + build estático do frontend + Nginx.
-- PostgreSQL: preferencialmente AWS RDS PostgreSQL.
+- EC2: Django + Gunicorn + Nginx + build estatico do frontend.
+- PostgreSQL: dentro da propria EC2 para reduzir custo inicial.
 - SMTP: AWS SES, Google Workspace, SendGrid, Mailgun ou outro provedor SMTP real.
-- Backup: RDS automated backups ou `pg_dump` diário para S3.
+- Backup: `pg_dump` diario, com copia externa em S3 quando possivel.
 
-Se o orçamento exigir, PostgreSQL pode rodar na própria EC2 no começo, mas RDS é mais seguro para produção.
+RDS e mais seguro, mas PostgreSQL local atende o inicio se a porta `5432` nao for exposta e se existir backup externo.
 
 ## Security group
 
 Liberar entrada:
 
 - `22/tcp`: SSH, restrito ao seu IP.
-- `80/tcp`: HTTP público, necessário para Let's Encrypt.
-- `443/tcp`: HTTPS público.
+- `80/tcp`: HTTP publico, ja usado pelo Nginx/Let's Encrypt.
+- `443/tcp`: HTTPS publico.
 
-Não expor `5432/tcp` publicamente. Se usar RDS, liberar o RDS apenas para o security group da EC2.
+Nao liberar `5432/tcp` publicamente. O Django deve acessar o PostgreSQL por `127.0.0.1:5432`.
 
 ## Preparar servidor
 
 ```bash
 sudo apt update
-sudo apt install -y python3-venv python3-pip nginx git nodejs npm certbot python3-certbot-nginx
+sudo apt install -y python3-venv python3-pip nginx git nodejs npm certbot python3-certbot-nginx postgresql-client
 sudo mkdir -p /srv/alytha
 sudo chown -R ubuntu:www-data /srv/alytha
 ```
 
 Clonar ou copiar o projeto para `/srv/alytha`.
+
+## PostgreSQL local na EC2
+
+Instalar e criar o banco local:
+
+```bash
+cd /srv/alytha
+export ALYTHA_DB_NAME=alytha
+export ALYTHA_DB_USER=alytha
+export ALYTHA_DB_PASSWORD='troque-por-uma-senha-forte-do-banco'
+bash deploy/aws-ec2/setup-local-postgres.sh
+```
+
+Depois coloque no `/srv/alytha/backend/.env`:
+
+```env
+DATABASE_URL=postgresql://alytha:troque-por-uma-senha-forte-do-banco@127.0.0.1:5432/alytha
+DJANGO_DB_CONN_MAX_AGE=60
+```
+
+Regras importantes:
+
+- Nao abrir porta `5432` no Security Group.
+- Nao configurar PostgreSQL para escutar IP publico.
+- Fazer backup diario e copiar para fora da EC2, preferencialmente S3.
 
 ## Backend
 
@@ -44,7 +69,7 @@ pip install -r requirements.txt
 
 Criar `/srv/alytha/backend/.env` baseado em `backend/.env.example`.
 
-Campos obrigatórios para EC2:
+Campos obrigatorios para EC2:
 
 ```env
 DJANGO_ENV=production
@@ -53,7 +78,7 @@ DJANGO_SECRET_KEY=gere-uma-chave-longa-e-aleatoria
 DJANGO_ALLOWED_HOSTS=plataforma.alytha.agr.br
 DJANGO_CORS_ALLOWED_ORIGINS=https://plataforma.alytha.agr.br
 DJANGO_CSRF_TRUSTED_ORIGINS=https://plataforma.alytha.agr.br
-DATABASE_URL=postgresql://usuario:senha@host-rds-ou-local:5432/alytha
+DATABASE_URL=postgresql://alytha:senha-forte@127.0.0.1:5432/alytha
 ALYTHA_PUBLIC_SITE_URL=https://plataforma.alytha.agr.br
 ALYTHA_SHARE_IMAGE_URL=https://plataforma.alytha.agr.br/logo.png
 ALYTHA_EXPOSE_PASSWORD_RESET_TOKEN=false
@@ -74,6 +99,9 @@ DJANGO_SECURE_PROXY_SSL_HEADER=true
 ALYTHA_INITIAL_BACKOFFICE_EMAIL=admin@alytha.agr.br
 ALYTHA_INITIAL_BACKOFFICE_NAME=Backoffice Alytha
 ALYTHA_INITIAL_BACKOFFICE_PASSWORD=senha-forte-inicial
+ALYTHA_BACKUP_DIR=/srv/alytha/backups/postgres
+ALYTHA_BACKUP_RETENTION_DAYS=30
+ALYTHA_BACKUP_S3_URI=s3://seu-bucket-backup-alytha/postgres
 ```
 
 Aplicar banco e criar backoffice inicial:
@@ -88,7 +116,7 @@ python manage.py collectstatic --noinput
 
 ## Frontend
 
-Na máquina de build ou na própria EC2:
+Na EC2 ou em uma maquina de build:
 
 ```bash
 cd /srv/alytha/frontend
@@ -108,7 +136,7 @@ VITE_SHARE_BASE_URL=https://plataforma.alytha.agr.br
 
 ## Gunicorn/systemd
 
-Copiar serviço:
+Copiar servico:
 
 ```bash
 sudo cp /srv/alytha/deploy/aws-ec2/alytha.service /etc/systemd/system/alytha.service
@@ -124,29 +152,7 @@ Logs:
 journalctl -u alytha -f
 ```
 
-## Nginx e HTTPS
-
-Se a EC2 ainda nao tiver Nginx/SSL, use o fluxo completo abaixo. Se ela ja tem a pagina de "aguarde inauguracao" com dominio e certificado ativo, pule para "Aproveitar Nginx/SSL existente".
-
-Antes do certificado novo, apontar o DNS `plataforma.alytha.agr.br` para o Elastic IP da EC2.
-
-Instalar config:
-
-```bash
-sudo cp /srv/alytha/deploy/aws-ec2/nginx-alytha.conf /etc/nginx/sites-available/alytha
-sudo ln -s /etc/nginx/sites-available/alytha /etc/nginx/sites-enabled/alytha
-sudo nginx -t
-```
-
-Gerar certificado:
-
-```bash
-sudo certbot --nginx -d plataforma.alytha.agr.br
-sudo nginx -t
-sudo systemctl reload nginx
-```
-
-### Aproveitar Nginx/SSL existente
+## Nginx e SSL existente
 
 Como o dominio e o certificado ja estao funcionando na instancia, nao rode `certbot` de novo sem necessidade. O caminho mais seguro e editar o server block HTTPS atual da pagina de "aguarde inauguracao".
 
@@ -169,7 +175,7 @@ sudo cp /etc/nginx/sites-available/SEU_ARQUIVO_ATUAL /etc/nginx/sites-available/
 /srv/alytha/deploy/aws-ec2/nginx-existing-ssl-snippet.conf
 ```
 
-4. Mantenha as linhas atuais de certificado, por exemplo:
+4. Mantenha as linhas atuais de certificado:
 
 ```nginx
 ssl_certificate /etc/letsencrypt/live/plataforma.alytha.agr.br/fullchain.pem;
@@ -184,6 +190,32 @@ sudo systemctl reload nginx
 ```
 
 6. Se precisar voltar para a pagina de aguarde, restaure o backup e recarregue o Nginx.
+
+## Backup PostgreSQL
+
+Valide manualmente:
+
+```bash
+bash /srv/alytha/deploy/aws-ec2/backup-postgres.sh
+```
+
+Depois instale o timer systemd:
+
+```bash
+sudo cp /srv/alytha/deploy/aws-ec2/alytha-postgres-backup.service /etc/systemd/system/
+sudo cp /srv/alytha/deploy/aws-ec2/alytha-postgres-backup.timer /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now alytha-postgres-backup.timer
+systemctl list-timers | grep alytha-postgres-backup
+```
+
+Para enviar para S3, instale/configure AWS CLI e defina no `.env`:
+
+```env
+ALYTHA_BACKUP_S3_URI=s3://seu-bucket-backup-alytha/postgres
+```
+
+Se ainda nao tiver S3, manter backup local temporariamente, mas nao considerar isso suficiente para producao por muito tempo.
 
 ## Checklist final
 
@@ -202,16 +234,4 @@ Validar no navegador:
 - `https://plataforma.alytha.agr.br/mesa-operacional`
 - `https://plataforma.alytha.agr.br/share/oportunidades/1`
 
-## Backup
-
-Se usar RDS, habilitar backup automático com retenção mínima de 30 dias.
-
-Se usar PostgreSQL na EC2, instalar AWS CLI e agendar `pg_dump` para S3. Exemplo:
-
-```bash
-mkdir -p /srv/alytha/backups
-pg_dump "$DATABASE_URL" --format=custom --file="/srv/alytha/backups/alytha-$(date +%F-%H%M).dump"
-aws s3 cp /srv/alytha/backups/ s3://seu-bucket-backup-alytha/ --recursive
-```
-
-Restaurar mensalmente em banco separado para validar os backups.
+Restaurar backup mensalmente em banco separado para validar os arquivos `.dump`.
