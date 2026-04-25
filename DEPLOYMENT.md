@@ -124,3 +124,9 @@ Depois de publicar, testar manualmente:
 - Criar credenciais SMTP reais e validar com `check_smtp`.
 - Configurar DNS/HTTPS para `plataforma.alytha.agr.br`.
 - Configurar backup diario com `pg_dump` ou backup gerenciado do provedor.
+
+## AWS EC2
+
+Para EC2 Ubuntu com Nginx, Gunicorn e systemd, usar o roteiro em `deploy/aws-ec2/README.md`.
+
+Recomendacao profissional: usar EC2 para aplicacao e AWS RDS PostgreSQL para banco. Se o PostgreSQL ficar na propria EC2 no inicio, manter backup diario externo em S3 e planejar migracao para RDS.
