@@ -187,8 +187,13 @@ const normalizeRoleSlug = (roleSlug?: string): RoleSlug => {
 };
 
 const getWhatsAppLocalDigits = (value: string) => {
-  const digits = value.replace(/\D/g, '');
-  const localDigits = digits.startsWith('55') && digits.length > 11 ? digits.slice(2) : digits;
+  const rawValue = String(value || '');
+  const digits = rawValue.replace(/\D/g, '');
+  const trimmedValue = rawValue.trim();
+  const hasCountryCode =
+    trimmedValue.startsWith('+55')
+    || (digits.startsWith('55') && digits.length > 11);
+  const localDigits = hasCountryCode ? digits.slice(2) : digits;
   return localDigits.slice(0, 11);
 };
 
