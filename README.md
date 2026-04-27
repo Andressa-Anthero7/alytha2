@@ -27,8 +27,9 @@ Dentro de `frontend/`:
 
 ## Variaveis de ambiente
 Copiar `frontend/.env.example` para `frontend/.env` e ajustar:
-- `VITE_API_URL` (opcional) - base da API em producao. Padrao `/api` (usa proxy local).
+- `VITE_API_BASE_URL` (opcional) - base da API em producao. Padrao `/api` (usa proxy local).
 - `VITE_API_PROXY_TARGET` (opcional) - URL de proxy no dev. Padrao `http://localhost:8000`.
+- `VITE_GOOGLE_ANALYTICS_ID` (opcional) - ID da tag do Google Analytics/Google tag, por exemplo `G-XXXXXXXXXX`.
 - `GEMINI_API_KEY` - apenas se voce usar integracoes Gemini ja existentes.
 
 ## Credenciais de demonstracao

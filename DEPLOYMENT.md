@@ -107,6 +107,8 @@ No frontend, antes de enviar o build:
 ```bash
 cd frontend
 npm ci
+# Se ainda nao existir: cp .env.production.example .env.production
+# Ajustar VITE_GOOGLE_ANALYTICS_ID em .env.production antes do build, quando aplicavel.
 npm run lint
 npm run build
 ```

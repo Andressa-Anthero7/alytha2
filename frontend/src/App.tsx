@@ -24,6 +24,7 @@ import ProfilePage from './pages/ProfilePage';
 import PublicMarketplaceOfferPage from './pages/PublicMarketplaceOfferPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
 import SellerLandingPage from './pages/SellerLandingPage';
+import { trackGoogleAnalyticsPageView } from './shared/analytics';
 
 const footerHiddenPaths = [
   '/app/admin/backoffice',
@@ -45,6 +46,10 @@ export default function App() {
 
     return () => window.clearTimeout(timeoutId);
   }, [location.pathname]);
+
+  useEffect(() => {
+    trackGoogleAnalyticsPageView(`${location.pathname}${location.search}${location.hash}`);
+  }, [location.hash, location.pathname, location.search]);
 
   return (
     <>

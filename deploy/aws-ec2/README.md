@@ -137,6 +137,7 @@ Confirmar que `.env.production` aponta para:
 VITE_API_BASE_URL=https://plataforma.alytha.agr.br/api
 VITE_PUBLIC_SITE_URL=https://plataforma.alytha.agr.br
 VITE_SHARE_BASE_URL=https://plataforma.alytha.agr.br
+VITE_GOOGLE_ANALYTICS_ID=G-XXXXXXXXXX
 ```
 
 ## Gunicorn/systemd
