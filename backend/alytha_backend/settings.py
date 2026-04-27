@@ -153,11 +153,13 @@ WSGI_APPLICATION = 'alytha_backend.wsgi.application'
 
 DATABASE_URL = os.environ.get('DATABASE_URL')
 DATABASES = {
-    'default': database_from_url(DATABASE_URL)
-    if DATABASE_URL
-    else {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+    'default': {
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': 'alytha',
+        'USER': 'alytha_user',
+        'PASSWORD': 'alythadb1985',
+        'HOST': 'localhost',
+        'PORT': '5432',
     }
 }
 DATABASES['default']['CONN_MAX_AGE'] = env_int('DJANGO_DB_CONN_MAX_AGE', 60 if IS_PRODUCTION else 0)
