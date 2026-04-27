@@ -20,6 +20,7 @@ from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied, ValidationError as DRFValidationError
 from rest_framework.permissions import BasePermission, IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
 from .models import Negotiation, Offer, PasswordResetToken, User
@@ -981,7 +982,7 @@ class UserViewSet(viewsets.ModelViewSet):
                 user = serializer.save()
                 sync_auth_user_for_market_user(market_user=user, password=password)
         except IntegrityError:
-            return Response({'detail': 'e-mail jÃ¡ cadastrado'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'detail': 'e-mail já cadastrado'}, status=status.HTTP_400_BAD_REQUEST)
 
         headers = self.get_success_headers(serializer.data)
         return Response(self.get_serializer(user).data, status=status.HTTP_201_CREATED, headers=headers)
@@ -1007,7 +1008,7 @@ class UserViewSet(viewsets.ModelViewSet):
                     password=password or None,
                 )
         except IntegrityError:
-            return Response({'detail': 'e-mail jÃ¡ cadastrado'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'detail': 'e-mail já cadastrado'}, status=status.HTTP_400_BAD_REQUEST)
 
         return Response(self.get_serializer(user).data)
 
@@ -1244,6 +1245,8 @@ class OfferViewSet(viewsets.ModelViewSet):
 
 class PublicBrokerOfferCreateView(APIView):
     permission_classes = []
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'public_broker_offer'
 
     def post(self, request, token):
         broker = get_object_or_404(User, broker_link_token=token, type='corretor')
@@ -1505,7 +1508,7 @@ class NegotiationViewSet(viewsets.ModelViewSet):
 
 class RegisterView(APIView):
     """
-    Registra usuários por tipo: comprador, vendedor, corretor, transportador (corretor), armazenagem (backoffice).
+    Registra usuários públicos por tipo: comprador, vendedor, corretor e transportador (corretor).
     """
 
     ROLE_MAP = {
@@ -1514,13 +1517,19 @@ class RegisterView(APIView):
         'cliente': 'vendedor',
         'corretor': 'corretor',
         'transportador': 'corretor',
-        'armazenagem': 'backoffice',
-        'backoffice': 'backoffice',
     }
+    BLOCKED_PUBLIC_ROLE_SLUGS = {'armazenagem', 'backoffice'}
 
     permission_classes = []
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'auth_register'
 
     def post(self, request, role_slug):
+        if role_slug in self.BLOCKED_PUBLIC_ROLE_SLUGS:
+            return Response(
+                {'detail': 'Cadastro de backoffice deve ser criado por um administrador.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         role = self.ROLE_MAP.get(role_slug)
         if not role:
             return Response({'detail': 'tipo inválido'}, status=status.HTTP_400_BAD_REQUEST)
@@ -1565,6 +1574,8 @@ class RegisterView(APIView):
 
 class ForgotPasswordRequestView(APIView):
     permission_classes = []
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'password_reset'
 
     def post(self, request):
         serializer = PasswordResetRequestSerializer(data=request.data)
@@ -1594,6 +1605,8 @@ class ForgotPasswordRequestView(APIView):
 
 class ForgotPasswordConfirmView(APIView):
     permission_classes = []
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'password_reset_confirm'
 
     def post(self, request):
         serializer = PasswordResetConfirmSerializer(data=request.data)
@@ -1631,6 +1644,8 @@ class LoginView(APIView):
     """
 
     permission_classes = []
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'auth_login'
 
     def post(self, request):
         email = str(request.data.get('email') or '').strip()

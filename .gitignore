@@ -1,24 +1,59 @@
+# Dependencies
 node_modules/
 frontend/node_modules/
+backend/.venv/
+backend/alytha_dev_venv/
+.venv/
+venv/
+
+# Build outputs
 build/
 dist/
 frontend/dist/
-coverage/
-.DS_Store
-*.log
-.env*
+backend/staticfiles/
+
+# Environment files and secrets
+.env
+.env.*
+backend/.env
+backend/.env.*
+frontend/.env
+frontend/.env.*
 !.env.example
 !backend/.env.example
 !backend/.env.postgres.example
-frontend/.env*
 !frontend/.env.example
 !frontend/.env.production.example
+
+# Databases and backups
+backend/db.sqlite3
+*.sqlite3
+*.sqlite
+*.dump
+backups/
+backend/backups/
+
+# Logs
+*.log
+*.err.log
+
+# Python cache and test artifacts
 __pycache__/
 */__pycache__/
-backend/db.sqlite3
-backend/.venv/
-backend/db.sqlite3
-backend/.venv/
-backend/alytha_dev_venv/
-__pycache__/
-*/__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Frontend/cache artifacts
+coverage/
+.vite/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# OS/editor noise
+.DS_Store
+Thumbs.db

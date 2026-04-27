@@ -219,6 +219,13 @@ REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',
     ),
+    'DEFAULT_THROTTLE_RATES': {
+        'auth_login': os.environ.get('DJANGO_THROTTLE_AUTH_LOGIN', '20/min'),
+        'auth_register': os.environ.get('DJANGO_THROTTLE_AUTH_REGISTER', '30/hour'),
+        'password_reset': os.environ.get('DJANGO_THROTTLE_PASSWORD_RESET', '5/hour'),
+        'password_reset_confirm': os.environ.get('DJANGO_THROTTLE_PASSWORD_RESET_CONFIRM', '20/hour'),
+        'public_broker_offer': os.environ.get('DJANGO_THROTTLE_PUBLIC_BROKER_OFFER', '30/hour'),
+    },
 }
 
 DEVELOPMENT_ORIGINS = [

@@ -1,8 +1,10 @@
 ﻿from decimal import Decimal
 
+from django.core.cache import cache
 from django.core.management import call_command
 from django.test import override_settings
 from rest_framework.test import APITestCase
+from rest_framework.throttling import ScopedRateThrottle
 from django.urls import reverse
 from django.contrib.auth import get_user_model
 
@@ -49,6 +51,7 @@ class PublicMarketplaceOfferShareTests(APITestCase):
 class ValidatedRegistrationAPITestCase(APITestCase):
     def setUp(self):
         super().setUp()
+        cache.clear()
         self._raw_post = self.client.post
 
         def wrapped_post(path, data=None, *args, **kwargs):
@@ -146,6 +149,22 @@ class AuthFlowTests(ValidatedRegistrationAPITestCase):
             format='json',
         )
         self.assertEqual(allowed_login.status_code, 200)
+
+    def test_public_register_rejects_privileged_roles(self):
+        for role_slug in ('backoffice', 'armazenagem'):
+            response = self.register_without_auto_validation(
+                role_slug,
+                {
+                    'name': f'Privileged {role_slug}',
+                    'email': f'{role_slug}@test.com',
+                    'password': 'SenhaPendente123!',
+                },
+            )
+
+            self.assertEqual(response.status_code, 403)
+            self.assertEqual(response.data['detail'], 'Cadastro de backoffice deve ser criado por um administrador.')
+
+        self.assertFalse(User.objects.filter(type='backoffice').exists())
 
     def test_broker_can_match_negotiation(self):
         # create seller
@@ -981,6 +1000,59 @@ class AuthFlowTests(ValidatedRegistrationAPITestCase):
         self.assertEqual(user.email, 'perfil.vendedor@test.com')
 
 
+class PublicEndpointThrottleTests(APITestCase):
+    def setUp(self):
+        super().setUp()
+        self.original_throttle_rates = ScopedRateThrottle.THROTTLE_RATES.copy()
+        ScopedRateThrottle.THROTTLE_RATES.update(
+            {
+                'auth_login': '2/min',
+                'password_reset': '2/min',
+            }
+        )
+        cache.clear()
+
+    def tearDown(self):
+        ScopedRateThrottle.THROTTLE_RATES.clear()
+        ScopedRateThrottle.THROTTLE_RATES.update(self.original_throttle_rates)
+        cache.clear()
+        super().tearDown()
+
+    def test_login_is_throttled_after_configured_rate(self):
+        for _ in range(2):
+            response = self.client.post(
+                '/api/login/',
+                {'email': 'missing@test.com', 'password': 'SenhaInvalida123!'},
+                format='json',
+            )
+            self.assertEqual(response.status_code, 401)
+
+        throttled = self.client.post(
+            '/api/login/',
+            {'email': 'missing@test.com', 'password': 'SenhaInvalida123!'},
+            format='json',
+        )
+
+        self.assertEqual(throttled.status_code, 429)
+
+    def test_password_reset_request_is_throttled_after_configured_rate(self):
+        for _ in range(2):
+            response = self.client.post(
+                '/api/forgot-password/request/',
+                {'email': 'missing@test.com'},
+                format='json',
+            )
+            self.assertEqual(response.status_code, 200)
+
+        throttled = self.client.post(
+            '/api/forgot-password/request/',
+            {'email': 'missing@test.com'},
+            format='json',
+        )
+
+        self.assertEqual(throttled.status_code, 429)
+
+
 class SeedDemoCommandTests(APITestCase):
     def test_seed_demo_creates_three_buy_and_three_sell_per_grain(self):
         call_command('seed_demo')
@@ -1538,6 +1610,22 @@ class MarketplaceRulesTests(ValidatedRegistrationAPITestCase):
 
 
 class BackofficeManagementTests(ValidatedRegistrationAPITestCase):
+    def create_backoffice_user(self, name, email, password='SenhaForte123!'):
+        User.objects.create(
+            name=name,
+            email=email,
+            type='backoffice',
+            is_validated=True,
+        )
+        get_user_model().objects.create_user(
+            username=email,
+            email=email,
+            password=password,
+            first_name=name,
+            is_staff=True,
+            is_superuser=True,
+        )
+
     def register_user(self, role, name, email, password='SenhaForte123!'):
         response = self.client.post(
             reverse('register', args=[role]),
@@ -1559,7 +1647,7 @@ class BackofficeManagementTests(ValidatedRegistrationAPITestCase):
 
     def test_backoffice_can_create_update_and_delete_users_with_auth_sync(self):
         auth_user_model = get_user_model()
-        self.register_user('backoffice', 'Backoffice Manager', 'backoffice.manager@test.com')
+        self.create_backoffice_user('Backoffice Manager', 'backoffice.manager@test.com')
         self.login('backoffice.manager@test.com')
 
         create_response = self.client.post(
@@ -1618,7 +1706,7 @@ class BackofficeManagementTests(ValidatedRegistrationAPITestCase):
         self.assertFalse(auth_user_model.objects.filter(username='broker.ops.senior@test.com').exists())
 
     def test_backoffice_can_create_offer_and_manage_negotiation_status(self):
-        self.register_user('backoffice', 'Backoffice Desk', 'backoffice.desk@test.com')
+        self.create_backoffice_user('Backoffice Desk', 'backoffice.desk@test.com')
         self.register_user('vendedor', 'Seller Managed', 'seller.managed@test.com')
         self.register_user('comprador', 'Buyer Managed', 'buyer.managed@test.com')
         self.login('backoffice.desk@test.com')

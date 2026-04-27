@@ -79,6 +79,8 @@ pg_restore --clean --if-exists --dbname "$DATABASE_URL_TESTE_RESTORE" backups/ar
 - Usar HTTPS em todo o dominio `plataforma.alytha.agr.br`.
 - Manter `DJANGO_ALLOWED_HOSTS`, `DJANGO_CORS_ALLOWED_ORIGINS` e `DJANGO_CSRF_TRUSTED_ORIGINS` restritos ao dominio oficial.
 - Configurar SMTP real para recuperacao de senha. O token de redefinicao nunca deve ser exibido em resposta publica em producao.
+- Manter throttling ativo para login, cadastro publico, recuperacao de senha e envio por link de corretor.
+- Criar usuarios de backoffice apenas pelo comando `ensure_backoffice_user` ou por usuario administrativo autenticado; nunca por cadastro publico.
 
 ## Release
 
