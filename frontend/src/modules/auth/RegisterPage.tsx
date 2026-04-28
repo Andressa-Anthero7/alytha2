@@ -202,22 +202,26 @@ const formatWhatsApp = (value: string) => {
   if (!localDigits) return '';
 
   const areaCode = localDigits.slice(0, 2);
-  const firstPart = localDigits.slice(2, 7);
-  const secondPart = localDigits.slice(7, 11);
+  const phoneDigits = localDigits.slice(2);
+  const firstPartSize = phoneDigits.length > 8 ? 5 : 4;
+  const firstPart = phoneDigits.slice(0, firstPartSize);
+  const secondPart = phoneDigits.slice(firstPartSize);
 
   if (localDigits.length <= 2) return `+55 (${areaCode}`;
-  if (localDigits.length <= 7) return `+55 (${areaCode}) ${firstPart}`;
+  if (phoneDigits.length <= firstPartSize) return `+55 (${areaCode}) ${firstPart}`;
   return `+55 (${areaCode}) ${firstPart}-${secondPart}`;
 };
 
 const validateWhatsApp = (value: string) => {
   const localDigits = getWhatsAppLocalDigits(value);
   const areaCode = localDigits.slice(0, 2);
+  const hasValidLength = localDigits.length === 10 || localDigits.length === 11;
+  const hasValidMobilePrefix = localDigits.length === 10 || localDigits[2] === '9';
   const repeatedDigits = /^(\d)\1+$/.test(localDigits);
 
   return {
     formatted: formatWhatsApp(localDigits),
-    isValid: localDigits.length === 11 && brazilMobileAreaCodes.has(areaCode) && localDigits[2] === '9' && !repeatedDigits,
+    isValid: hasValidLength && brazilMobileAreaCodes.has(areaCode) && hasValidMobilePrefix && !repeatedDigits,
   };
 };
 
@@ -350,7 +354,7 @@ export function RegisterPage({ routeBase }: RegisterPageProps) {
     const whatsapp = validateWhatsApp(form.phone);
     if (!whatsapp.isValid) {
       setSubmitting(false);
-      setError('Informe um WhatsApp valido com DDD e 9 digitos. Ex.: +55 (16) 99999-9999.');
+      setError('Informe um WhatsApp valido com DDD e 8 ou 9 digitos. Ex.: +55 (16) 9999-9999 ou +55 (16) 99999-9999.');
       return;
     }
 
@@ -516,7 +520,7 @@ export function RegisterPage({ routeBase }: RegisterPageProps) {
                   onChange={(event) => updateField('phone', formatWhatsApp(event.target.value))}
                   className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition-colors focus:border-emerald-500 focus:bg-white"
                 />
-                <p className="text-xs leading-5 text-slate-500">Use um WhatsApp brasileiro com DDD. O numero deve ser celular e comecar com 9.</p>
+                <p className="text-xs leading-5 text-slate-500">Use um WhatsApp brasileiro com DDD. Aceitamos numeros com 8 ou 9 digitos.</p>
               </label>
 
               <label className="block space-y-2">

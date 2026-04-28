@@ -40,6 +40,7 @@ export default function Navbar() {
   const user = getCurrentUser<User>();
   const loggedIn = isAuthenticated() && Boolean(user);
   const dashboardHref = getPrimaryAppPath(user);
+  const showHomeSignupCta = !loggedIn && (location.pathname === HOME_PATH || location.pathname === '/');
   const visibleNavItems = navItems.filter((item) => !loggedIn || canAccessProfileContent(user, item.allowedTypes || profileNavAllowedTypes[item.to]));
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
@@ -127,13 +128,22 @@ export default function Navbar() {
               </button>
             </>
           ) : (
-            <Link
-              to="/login"
-              className="inline-flex items-center gap-2 rounded-full bg-emerald-600 px-5 py-2.5 text-white shadow-lg shadow-emerald-600/25 hover:bg-emerald-700"
-            >
-              Entrar
-              <ArrowRight className="h-4 w-4" />
-            </Link>
+            <>
+              {showHomeSignupCta ? (
+                <Link to="/login" className="rounded-full px-4 py-2.5 text-slate-600 hover:bg-slate-100 hover:text-slate-900">
+                  Entrar
+                </Link>
+              ) : null}
+              <Link
+                to={showHomeSignupCta ? '/cadastro' : '/login'}
+                className={`inline-flex items-center gap-2 rounded-full bg-emerald-600 px-5 py-2.5 text-white shadow-lg shadow-emerald-600/25 hover:bg-emerald-700 ${
+                  showHomeSignupCta ? 'animate-signup-blink' : ''
+                }`}
+              >
+                {showHomeSignupCta ? 'Inscreva-se' : 'Entrar'}
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+            </>
           )}
         </nav>
 
@@ -191,14 +201,27 @@ export default function Navbar() {
                 </button>
               </>
             ) : (
-              <Link
-                to="/login"
-                onClick={closeMobileMenu}
-                className="inline-flex items-center justify-center gap-2 rounded-full bg-emerald-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-emerald-600/25"
-              >
-                Entrar
-                <ArrowRight className="h-4 w-4" />
-              </Link>
+              <>
+                {showHomeSignupCta ? (
+                  <Link
+                    to="/login"
+                    onClick={closeMobileMenu}
+                    className="inline-flex items-center justify-center rounded-full px-4 py-3 text-sm font-semibold text-slate-600"
+                  >
+                    Entrar
+                  </Link>
+                ) : null}
+                <Link
+                  to={showHomeSignupCta ? '/cadastro' : '/login'}
+                  onClick={closeMobileMenu}
+                  className={`inline-flex items-center justify-center gap-2 rounded-full bg-emerald-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-emerald-600/25 ${
+                    showHomeSignupCta ? 'animate-signup-blink' : ''
+                  }`}
+                >
+                  {showHomeSignupCta ? 'Inscreva-se' : 'Entrar'}
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
+              </>
             )}
           </div>
         </div>
