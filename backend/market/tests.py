@@ -744,13 +744,14 @@ class AuthFlowTests(ValidatedRegistrationAPITestCase):
             'location': 'Rio Verde - GO',
             'crop': '24/25',
             'shipping': 'FOB',
-            'quality': {'notes': 'Padrão exportação'},
+            'quality': {'notes': 'Padrão exportação', 'damagedSoybean': True},
             'paymentTerms': 'À vista'
         }, format='json')
 
         self.assertEqual(res.status_code, 201)
         offer = Offer.objects.get(id=res.data['id'])
         self.assertEqual(offer.user.email, 'seller.self@test.com')
+        self.assertTrue(offer.quality['damagedSoybean'])
 
     def test_authenticated_user_can_create_offer_with_current_frontend_payload_shape(self):
         self.client.post(reverse('register', args=['vendedor']), {

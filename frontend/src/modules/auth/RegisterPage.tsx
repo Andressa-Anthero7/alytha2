@@ -181,7 +181,7 @@ const emptyForm = (): RegisterFormState => ({
 });
 
 const normalizeRoleSlug = (roleSlug?: string): RoleSlug => {
-  if (roleSlug === 'vendedor') return 'vendedor';
+  if (roleSlug === 'vendedor' || roleSlug === 'cliente') return 'vendedor';
   if (roleSlug === 'corretor') return 'corretor';
   return 'comprador';
 };
@@ -294,7 +294,7 @@ const validateDocument = (documentType: RegisterFormState['documentType'], docum
 export function RegisterPage({ routeBase }: RegisterPageProps) {
   const navigate = useNavigate();
   const { roleSlug } = useParams();
-  const normalizedRoleSlug = normalizeRoleSlug(roleSlug);
+  const normalizedRoleSlug = roleSlug ? normalizeRoleSlug(roleSlug) : null;
 
   const [form, setForm] = useState<RegisterFormState>(emptyForm);
   const [submitting, setSubmitting] = useState(false);
@@ -304,9 +304,9 @@ export function RegisterPage({ routeBase }: RegisterPageProps) {
   const [error, setError] = useState<string | null>(null);
   const errorRef = useRef<HTMLDivElement | null>(null);
 
-  const selectedSegments = useMemo(() => segmentOptions[normalizedRoleSlug], [normalizedRoleSlug]);
+  const selectedSegments = useMemo(() => (normalizedRoleSlug ? segmentOptions[normalizedRoleSlug] : []), [normalizedRoleSlug]);
   const selectedRoleLabel = useMemo(
-    () => roleCards.find((item) => item.slug === normalizedRoleSlug)?.label || 'Comprador',
+    () => (normalizedRoleSlug ? roleCards.find((item) => item.slug === normalizedRoleSlug)?.label || 'Comprador' : 'Perfil'),
     [normalizedRoleSlug],
   );
   const selectedRoleText = selectedRoleLabel.toLowerCase();
@@ -338,6 +338,12 @@ export function RegisterPage({ routeBase }: RegisterPageProps) {
     event.preventDefault();
     setSubmitting(true);
     setError(null);
+
+    if (!normalizedRoleSlug) {
+      setSubmitting(false);
+      setError('Escolha comprador ou vendedor para continuar o cadastro.');
+      return;
+    }
 
     if (form.password !== form.confirmPassword) {
       setSubmitting(false);
@@ -423,7 +429,11 @@ export function RegisterPage({ routeBase }: RegisterPageProps) {
 
   return (
     <div className="min-h-screen bg-[linear-gradient(180deg,#f8fafc_0%,#ffffff_100%)]">
-      <ShellHeader eyebrow="Cadastro" title={roleTitle[normalizedRoleSlug]} subtitle={roleSubtitle[normalizedRoleSlug]} />
+      <ShellHeader
+        eyebrow="Cadastro"
+        title={normalizedRoleSlug ? roleTitle[normalizedRoleSlug] : 'Criar cadastro'}
+        subtitle={normalizedRoleSlug ? roleSubtitle[normalizedRoleSlug] : 'Escolha se o cadastro e de comprador ou vendedor para iniciar o fluxo correto.'}
+      />
 
       <div className="mx-auto max-w-7xl px-4 pt-5 sm:px-6 sm:pt-7 lg:px-8">
         <button
@@ -465,6 +475,7 @@ export function RegisterPage({ routeBase }: RegisterPageProps) {
         </section>
 
         <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-xl shadow-slate-200/60 sm:rounded-[2.4rem] sm:p-8">
+          {normalizedRoleSlug ? (
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
               <p className="text-[10px] font-black uppercase tracking-[0.24em] text-emerald-600">Cadastro de {selectedRoleLabel}</p>
@@ -761,6 +772,28 @@ export function RegisterPage({ routeBase }: RegisterPageProps) {
               </button>
             </div>
           </form>
+          ) : (
+            <div className="flex h-full min-h-[420px] flex-col justify-center">
+              <p className="text-[10px] font-black uppercase tracking-[0.24em] text-emerald-600">Entrada unica</p>
+              <h3 className="mt-2 text-3xl font-black tracking-tight text-slate-950">Selecione um perfil para continuar</h3>
+              <p className="mt-3 text-sm leading-7 text-slate-600">
+                Use esta URL generica para enviar o mesmo link a compradores e vendedores. A escolha do perfil abre o formulario correto.
+              </p>
+              <div className="mt-8 grid gap-3 sm:grid-cols-2">
+                {publicRoleCards.map((item) => (
+                  <button
+                    key={item.slug}
+                    type="button"
+                    onClick={() => handleRoleChange(item.slug)}
+                    className="rounded-[1.4rem] border border-slate-200 bg-slate-50 px-4 py-4 text-left transition-colors hover:border-emerald-200 hover:bg-emerald-50"
+                  >
+                    <span className="text-sm font-black uppercase tracking-[0.18em] text-slate-950">{item.label}</span>
+                    <span className="mt-2 block text-sm leading-6 text-slate-600">{item.summary}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </section>
       </main>
     </div>

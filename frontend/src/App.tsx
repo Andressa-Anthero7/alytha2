@@ -94,10 +94,12 @@ export default function App() {
         />
         <Route path="/corretor/:token/:mode" element={<BrokerExclusiveOfferPage />} />
         <Route path="/login" element={<LoginPage />} />
-        <Route path="/cadastro" element={<Navigate to="/app/cadastro/comprador" replace />} />
+        <Route path="/cadastro" element={<Navigate to="/app/cadastro" replace />} />
+        <Route path="/cadastro/" element={<Navigate to="/app/cadastro" replace />} />
         <Route path="/esqueci-minha-senha" element={<ForgotPasswordPage />} />
         <Route path="/redefinir-senha/:token" element={<ResetPasswordPage />} />
-        <Route path="/app/cadastro" element={<Navigate to="/app/cadastro/comprador" replace />} />
+        <Route path="/app/cadastro" element={<RegisterPage routeBase="" />} />
+        <Route path="/app/cadastro/" element={<RegisterPage routeBase="" />} />
         <Route path="/app/cadastro/:roleSlug" element={<RegisterPage routeBase="" />} />
 
         <Route

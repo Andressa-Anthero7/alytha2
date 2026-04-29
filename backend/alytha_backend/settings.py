@@ -72,8 +72,8 @@ def database_from_url(database_url: str):
             'PORT': str(parsed.port or ''),
         }
         options = dict(parse_qsl(parsed.query))
-        if options:
-            config['OPTIONS'] = options
+        options.setdefault('connect_timeout', os.environ.get('DJANGO_DB_CONNECT_TIMEOUT', '5'))
+        config['OPTIONS'] = options
         return config
 
     if scheme == 'sqlite':
@@ -152,16 +152,17 @@ WSGI_APPLICATION = 'alytha_backend.wsgi.application'
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
 DATABASE_URL = os.environ.get('DATABASE_URL')
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'alytha',
-        'USER': 'alytha_user',
-        'PASSWORD': 'alythadb1985',
-        'HOST': 'localhost',
-        'PORT': '5432',
+if DATABASE_URL:
+    default_database = database_from_url(DATABASE_URL)
+elif IS_PRODUCTION:
+    raise ImproperlyConfigured('Defina DATABASE_URL no ambiente de producao.')
+else:
+    default_database = {
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': BASE_DIR / 'db.sqlite3',
     }
-}
+
+DATABASES = {'default': default_database}
 DATABASES['default']['CONN_MAX_AGE'] = env_int('DJANGO_DB_CONN_MAX_AGE', 60 if IS_PRODUCTION else 0)
 
 

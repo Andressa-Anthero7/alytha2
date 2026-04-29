@@ -33,6 +33,7 @@ type OfferFormState = {
   negotiationChannel: OfferChannel;
   mesaCommission: string;
   nonGmo: boolean;
+  damagedSoybean: boolean;
   moisture: string;
   impurity: string;
   damaged: string;
@@ -73,6 +74,7 @@ const initialState: OfferFormState = {
   negotiationChannel: 'mesa',
   mesaCommission: '1.00',
   nonGmo: false,
+  damagedSoybean: false,
   moisture: '',
   impurity: '',
   damaged: '',
@@ -209,6 +211,7 @@ export default function OfferForm({
   const shouldRegisterCommission = form.negotiationChannel === 'mesa' || isPublicLead;
   const showPhField = offerType === 'venda' && form.grain === 'Milho';
   const showProteinField = offerType === 'venda' && form.grain === 'Soja';
+  const showSoybeanOptions = form.grain === 'Soja';
 
   const updateField = <T extends keyof OfferFormState>(name: T, value: OfferFormState[T]) => {
     setForm((previous) => ({ ...previous, [name]: value }));
@@ -220,6 +223,7 @@ export default function OfferForm({
       grain,
       ph: grain === 'Milho' ? previous.ph : '',
       protein: grain === 'Soja' ? previous.protein : '',
+      damagedSoybean: grain === 'Soja' ? previous.damagedSoybean : false,
     }));
   };
 
@@ -258,6 +262,7 @@ export default function OfferForm({
       protein: showProteinField ? parseOptionalNumber(form.protein) : undefined,
       standard: offerType === 'venda' && form.grainStandard ? grainStandardLabelMap[form.grainStandard] : undefined,
       nonGmo: form.nonGmo ? true : undefined,
+      damagedSoybean: showSoybeanOptions && form.damagedSoybean ? true : undefined,
       deliveryWindow: form.deliveryWindow,
       funrural: offerType === 'venda' ? form.funrural : undefined,
       notes: form.qualityNotes,
@@ -501,15 +506,29 @@ export default function OfferForm({
               <option value="Milho">Milho</option>
                 <option value="Sorgo">Sorgo</option>
               </select>
-            <label className="flex cursor-pointer items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-800 hover:bg-slate-50">
-              <input
-                type="checkbox"
-                checked={form.nonGmo}
-                onChange={(event) => updateField('nonGmo', event.target.checked)}
-                className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
-              />
-              Non GMO
-            </label>
+            <div className="grid gap-2">
+              <label className="flex cursor-pointer items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-800 hover:bg-slate-50">
+                <input
+                  type="checkbox"
+                  checked={form.nonGmo}
+                  onChange={(event) => updateField('nonGmo', event.target.checked)}
+                  className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                />
+                Non GMO
+              </label>
+
+              {showSoybeanOptions ? (
+                <label className="flex cursor-pointer items-center gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-950 hover:bg-amber-100">
+                  <input
+                    type="checkbox"
+                    checked={form.damagedSoybean}
+                    onChange={(event) => updateField('damagedSoybean', event.target.checked)}
+                    className="h-4 w-4 rounded border-amber-300 text-amber-600 focus:ring-amber-500"
+                  />
+                  Soja avariada
+                </label>
+              ) : null}
+            </div>
           </div>
 
           <label className="space-y-2">
