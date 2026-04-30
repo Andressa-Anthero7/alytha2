@@ -219,7 +219,7 @@ class UserSerializer(serializers.ModelSerializer):
             attrs['document_number'] = ''
 
         if email is not None:
-            attrs['email'] = str(email).strip()
+            attrs['email'] = str(email).strip().lower()
 
         if name is not None:
             attrs['name'] = str(name).strip()

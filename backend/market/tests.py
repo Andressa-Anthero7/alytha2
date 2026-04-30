@@ -118,6 +118,73 @@ class AuthFlowTests(ValidatedRegistrationAPITestCase):
         self.assertEqual(res.status_code, 201)
         self.assertTrue(Offer.objects.filter(grain='Soja').exists())
 
+    def test_login_rejects_auth_user_without_market_profile(self):
+        get_user_model().objects.create_user(
+            username='orphan.client@test.com',
+            email='orphan.client@test.com',
+            password='SenhaOrphan123!',
+        )
+
+        response = self.client.post(
+            '/api/login/',
+            {'email': 'orphan.client@test.com', 'password': 'SenhaOrphan123!'},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.data['detail'], 'Usuário não localizado.')
+        self.assertNotIn('access', response.data)
+
+    def test_login_accepts_auth_user_with_email_when_username_is_legacy(self):
+        market_user = User.objects.create(
+            name='Cliente Legacy',
+            email='cliente.legacy@test.com',
+            type='vendedor',
+            is_validated=True,
+        )
+        get_user_model().objects.create_user(
+            username='legacy-login',
+            email='cliente.legacy@test.com',
+            password='SenhaLegacy123!',
+        )
+
+        response = self.client.post(
+            '/api/login/',
+            {'email': 'CLIENTE.LEGACY@test.com', 'password': 'SenhaLegacy123!'},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['user']['id'], market_user.id)
+        self.assertEqual(response.data['user']['email'], 'cliente.legacy@test.com')
+
+    def test_dashboard_resolves_market_profile_from_auth_username_when_auth_email_is_blank(self):
+        market_user = User.objects.create(
+            name='Cliente Sem Email Auth',
+            email='cliente.sem.email.auth@test.com',
+            type='vendedor',
+            is_validated=True,
+        )
+        get_user_model().objects.create_user(
+            username='cliente.sem.email.auth@test.com',
+            email='',
+            password='SenhaUsername123!',
+        )
+
+        login = self.client.post(
+            '/api/login/',
+            {'email': 'cliente.sem.email.auth@test.com', 'password': 'SenhaUsername123!'},
+            format='json',
+        )
+        self.assertEqual(login.status_code, 200)
+        self.assertEqual(login.data['user']['id'], market_user.id)
+
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {login.data['access']}")
+        response = self.client.get('/api/client-dashboard/')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['header']['userName'], 'Cliente Sem Email Auth')
+
     def test_public_register_requires_backoffice_validation_before_login(self):
         response = self.register_without_auto_validation(
             'vendedor',

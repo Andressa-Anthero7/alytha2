@@ -347,7 +347,7 @@ class BrokerReadOnlyOrBackoffice(BasePermission):
         if getattr(request.user, 'is_staff', False):
             return True
 
-        market_user = User.objects.filter(email=request.user.email).first()
+        market_user = get_market_user_for_auth_user(request.user)
         if not market_user:
             return False
 
@@ -360,17 +360,62 @@ class BrokerReadOnlyOrBackoffice(BasePermission):
 def get_market_user(request):
     if not request.user or not request.user.is_authenticated:
         return None
-    return User.objects.filter(email=request.user.email).first()
+    return get_market_user_for_auth_user(request.user)
+
+
+def normalize_identity(value):
+    return str(value or '').strip().lower()
+
+
+def build_identity_query(*values):
+    query = Q()
+    for value in values:
+        normalized_value = normalize_identity(value)
+        if normalized_value:
+            query |= Q(email__iexact=normalized_value)
+    return query
+
+
+def get_market_user_for_auth_user(auth_user):
+    if not auth_user or not getattr(auth_user, 'is_authenticated', False):
+        return None
+
+    query = build_identity_query(
+        getattr(auth_user, 'email', ''),
+        getattr(auth_user, 'username', ''),
+    )
+    if not query:
+        return None
+
+    return User.objects.filter(query).first()
+
+
+def get_auth_user_by_identity(identity):
+    normalized_identity = normalize_identity(identity)
+    if not normalized_identity:
+        return None
+
+    return AuthUser.objects.filter(Q(username__iexact=normalized_identity) | Q(email__iexact=normalized_identity)).first()
 
 
 def get_or_create_auth_user(*, email: str, name: str):
-    auth_user, created = AuthUser.objects.get_or_create(
-        username=email,
-        defaults={'email': email, 'first_name': name},
-    )
+    email = normalize_identity(email)
+    auth_user = AuthUser.objects.filter(Q(username__iexact=email) | Q(email__iexact=email)).first()
+    created = False
+
+    if not auth_user:
+        auth_user = AuthUser.objects.create_user(
+            username=email,
+            email=email,
+            first_name=name,
+        )
+        created = True
 
     if not created:
         updated_fields = []
+        if auth_user.username != email:
+            auth_user.username = email
+            updated_fields.append('username')
         if auth_user.email != email:
             auth_user.email = email
             updated_fields.append('email')
@@ -384,18 +429,21 @@ def get_or_create_auth_user(*, email: str, name: str):
 
 
 def sync_auth_user_for_market_user(*, market_user: User, previous_email: str | None = None, password: str | None = None):
-    reference_email = previous_email or market_user.email
-    auth_user = AuthUser.objects.filter(username=reference_email).first() or AuthUser.objects.filter(username=market_user.email).first()
+    reference_email = normalize_identity(previous_email or market_user.email)
+    market_email = normalize_identity(market_user.email)
+    auth_user = AuthUser.objects.filter(Q(username__iexact=reference_email) | Q(email__iexact=reference_email)).first()
+    if not auth_user:
+        auth_user = AuthUser.objects.filter(Q(username__iexact=market_email) | Q(email__iexact=market_email)).first()
 
     if not auth_user:
-        auth_user = get_or_create_auth_user(email=market_user.email, name=market_user.name)
+        auth_user = get_or_create_auth_user(email=market_email, name=market_user.name)
     else:
         updated_fields = []
-        if auth_user.username != market_user.email:
-            auth_user.username = market_user.email
+        if auth_user.username != market_email:
+            auth_user.username = market_email
             updated_fields.append('username')
-        if auth_user.email != market_user.email:
-            auth_user.email = market_user.email
+        if auth_user.email != market_email:
+            auth_user.email = market_email
             updated_fields.append('email')
         if market_user.name and auth_user.first_name != market_user.name:
             auth_user.first_name = market_user.name
@@ -971,7 +1019,7 @@ class UserViewSet(viewsets.ModelViewSet):
         data = request.data.copy()
         data.pop('password', None)
         if 'email' in data:
-            data['email'] = str(data.get('email') or '').strip()
+            data['email'] = normalize_identity(data.get('email'))
 
         serializer = self.get_serializer(data=data)
         serializer.is_valid(raise_exception=True)
@@ -993,7 +1041,7 @@ class UserViewSet(viewsets.ModelViewSet):
         data = request.data.copy()
         data.pop('password', None)
         if 'email' in data:
-            data['email'] = str(data.get('email') or '').strip()
+            data['email'] = normalize_identity(data.get('email'))
 
         serializer = self.get_serializer(instance, data=data, partial=True)
         serializer.is_valid(raise_exception=True)
@@ -1014,7 +1062,7 @@ class UserViewSet(viewsets.ModelViewSet):
 
     def destroy(self, request, *args, **kwargs):
         instance = self.get_object()
-        auth_user = AuthUser.objects.filter(username=instance.email).first()
+        auth_user = get_auth_user_by_identity(instance.email)
 
         with transaction.atomic():
             response = super().destroy(request, *args, **kwargs)
@@ -1254,7 +1302,7 @@ class PublicBrokerOfferCreateView(APIView):
         serializer.is_valid(raise_exception=True)
 
         validated_data = dict(serializer.validated_data)
-        email = validated_data.pop('email')
+        email = normalize_identity(validated_data.pop('email'))
         name = validated_data.pop('name')
         phone = validated_data.pop('phone', '')
         company = validated_data.pop('company', '')
@@ -1264,7 +1312,7 @@ class PublicBrokerOfferCreateView(APIView):
         enforce_legal_acceptance(accept_terms=accept_terms, accept_privacy=accept_privacy)
         target_type = 'comprador' if validated_data['offer_type'] == 'compra' else 'vendedor'
 
-        existing_user = User.objects.filter(email=email).first()
+        existing_user = User.objects.filter(email__iexact=email).first()
         if existing_user and existing_user.type != target_type:
             return Response(
                 {'detail': 'Este e-mail já está vinculado a um perfil diferente na Alytha.'},
@@ -1312,13 +1360,7 @@ class PublicBrokerOfferCreateView(APIView):
             if legal_updated_fields:
                 target_user.save(update_fields=legal_updated_fields)
 
-        auth_user, created = AuthUser.objects.get_or_create(
-            username=email,
-            defaults={'email': email, 'first_name': target_user.name},
-        )
-        if created:
-            auth_user.set_unusable_password()
-            auth_user.save()
+        get_or_create_auth_user(email=email, name=target_user.name)
 
         offer, registration_meta = create_offer_with_rules(
             validated_data=validated_data,
@@ -1544,7 +1586,7 @@ class RegisterView(APIView):
         if requires_backoffice_validation(role):
             data['is_validated'] = False
         password = data.get('password') or AuthUser.objects.make_random_password()
-        email = str(data.get('email') or '').strip()
+        email = normalize_identity(data.get('email'))
         data['email'] = email
         name = data.get('name') or data.get('username') or ''
         if not email:
@@ -1581,8 +1623,8 @@ class ForgotPasswordRequestView(APIView):
         serializer = PasswordResetRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        email = serializer.validated_data['email'].strip()
-        market_user = User.objects.filter(email=email).first()
+        email = normalize_identity(serializer.validated_data['email'])
+        market_user = User.objects.filter(email__iexact=email).first()
         reset_token = None
 
         if market_user:
@@ -1619,7 +1661,7 @@ class ForgotPasswordConfirmView(APIView):
         if not reset_token or not reset_token.is_active:
             return Response({'detail': 'O link para redefinir senha expirou ou é inválido.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        auth_user = AuthUser.objects.filter(username=reset_token.user.email).first()
+        auth_user = get_auth_user_by_identity(reset_token.user.email)
         if not auth_user:
             return Response({'detail': 'Conta não localizada para redefinir a senha.'}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -1648,14 +1690,20 @@ class LoginView(APIView):
     throttle_scope = 'auth_login'
 
     def post(self, request):
-        email = str(request.data.get('email') or '').strip()
+        email = normalize_identity(request.data.get('email'))
         password = request.data.get('password')
         if not email or not password:
             return Response({'detail': 'e-mail e senha obrigatórios'}, status=status.HTTP_400_BAD_REQUEST)
         auth_user = authenticate(username=email, password=password)
         if not auth_user:
+            auth_candidate = get_auth_user_by_identity(email)
+            if auth_candidate:
+                auth_user = authenticate(username=auth_candidate.get_username(), password=password)
+        if not auth_user:
             return Response({'detail': 'credenciais inválidas'}, status=status.HTTP_401_UNAUTHORIZED)
-        market_user = User.objects.filter(email=email).first()
+        market_user = get_market_user_for_auth_user(auth_user) or User.objects.filter(email__iexact=email).first()
+        if not market_user:
+            return Response({'detail': 'Usuário não localizado.'}, status=status.HTTP_403_FORBIDDEN)
         if user_is_pending_validation(market_user):
             return Response(
                 {'detail': 'Seu cadastro ainda aguarda validacao do backoffice antes do primeiro login.'},
@@ -1668,7 +1716,7 @@ class LoginView(APIView):
             {
                 'access': str(refresh.access_token),
                 'refresh': str(refresh),
-                'user': UserSerializer(market_user).data if market_user else None,
+                'user': UserSerializer(market_user).data,
             }
         )
 
