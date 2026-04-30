@@ -661,10 +661,8 @@ def get_public_marketplace_queryset(request=None):
     market_user = get_market_user(request) if request else None
     user_role = getattr(market_user, 'type', None)
     if market_user and not getattr(request.user, 'is_staff', False) and user_role != 'backoffice':
-        allowed_offer_type = CLIENT_OFFER_TYPE_BY_ROLE.get(user_role)
-        if not allowed_offer_type:
+        if user_role not in CLIENT_OFFER_TYPE_BY_ROLE:
             return queryset.none()
-        return queryset.filter(offer_type=allowed_offer_type)
 
     return queryset
 

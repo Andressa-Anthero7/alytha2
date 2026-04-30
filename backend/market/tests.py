@@ -1421,11 +1421,13 @@ class MarketplaceRulesTests(ValidatedRegistrationAPITestCase):
         self.login('buyer.viewer@test.com')
         buyer_list = self.client.get('/api/public-marketplace/offers?grain=Soja')
         self.assertEqual(buyer_list.status_code, 200)
-        self.assertNotIn(visible_offer.id, [item['id'] for item in buyer_list.data['items']])
+        self.assertIn(visible_offer.id, [item['id'] for item in buyer_list.data['items']])
 
-        blocked_buyer_detail = self.client.get(f'/api/public-marketplace/offers/{visible_offer.id}')
+        buyer_detail = self.client.get(f'/api/public-marketplace/offers/{visible_offer.id}')
 
-        self.assertEqual(blocked_buyer_detail.status_code, 404)
+        self.assertEqual(buyer_detail.status_code, 200)
+        self.assertFalse(buyer_detail.data['contact']['locked'])
+        self.assertEqual(buyer_detail.data['contact']['email'], 'seller.public.search@test.com')
         self.client.credentials()
 
         self.login('seller.public.search@test.com')
