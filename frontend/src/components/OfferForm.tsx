@@ -1,5 +1,5 @@
 import { AlertCircle, CheckCircle2, Copy, LoaderCircle, ShieldCheck } from 'lucide-react';
-import { useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { apiFetch } from '../lib/api';
 import { LEGAL_DOCUMENT_VERSION } from '../shared/legal';
 import type { OfferPixData, OfferRegistration } from '../types';
@@ -27,7 +27,9 @@ type OfferFormState = {
   quantity: string;
   unit: string;
   price: string;
-  location: string;
+  locationState: string;
+  locationCity: string;
+  locationComplement: string;
   crop: string;
   shipping: 'FOB' | 'CIF';
   negotiationChannel: OfferChannel;
@@ -54,10 +56,67 @@ type OfferSubmissionResponse = {
   registration?: OfferRegistration | null;
 };
 
+type IbgeMunicipality = {
+  id: number;
+  nome: string;
+};
+
 const isOfferSubmissionResponse = (payload: unknown): payload is OfferSubmissionResponse =>
   Boolean(payload && typeof payload === 'object' && 'id' in payload && typeof (payload as { id?: unknown }).id === 'number');
 
 const mesaCommissionOptions = ['0.50', '1.00', '1.50', '2.00', '2.50', '3.00', '3.50', '4.00', '4.50', '5.00'] as const;
+const grainOptions = ['Soja', 'Milho', 'Sorgo'] as const;
+const shippingOptions = [
+  {
+    value: 'FOB',
+    title: 'FOB',
+    description: 'Retirada na origem ou ponto indicado pelo vendedor.',
+  },
+  {
+    value: 'CIF',
+    title: 'CIF',
+    description: 'Entrega no destino ou base combinada com o comprador.',
+  },
+] as const;
+const paymentTermSuggestions = ['A vista', '7 dias', '15 dias', '30 dias', 'Contra entrega'] as const;
+const ibgeLocalitiesApiBaseUrl = 'https://servicodados.ibge.gov.br/api/v1/localidades';
+const brazilStates = [
+  { code: 'AC', name: 'Acre' },
+  { code: 'AL', name: 'Alagoas' },
+  { code: 'AP', name: 'Amapa' },
+  { code: 'AM', name: 'Amazonas' },
+  { code: 'BA', name: 'Bahia' },
+  { code: 'CE', name: 'Ceara' },
+  { code: 'DF', name: 'Distrito Federal' },
+  { code: 'ES', name: 'Espirito Santo' },
+  { code: 'GO', name: 'Goias' },
+  { code: 'MA', name: 'Maranhao' },
+  { code: 'MT', name: 'Mato Grosso' },
+  { code: 'MS', name: 'Mato Grosso do Sul' },
+  { code: 'MG', name: 'Minas Gerais' },
+  { code: 'PA', name: 'Para' },
+  { code: 'PB', name: 'Paraiba' },
+  { code: 'PR', name: 'Parana' },
+  { code: 'PE', name: 'Pernambuco' },
+  { code: 'PI', name: 'Piaui' },
+  { code: 'RJ', name: 'Rio de Janeiro' },
+  { code: 'RN', name: 'Rio Grande do Norte' },
+  { code: 'RS', name: 'Rio Grande do Sul' },
+  { code: 'RO', name: 'Rondonia' },
+  { code: 'RR', name: 'Roraima' },
+  { code: 'SC', name: 'Santa Catarina' },
+  { code: 'SP', name: 'Sao Paulo' },
+  { code: 'SE', name: 'Sergipe' },
+  { code: 'TO', name: 'Tocantins' },
+] as const;
+
+const cropSuggestions = (() => {
+  const currentYear = new Date().getFullYear();
+  return Array.from({ length: 3 }, (_, index) => {
+    const startYear = currentYear - 1 + index;
+    return `${startYear}/${String(startYear + 1).slice(-2)}`;
+  });
+})();
 
 const initialState: OfferFormState = {
   name: '',
@@ -68,7 +127,9 @@ const initialState: OfferFormState = {
   quantity: '',
   unit: 'Sacas',
   price: '',
-  location: '',
+  locationState: '',
+  locationCity: '',
+  locationComplement: '',
   crop: '',
   shipping: 'FOB',
   negotiationChannel: 'mesa',
@@ -177,6 +238,20 @@ const getErrorMessage = (payload: unknown) => {
 const formatCurrency = (value: number) =>
   Number(value).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+const formatQuantityPreview = (value: string, unit: string) => {
+  const parsedValue = Number(value.trim().replace(',', '.'));
+  if (!Number.isFinite(parsedValue) || parsedValue <= 0) {
+    return 'Ainda nao informado';
+  }
+
+  return `${parsedValue.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} ${unit}`;
+};
+
+const formatCurrencyPreview = (value: string) => {
+  const parsedValue = Number(value.trim().replace(',', '.'));
+  return Number.isFinite(parsedValue) && parsedValue > 0 ? formatCurrency(parsedValue) : 'Ainda nao informado';
+};
+
 const parseOptionalNumber = (value: string) => {
   const normalized = value.trim().replace(',', '.');
   if (!normalized) {
@@ -186,6 +261,27 @@ const parseOptionalNumber = (value: string) => {
   const parsed = Number(normalized);
   return Number.isFinite(parsed) ? parsed : undefined;
 };
+
+const buildLocationLabel = (city: string, stateCode: string, complement: string) => {
+  const cityLabel = city.trim();
+  const stateLabel = stateCode.trim().toUpperCase();
+  const complementLabel = complement.trim();
+  const baseLocation = [cityLabel, stateLabel].filter(Boolean).join(' - ');
+
+  if (!baseLocation) {
+    return '';
+  }
+
+  return complementLabel ? `${baseLocation} (${complementLabel})` : baseLocation;
+};
+
+const isIbgeMunicipality = (value: unknown): value is IbgeMunicipality =>
+  Boolean(
+    value
+    && typeof value === 'object'
+    && typeof (value as { id?: unknown }).id === 'number'
+    && typeof (value as { nome?: unknown }).nome === 'string',
+  );
 
 export default function OfferForm({
   offerType,
@@ -203,6 +299,8 @@ export default function OfferForm({
   const [registration, setRegistration] = useState<OfferRegistration | null>(null);
   const [copyFeedback, setCopyFeedback] = useState('');
   const [legalAccepted, setLegalAccepted] = useState(false);
+  const [municipalitiesByState, setMunicipalitiesByState] = useState<Record<string, string[]>>({});
+  const [municipalityStatus, setMunicipalityStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
 
   const copy = formCopy[offerType];
   const isPublicLead = mode === 'broker-link';
@@ -212,10 +310,79 @@ export default function OfferForm({
   const showPhField = offerType === 'venda' && form.grain === 'Milho';
   const showProteinField = offerType === 'venda' && form.grain === 'Soja';
   const showSoybeanOptions = form.grain === 'Soja';
+  const municipalities = municipalitiesByState[form.locationState] || [];
+  const selectedState = brazilStates.find((state) => state.code === form.locationState);
+  const resolvedLocation = useMemo(
+    () => buildLocationLabel(form.locationCity, form.locationState, form.locationComplement),
+    [form.locationCity, form.locationComplement, form.locationState],
+  );
+  const opportunitySummary = [
+    { label: 'Produto', value: form.grain },
+    { label: 'Praca', value: resolvedLocation || 'Selecione UF e municipio' },
+    { label: 'Volume', value: formatQuantityPreview(form.quantity, form.unit) },
+    { label: 'Preco', value: formatCurrencyPreview(form.price) },
+    { label: 'Safra', value: form.crop.trim() || 'Ainda nao informada' },
+    { label: 'Frete', value: form.shipping },
+  ];
 
   const updateField = <T extends keyof OfferFormState>(name: T, value: OfferFormState[T]) => {
     setForm((previous) => ({ ...previous, [name]: value }));
   };
+
+  useEffect(() => {
+    if (!form.locationState) {
+      setMunicipalityStatus('idle');
+      return;
+    }
+
+    if (municipalitiesByState[form.locationState]) {
+      setMunicipalityStatus('ready');
+      return;
+    }
+
+    const controller = new AbortController();
+    let cancelled = false;
+
+    const loadMunicipalities = async () => {
+      setMunicipalityStatus('loading');
+
+      try {
+        const response = await fetch(`${ibgeLocalitiesApiBaseUrl}/estados/${form.locationState}/municipios?orderBy=nome`, {
+          signal: controller.signal,
+        });
+        const data = (await response.json().catch(() => null)) as unknown;
+
+        if (!response.ok || !Array.isArray(data)) {
+          throw new Error('Nao foi possivel carregar os municipios.');
+        }
+
+        const nextMunicipalities = data
+          .filter(isIbgeMunicipality)
+          .map((municipality) => municipality.nome)
+          .filter(Boolean);
+
+        if (!cancelled) {
+          setMunicipalitiesByState((current) => ({ ...current, [form.locationState]: nextMunicipalities }));
+          setMunicipalityStatus('ready');
+        }
+      } catch (loadError) {
+        if (loadError instanceof DOMException && loadError.name === 'AbortError') {
+          return;
+        }
+
+        if (!cancelled) {
+          setMunicipalityStatus('error');
+        }
+      }
+    };
+
+    void loadMunicipalities();
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [form.locationState, municipalitiesByState]);
 
   const handleGrainChange = (grain: string) => {
     setForm((previous) => ({
@@ -224,6 +391,15 @@ export default function OfferForm({
       ph: grain === 'Milho' ? previous.ph : '',
       protein: grain === 'Soja' ? previous.protein : '',
       damagedSoybean: grain === 'Soja' ? previous.damagedSoybean : false,
+    }));
+  };
+
+  const handleLocationStateChange = (stateCode: string) => {
+    setForm((previous) => ({
+      ...previous,
+      locationState: stateCode,
+      locationCity: '',
+      locationComplement: '',
     }));
   };
 
@@ -249,6 +425,12 @@ export default function OfferForm({
     if (isPublicLead && !legalAccepted) {
       setLoading(false);
       setError('Para enviar a oportunidade, confirme a leitura e aceite do contrato Alytha e da politica de LGPD.');
+      return;
+    }
+
+    if (!resolvedLocation) {
+      setLoading(false);
+      setError('Selecione o estado e o municipio da praca antes de salvar.');
       return;
     }
 
@@ -285,7 +467,7 @@ export default function OfferForm({
       quantity: Number(form.quantity),
       unit: form.unit,
       price: Number(form.price),
-      location: form.location,
+      location: resolvedLocation,
       crop: form.crop,
       shipping: form.shipping,
       negotiationChannel: form.negotiationChannel,
@@ -497,15 +679,24 @@ export default function OfferForm({
         <div className="mt-8 grid gap-4 md:grid-cols-2">
           <div className="space-y-2">
             <span className="text-xs font-black uppercase tracking-[0.2em] text-slate-500">Produto</span>
-            <select
-              value={form.grain}
-              onChange={(event) => handleGrainChange(event.target.value)}
-              className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none focus:border-emerald-500 focus:bg-white"
-            >
-              <option value="Soja">Soja</option>
-              <option value="Milho">Milho</option>
-                <option value="Sorgo">Sorgo</option>
-              </select>
+            <div className="grid grid-cols-3 gap-2">
+              {grainOptions.map((grain) => {
+                const active = form.grain === grain;
+                return (
+                  <button
+                    key={grain}
+                    type="button"
+                    onClick={() => handleGrainChange(grain)}
+                    className={`rounded-2xl border px-3 py-3 text-sm font-black transition-colors ${
+                      active ? 'border-emerald-500 bg-emerald-50 text-emerald-900' : 'border-slate-200 bg-slate-50 text-slate-700 hover:bg-white'
+                    }`}
+                    aria-pressed={active}
+                  >
+                    {grain}
+                  </button>
+                );
+              })}
+            </div>
             <div className="grid gap-2">
               <label className="flex cursor-pointer items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-800 hover:bg-slate-50">
                 <input
@@ -531,7 +722,7 @@ export default function OfferForm({
             </div>
           </div>
 
-          <label className="space-y-2">
+          <div className="space-y-2">
             <span className="text-xs font-black uppercase tracking-[0.2em] text-slate-500">Safra</span>
             <input
               required
@@ -540,7 +731,21 @@ export default function OfferForm({
               placeholder="Ex.: 2024/25"
               className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none focus:border-emerald-500 focus:bg-white"
             />
-          </label>
+            <div className="flex flex-wrap gap-2">
+              {cropSuggestions.map((crop) => (
+                <button
+                  key={crop}
+                  type="button"
+                  onClick={() => updateField('crop', crop)}
+                  className={`rounded-full border px-3 py-1.5 text-xs font-bold transition-colors ${
+                    form.crop === crop ? 'border-emerald-500 bg-emerald-50 text-emerald-800' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+                  }`}
+                >
+                  {crop}
+                </button>
+              ))}
+            </div>
+          </div>
 
           <label className="space-y-2">
             <span className="text-xs font-black uppercase tracking-[0.2em] text-slate-500">Quantidade</span>
@@ -582,28 +787,115 @@ export default function OfferForm({
             />
           </label>
 
-          <label className="space-y-2">
-            <span className="text-xs font-black uppercase tracking-[0.2em] text-slate-500">{copy.locationLabel}</span>
-            <input
-              required
-              value={form.location}
-              onChange={(event) => updateField('location', event.target.value)}
-              placeholder="Ex.: Rondonópolis - MT"
-              className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none focus:border-emerald-500 focus:bg-white"
-            />
-          </label>
+          <div className="rounded-[1.8rem] border border-slate-200 bg-slate-50/80 p-4 md:col-span-2">
+            <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-500">{copy.locationLabel}</p>
+                <p className="mt-1 text-sm leading-6 text-slate-600">Escolha UF e município para padronizar a praça no marketplace e no mapa.</p>
+              </div>
+              <span className="rounded-full border border-emerald-100 bg-white px-3 py-1.5 text-xs font-black text-emerald-800">
+                {resolvedLocation || 'Praça pendente'}
+              </span>
+            </div>
 
-          <label className="space-y-2">
-            <span className="text-xs font-black uppercase tracking-[0.2em] text-slate-500">Condição FOB / CIF</span>
-            <select
-              value={form.shipping}
-              onChange={(event) => updateField('shipping', event.target.value as 'FOB' | 'CIF')}
-              className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none focus:border-emerald-500 focus:bg-white"
-            >
-              <option value="FOB">FOB</option>
-              <option value="CIF">CIF</option>
-            </select>
-          </label>
+            <div className="mt-4 grid gap-3 md:grid-cols-[0.48fr_1fr]">
+              <label className="space-y-2">
+                <span className="text-xs font-black uppercase tracking-[0.18em] text-slate-500">Estado</span>
+                <select
+                  required
+                  value={form.locationState}
+                  onChange={(event) => handleLocationStateChange(event.target.value)}
+                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 outline-none focus:border-emerald-500"
+                >
+                  <option value="">Selecione a UF</option>
+                  {brazilStates.map((state) => (
+                    <option key={state.code} value={state.code}>
+                      {state.code} - {state.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="space-y-2">
+                <span className="text-xs font-black uppercase tracking-[0.18em] text-slate-500">Município</span>
+                {municipalityStatus === 'error' ? (
+                  <input
+                    required
+                    value={form.locationCity}
+                    onChange={(event) => updateField('locationCity', event.target.value)}
+                    placeholder="Digite o município"
+                    className="w-full rounded-2xl border border-amber-200 bg-white px-4 py-3 outline-none focus:border-amber-500"
+                  />
+                ) : (
+                  <select
+                    required
+                    value={form.locationCity}
+                    onChange={(event) => updateField('locationCity', event.target.value)}
+                    disabled={!form.locationState || municipalityStatus === 'loading'}
+                    className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 outline-none focus:border-emerald-500 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+                  >
+                    <option value="">
+                      {!form.locationState
+                        ? 'Selecione o estado primeiro'
+                        : municipalityStatus === 'loading'
+                          ? 'Carregando municípios...'
+                          : 'Selecione o município'}
+                    </option>
+                    {municipalities.map((municipality) => (
+                      <option key={municipality} value={municipality}>
+                        {municipality}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </label>
+
+              <label className="space-y-2 md:col-span-2">
+                <span className="text-xs font-black uppercase tracking-[0.18em] text-slate-500">Complemento da praça</span>
+                <input
+                  value={form.locationComplement}
+                  onChange={(event) => updateField('locationComplement', event.target.value)}
+                  placeholder="Opcional: armazém, fazenda, porto, região ou ponto de retirada"
+                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 outline-none focus:border-emerald-500"
+                />
+              </label>
+            </div>
+
+            {municipalityStatus === 'loading' ? (
+              <p className="mt-3 inline-flex items-center gap-2 text-xs font-bold text-slate-500">
+                <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
+                Buscando municípios do {selectedState?.name || form.locationState}...
+              </p>
+            ) : null}
+            {municipalityStatus === 'error' ? (
+              <p className="mt-3 text-xs font-bold text-amber-800">
+                Não foi possível carregar a lista agora. Digite o município manualmente para continuar.
+              </p>
+            ) : null}
+          </div>
+
+          <fieldset className="space-y-2 md:col-span-2">
+            <legend className="text-xs font-black uppercase tracking-[0.2em] text-slate-500">Condição FOB / CIF</legend>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {shippingOptions.map((option) => {
+                const active = form.shipping === option.value;
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => updateField('shipping', option.value)}
+                    className={`rounded-[1.4rem] border p-4 text-left transition-colors ${
+                      active ? 'border-emerald-500 bg-emerald-50' : 'border-slate-200 bg-slate-50 hover:bg-white'
+                    }`}
+                    aria-pressed={active}
+                  >
+                    <span className="text-sm font-black text-slate-950">{option.title}</span>
+                    <span className="mt-1 block text-sm leading-6 text-slate-600">{option.description}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </fieldset>
 
           <label className="space-y-2">
             <span className="text-xs font-black uppercase tracking-[0.2em] text-slate-500">{copy.windowLabel}</span>
@@ -760,8 +1052,24 @@ export default function OfferForm({
             />
           </label>
 
-          <label className="space-y-2">
+          <div className="space-y-2">
             <span className="text-xs font-black uppercase tracking-[0.2em] text-slate-500">{copy.paymentLabel}</span>
+            <div className="flex flex-wrap gap-2">
+              {paymentTermSuggestions.map((paymentTerm) => (
+                <button
+                  key={paymentTerm}
+                  type="button"
+                  onClick={() => updateField('paymentTerms', paymentTerm)}
+                  className={`rounded-full border px-3 py-1.5 text-xs font-bold transition-colors ${
+                    form.paymentTerms === paymentTerm
+                      ? 'border-emerald-500 bg-emerald-50 text-emerald-800'
+                      : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+                  }`}
+                >
+                  {paymentTerm}
+                </button>
+              ))}
+            </div>
             <textarea
               required
               value={form.paymentTerms}
@@ -769,7 +1077,7 @@ export default function OfferForm({
               placeholder={copy.paymentPlaceholder}
               className="min-h-24 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none focus:border-emerald-500 focus:bg-white"
             />
-          </label>
+          </div>
 
           <label className="space-y-2">
             <span className="text-xs font-black uppercase tracking-[0.2em] text-slate-500">{copy.observationsLabel}</span>
@@ -851,6 +1159,21 @@ export default function OfferForm({
       </form>
 
       <aside className="space-y-6">
+        <div className="rounded-[2rem] border border-slate-200 bg-white/92 p-5 shadow-[0_35px_100px_-70px_rgba(15,23,42,0.55)] sm:p-6">
+          <p className="text-[11px] font-black uppercase tracking-[0.28em] text-emerald-700">Resumo em tempo real</p>
+          <div className="mt-4 grid gap-3">
+            {opportunitySummary.map((item) => (
+              <div key={item.label} className="flex items-center justify-between gap-4 rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3">
+                <span className="text-xs font-black uppercase tracking-[0.16em] text-slate-500">{item.label}</span>
+                <span className="text-right text-sm font-black text-slate-950">{item.value}</span>
+              </div>
+            ))}
+          </div>
+          <p className="mt-4 text-sm leading-6 text-slate-600">
+            A praça será salva como <span className="font-bold text-slate-950">{resolvedLocation || 'Cidade - UF'}</span>, mantendo o mapa e os filtros consistentes.
+          </p>
+        </div>
+
         <div className="rounded-[2rem] border border-emerald-100 bg-[linear-gradient(180deg,#052e2b_0%,#0f5f54_100%)] p-5 text-white shadow-[0_45px_120px_-60px_rgba(5,46,43,0.8)] sm:p-8">
           <p className="text-[11px] font-black uppercase tracking-[0.28em] text-emerald-200">Regras do cadastro</p>
           <div className="mt-5 space-y-3 text-sm leading-7 text-emerald-50">
