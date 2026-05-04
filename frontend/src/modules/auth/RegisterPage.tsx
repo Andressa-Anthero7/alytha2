@@ -12,6 +12,7 @@ type RegisterPageProps = {
 
 type RoleSlug = 'comprador' | 'vendedor' | 'corretor';
 type BrokerDocumentFlow = 'pf' | 'pj' | '';
+type ZipLookupStatus = 'idle' | 'loading' | 'filled' | 'not_found' | 'error';
 
 type RegisterFormState = {
   name: string;
@@ -35,6 +36,14 @@ type RegisterFormState = {
   password: string;
   confirmPassword: string;
   brokerDocumentFlow: BrokerDocumentFlow;
+};
+
+type ViaCepResponse = {
+  erro?: boolean;
+  logradouro?: string;
+  bairro?: string;
+  localidade?: string;
+  uf?: string;
 };
 
 const roleCards: Array<{ slug: RoleSlug; label: string; summary: string }> = [
@@ -232,6 +241,14 @@ const formatWhatsApp = (value: string) => {
   return `+55 (${areaCode}) ${firstPart}-${secondPart}`;
 };
 
+const getZipCodeDigits = (value: string) => value.replace(/\D/g, '').slice(0, 8);
+
+const formatZipCode = (value: string) => {
+  const digits = getZipCodeDigits(value);
+  if (digits.length <= 5) return digits;
+  return `${digits.slice(0, 5)}-${digits.slice(5)}`;
+};
+
 const validateWhatsApp = (value: string) => {
   const localDigits = getWhatsAppLocalDigits(value);
   const areaCode = localDigits.slice(0, 2);
@@ -327,8 +344,10 @@ export function RegisterPage({ routeBase }: RegisterPageProps) {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [legalAccepted, setLegalAccepted] = useState(false);
+  const [zipLookupStatus, setZipLookupStatus] = useState<ZipLookupStatus>('idle');
   const [error, setError] = useState<string | null>(null);
   const errorRef = useRef<HTMLDivElement | null>(null);
+  const addressNumberRef = useRef<HTMLInputElement | null>(null);
 
   const isBrokerRegistration = normalizedRoleSlug === 'corretor';
   const selectedSegments = useMemo(() => {
@@ -363,6 +382,17 @@ export function RegisterPage({ routeBase }: RegisterPageProps) {
   const profileSegmentDisabled = isBrokerRegistration && !form.brokerDocumentFlow;
   const documentFieldDisabled = isBrokerRegistration && !resolvedDocumentType;
   const showRegistrationFields = !isBrokerRegistration || Boolean(form.brokerDocumentFlow);
+  const zipCodeDigits = useMemo(() => getZipCodeDigits(form.zipCode), [form.zipCode]);
+  const zipLookupMessage =
+    zipLookupStatus === 'loading'
+      ? 'Buscando endereço pelo CEP...'
+      : zipLookupStatus === 'filled'
+        ? 'Endereço preenchido automaticamente. Confira número e complemento.'
+        : zipLookupStatus === 'not_found'
+          ? 'CEP não encontrado. Preencha o endereço manualmente.'
+          : zipLookupStatus === 'error'
+            ? 'Não foi possível buscar o CEP agora. Preencha o endereço manualmente.'
+            : '';
 
   useEffect(() => {
     if (!error) return undefined;
@@ -375,8 +405,57 @@ export function RegisterPage({ routeBase }: RegisterPageProps) {
     return () => window.clearTimeout(focusTimer);
   }, [error]);
 
+  useEffect(() => {
+    if (!showRegistrationFields || !form.zipCode || zipCodeDigits.length !== 8) {
+      setZipLookupStatus('idle');
+      return undefined;
+    }
+
+    const controller = new AbortController();
+    const lookupTimer = window.setTimeout(async () => {
+      setZipLookupStatus('loading');
+
+      try {
+        const response = await fetch(`https://viacep.com.br/ws/${zipCodeDigits}/json/`, { signal: controller.signal });
+        if (!response.ok) throw new Error('CEP lookup failed');
+
+        const payload = (await response.json()) as ViaCepResponse;
+        if (payload.erro) {
+          setZipLookupStatus('not_found');
+          return;
+        }
+
+        setForm((previous) => ({
+          ...previous,
+          street: payload.logradouro?.trim() || previous.street,
+          district: payload.bairro?.trim() || previous.district,
+          city: payload.localidade?.trim() || previous.city,
+          state: payload.uf?.trim().toUpperCase() || previous.state,
+          country: 'Brasil',
+        }));
+        setZipLookupStatus('filled');
+        window.setTimeout(() => {
+          addressNumberRef.current?.focus();
+        }, 0);
+      } catch (lookupError) {
+        if (lookupError instanceof DOMException && lookupError.name === 'AbortError') return;
+        setZipLookupStatus('error');
+      }
+    }, 350);
+
+    return () => {
+      window.clearTimeout(lookupTimer);
+      controller.abort();
+    };
+  }, [form.zipCode, showRegistrationFields, zipCodeDigits]);
+
   const updateField = <K extends keyof RegisterFormState>(field: K, value: RegisterFormState[K]) => {
     setForm((previous) => ({ ...previous, [field]: value }));
+  };
+
+  const handleZipCodeChange = (value: string) => {
+    setZipLookupStatus('idle');
+    updateField('zipCode', formatZipCode(value));
   };
 
   const handleRoleChange = (nextRole: RoleSlug) => {
@@ -779,10 +858,23 @@ export function RegisterPage({ routeBase }: RegisterPageProps) {
                 <span className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-500">CEP</span>
                 <input
                   required
+                  inputMode="numeric"
+                  autoComplete="postal-code"
+                  maxLength={9}
+                  placeholder="00000-000"
                   value={form.zipCode}
-                  onChange={(event) => updateField('zipCode', event.target.value)}
+                  onChange={(event) => handleZipCodeChange(event.target.value)}
                   className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition-colors focus:border-emerald-500 focus:bg-white"
                 />
+                {zipLookupMessage && (
+                  <p
+                    className={`text-xs font-bold leading-5 ${
+                      zipLookupStatus === 'filled' ? 'text-emerald-700' : zipLookupStatus === 'not_found' || zipLookupStatus === 'error' ? 'text-amber-700' : 'text-slate-500'
+                    }`}
+                  >
+                    {zipLookupMessage}
+                  </p>
+                )}
               </label>
 
               <label className="block space-y-2 md:col-span-2">
@@ -798,6 +890,7 @@ export function RegisterPage({ routeBase }: RegisterPageProps) {
               <label className="block space-y-2">
                 <span className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-500">Número</span>
                 <input
+                  ref={addressNumberRef}
                   required
                   value={form.number}
                   onChange={(event) => updateField('number', event.target.value)}
