@@ -102,7 +102,10 @@ const googleMapsApiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY?.trim();
 const configuredGoogleMapsMapId = import.meta.env.VITE_GOOGLE_MAPS_MAP_ID?.trim();
 const googleMapsMapId = configuredGoogleMapsMapId && configuredGoogleMapsMapId !== 'seu-map-id' ? configuredGoogleMapsMapId : 'DEMO_MAP_ID';
 const geocodedLocationStorageKey = 'alytha.marketplace.geocodedLocations.v1';
-const brazilMarketCenter = { lat: -15.78, lng: -52.0 };
+const brazilMarketCenter = { lat: -14.24, lng: -51.93 };
+const brazilOverviewZoom = 3;
+const brazilSinglePointZoom = 4;
+const brazilMaxAutoZoom = 5;
 const brazilMapBounds = {
   north: 6.2,
   south: -34.2,
@@ -310,6 +313,10 @@ type GoogleMapsApi = {
     Map: new (element: HTMLElement, options: Record<string, unknown>) => Record<string, unknown>;
     LatLngBounds: new () => {
       extend: (position: { lat: number; lng: number }) => void;
+    };
+    event: {
+      addListenerOnce: (instance: Record<string, unknown>, eventName: string, handler: () => void) => unknown;
+      removeListener: (listener: unknown) => void;
     };
     Geocoder?: new () => GoogleMapsGeocoder;
     importLibrary?: (libraryName: string) => Promise<unknown>;
@@ -641,8 +648,8 @@ function MarketplaceMap({ offers, totalCount }: { offers: PublicMarketplaceOffer
         if (!mapRef.current) {
           mapRef.current = new google.maps.Map(mapContainerRef.current, {
             center: brazilMarketCenter,
-            zoom: 4,
-            minZoom: 4,
+            zoom: brazilOverviewZoom,
+            minZoom: brazilOverviewZoom,
             maxZoom: 12,
             mapId: googleMapsMapId,
             clickableIcons: false,
@@ -783,21 +790,23 @@ function MarketplaceMap({ offers, totalCount }: { offers: PublicMarketplaceOffer
     points.forEach((point) => bounds.extend({ lat: point.lat, lng: point.lng }));
 
     if (points.length === 1) {
-      mapRef.current.setCenter({ lat: points[0].lat, lng: points[0].lng });
-      mapRef.current.setZoom(6);
+      mapRef.current.setCenter(brazilMarketCenter);
+      mapRef.current.setZoom(brazilSinglePointZoom);
       return;
     }
 
-    mapRef.current.fitBounds(bounds, { top: 86, right: 54, bottom: 74, left: 54 });
+    const idleListener = mapsWindow.google!.maps.event.addListenerOnce(mapRef.current, 'idle', () => {
+      if (mapRef.current && (mapRef.current.getZoom() || brazilOverviewZoom) > brazilMaxAutoZoom) {
+        mapRef.current.setZoom(brazilMaxAutoZoom);
+      }
+    });
+
+    mapRef.current.fitBounds(bounds, { top: 120, right: 92, bottom: 104, left: 92 });
+
+    return () => {
+      mapsWindow.google!.maps.event.removeListener(idleListener);
+    };
   }, [mapStatus, pointsBoundsKey, points]);
-
-  useEffect(() => {
-    if (mapStatus !== 'ready' || !mapRef.current || !selectedPoint) {
-      return;
-    }
-
-    mapRef.current.panTo({ lat: selectedPoint.lat, lng: selectedPoint.lng });
-  }, [mapStatus, selectedPoint]);
 
   return (
     <section className="grid gap-4 lg:grid-cols-[minmax(0,1.45fr)_minmax(320px,0.55fr)]">
