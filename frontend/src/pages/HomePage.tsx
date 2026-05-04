@@ -35,8 +35,10 @@ const channelLabel = {
 type MapCoordinate = {
   lat: number;
   lng: number;
-  precision: 'city' | 'state' | 'fallback';
+  precision: 'city' | 'state' | 'fallback' | 'geocoded';
 };
+
+type GeocodedCoordinateMap = Record<string, MapCoordinate>;
 
 type MarketplaceMapPoint = MapCoordinate & {
   key: string;
@@ -99,6 +101,7 @@ const cityCoordinates: Record<string, { lat: number; lng: number }> = {
 const googleMapsApiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY?.trim();
 const configuredGoogleMapsMapId = import.meta.env.VITE_GOOGLE_MAPS_MAP_ID?.trim();
 const googleMapsMapId = configuredGoogleMapsMapId && configuredGoogleMapsMapId !== 'seu-map-id' ? configuredGoogleMapsMapId : 'DEMO_MAP_ID';
+const geocodedLocationStorageKey = 'alytha.marketplace.geocodedLocations.v1';
 const brazilMarketCenter = { lat: -15.78, lng: -52.0 };
 const brazilMapBounds = {
   north: 6.2,
@@ -117,6 +120,13 @@ const normalizeLocationText = (value: string) =>
 
 const clampLatitude = (value: number) => Math.min(brazilMapBounds.north, Math.max(brazilMapBounds.south, value));
 const clampLongitude = (value: number) => Math.min(brazilMapBounds.east, Math.max(brazilMapBounds.west, value));
+const isCoordinateInsideBrazilBounds = (lat: number, lng: number) =>
+  Number.isFinite(lat)
+  && Number.isFinite(lng)
+  && lat <= brazilMapBounds.north
+  && lat >= brazilMapBounds.south
+  && lng <= brazilMapBounds.east
+  && lng >= brazilMapBounds.west;
 
 const getLocationHash = (value: string) =>
   normalizeLocationText(value)
@@ -124,12 +134,17 @@ const getLocationHash = (value: string) =>
     .reduce((hash, char) => hash + char.charCodeAt(0), 0);
 
 const extractStateCode = (location: string) => {
-  const matches = location.toUpperCase().match(/[A-Z]{2}/g) ?? [];
+  const normalizedLocation = location
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toUpperCase();
+  const stateTokenPattern = /(?:^|[\s,./-])([A-Z]{2})(?=$|[\s,./-])/g;
+  const matches = Array.from(normalizedLocation.matchAll(stateTokenPattern), (match) => match[1]);
   return [...matches].reverse().find((code) => Boolean(stateCoordinates[code])) || null;
 };
 
 const resolveLocationCoordinate = (location: string): MapCoordinate => {
-  const cityKey = normalizeLocationText(location.split(/\s[-/,]\s|\s-\s|,/)[0] || location);
+  const cityKey = normalizeLocationText(location.split(/\s*[-,/]\s*/)[0] || location);
   const cityCoordinate = cityCoordinates[cityKey];
   if (cityCoordinate) {
     return { ...cityCoordinate, precision: 'city' };
@@ -151,11 +166,82 @@ const resolveLocationCoordinate = (location: string): MapCoordinate => {
   return { ...brazilMarketCenter, precision: 'fallback' };
 };
 
-const buildMarketplaceMapPoints = (offers: PublicMarketplaceOfferListItem[]) => {
+const getLocationCoordinateKey = (location: string) => normalizeLocationText(location);
+
+const isStoredCoordinate = (value: unknown): value is MapCoordinate => {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+
+  const coordinate = value as Partial<MapCoordinate>;
+  return (
+    typeof coordinate.lat === 'number'
+    && typeof coordinate.lng === 'number'
+    && isCoordinateInsideBrazilBounds(coordinate.lat, coordinate.lng)
+  );
+};
+
+const getStoredGeocodedCoordinates = (): GeocodedCoordinateMap => {
+  if (typeof window === 'undefined') {
+    return {};
+  }
+
+  try {
+    const rawValue = window.sessionStorage.getItem(geocodedLocationStorageKey);
+    if (!rawValue) {
+      return {};
+    }
+
+    const parsedValue = JSON.parse(rawValue) as Record<string, unknown>;
+    return Object.fromEntries(
+      Object.entries(parsedValue)
+        .filter(([, value]) => isStoredCoordinate(value))
+        .map(([key, value]) => [
+          key,
+          {
+            lat: (value as MapCoordinate).lat,
+            lng: (value as MapCoordinate).lng,
+            precision: 'geocoded' as const,
+          },
+        ]),
+    );
+  } catch {
+    return {};
+  }
+};
+
+const storeGeocodedCoordinates = (coordinates: GeocodedCoordinateMap) => {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  try {
+    const entries = Object.entries(coordinates).slice(-250);
+    window.sessionStorage.setItem(geocodedLocationStorageKey, JSON.stringify(Object.fromEntries(entries)));
+  } catch {
+    // Cache is opportunistic; the map still works with in-memory coordinates and fallbacks.
+  }
+};
+
+const buildGeocoderAddress = (location: string) => {
+  const trimmedLocation = location.trim();
+  if (!trimmedLocation) {
+    return '';
+  }
+
+  const normalizedLocation = normalizeLocationText(trimmedLocation);
+  if (normalizedLocation.endsWith('_brasil') || normalizedLocation.endsWith('_brazil')) {
+    return trimmedLocation;
+  }
+
+  return `${trimmedLocation}, Brasil`;
+};
+
+const buildMarketplaceMapPoints = (offers: PublicMarketplaceOfferListItem[], geocodedCoordinates: GeocodedCoordinateMap = {}) => {
   const groupedPoints = new Map<string, MarketplaceMapPoint>();
 
   offers.forEach((offer) => {
-    const key = normalizeLocationText(offer.location) || String(offer.id);
+    const key = getLocationCoordinateKey(offer.location) || String(offer.id);
     const currentPoint = groupedPoints.get(key);
 
     if (currentPoint) {
@@ -172,7 +258,7 @@ const buildMarketplaceMapPoints = (offers: PublicMarketplaceOfferListItem[]) => 
       grains: [],
       totalQuantity: 0,
       averagePrice: 0,
-      ...resolveLocationCoordinate(offer.location),
+      ...(geocodedCoordinates[key] || resolveLocationCoordinate(offer.location)),
     });
   });
 
@@ -225,6 +311,8 @@ type GoogleMapsApi = {
     LatLngBounds: new () => {
       extend: (position: { lat: number; lng: number }) => void;
     };
+    Geocoder?: new () => GoogleMapsGeocoder;
+    importLibrary?: (libraryName: string) => Promise<unknown>;
     marker?: {
       AdvancedMarkerElement: new (options: Record<string, unknown>) => {
         map: Record<string, unknown> | null;
@@ -239,7 +327,44 @@ type GoogleMapsWindow = Window & {
   alythaGoogleMapsLoaded?: () => void;
 };
 
+type GoogleMapsLatLngLike =
+  | {
+      lat: () => number;
+      lng: () => number;
+    }
+  | {
+      lat: number;
+      lng: number;
+    };
+
+type GoogleMapsGeocoderResult = {
+  geometry?: {
+    location?: GoogleMapsLatLngLike;
+  };
+  types?: string[];
+};
+
+type GoogleMapsGeocoderResponse = {
+  results?: GoogleMapsGeocoderResult[];
+};
+
+type GoogleMapsGeocoder = {
+  geocode: (request: {
+    address: string;
+    componentRestrictions?: {
+      administrativeArea?: string;
+      country: string;
+    };
+    region?: string;
+  }) => Promise<GoogleMapsGeocoderResponse>;
+};
+
+type GoogleMapsGeocodingLibrary = {
+  Geocoder: new () => GoogleMapsGeocoder;
+};
+
 let googleMapsLoadPromise: Promise<GoogleMapsApi> | null = null;
+const failedGeocodedLocationKeys = new Set<string>();
 
 const loadGoogleMapsApi = (apiKey: string) => {
   if (typeof window === 'undefined') {
@@ -282,7 +407,7 @@ const loadGoogleMapsApi = (apiKey: string) => {
       key: apiKey,
       v: 'weekly',
       loading: 'async',
-      libraries: 'marker',
+      libraries: 'marker,geocoding',
       language: 'pt-BR',
       region: 'BR',
       callback: 'alythaGoogleMapsLoaded',
@@ -305,6 +430,64 @@ const loadGoogleMapsApi = (apiKey: string) => {
   });
 
   return googleMapsLoadPromise;
+};
+
+const getGoogleGeocoderConstructor = async (google: GoogleMapsApi) => {
+  if (google.maps.Geocoder) {
+    return google.maps.Geocoder;
+  }
+
+  if (!google.maps.importLibrary) {
+    return null;
+  }
+
+  const geocodingLibrary = (await google.maps.importLibrary('geocoding')) as Partial<GoogleMapsGeocodingLibrary>;
+  return geocodingLibrary.Geocoder || null;
+};
+
+const readGeocoderLatLng = (location: GoogleMapsLatLngLike | undefined) => {
+  if (!location) {
+    return null;
+  }
+
+  const lat = typeof location.lat === 'function' ? location.lat() : location.lat;
+  const lng = typeof location.lng === 'function' ? location.lng() : location.lng;
+
+  if (!isCoordinateInsideBrazilBounds(lat, lng)) {
+    return null;
+  }
+
+  return { lat, lng };
+};
+
+const selectBestGeocoderResult = (results: GoogleMapsGeocoderResult[]) =>
+  results.find((result) => result.types?.includes('locality'))
+  || results.find((result) => result.types?.includes('administrative_area_level_2'))
+  || results.find((result) => result.types?.includes('sublocality'))
+  || results[0]
+  || null;
+
+const delay = (milliseconds: number) => new Promise((resolve) => window.setTimeout(resolve, milliseconds));
+
+const geocodeMarketplaceLocation = async (geocoder: GoogleMapsGeocoder, location: string): Promise<MapCoordinate | null> => {
+  const address = buildGeocoderAddress(location);
+  if (!address) {
+    return null;
+  }
+
+  const stateCode = extractStateCode(location);
+  const response = await geocoder.geocode({
+    address,
+    componentRestrictions: {
+      country: 'BR',
+      ...(stateCode ? { administrativeArea: stateCode } : {}),
+    },
+    region: 'BR',
+  });
+
+  const result = selectBestGeocoderResult(response.results || []);
+  const coordinate = readGeocoderLatLng(result?.geometry?.location);
+  return coordinate ? { ...coordinate, precision: 'geocoded' } : null;
 };
 
 const createMapMarkerContent = (point: MarketplaceMapPoint, selected: boolean) => {
@@ -388,7 +571,8 @@ function OfferCard({ offer }: JSX.IntrinsicAttributes & { offer: PublicMarketpla
 }
 
 function MarketplaceMap({ offers, totalCount }: { offers: PublicMarketplaceOfferListItem[]; totalCount: number }) {
-  const points = useMemo(() => buildMarketplaceMapPoints(offers), [offers]);
+  const [geocodedCoordinates, setGeocodedCoordinates] = useState<GeocodedCoordinateMap>(() => getStoredGeocodedCoordinates());
+  const points = useMemo(() => buildMarketplaceMapPoints(offers, geocodedCoordinates), [geocodedCoordinates, offers]);
   const [selectedPointKey, setSelectedPointKey] = useState('');
   const selectedPoint = points.find((point) => point.key === selectedPointKey) || points[0] || null;
   const sellTotal = offers.filter((offer) => offer.type === 'venda').length;
@@ -403,6 +587,24 @@ function MarketplaceMap({ offers, totalCount }: { offers: PublicMarketplaceOffer
   const pointsBoundsKey = useMemo(
     () => points.map((point) => `${point.key}:${point.lat}:${point.lng}:${point.offers.length}`).join('|'),
     [points],
+  );
+  const locationsPendingGeocoding = useMemo(() => {
+    const uniqueLocations = new Map<string, string>();
+
+    offers.forEach((offer) => {
+      const key = getLocationCoordinateKey(offer.location);
+      if (!key || geocodedCoordinates[key] || failedGeocodedLocationKeys.has(key)) {
+        return;
+      }
+
+      uniqueLocations.set(key, offer.location);
+    });
+
+    return Array.from(uniqueLocations.entries());
+  }, [geocodedCoordinates, offers]);
+  const locationsPendingGeocodingKey = useMemo(
+    () => locationsPendingGeocoding.map(([key]) => key).join('|'),
+    [locationsPendingGeocoding],
   );
 
   useEffect(() => {
@@ -507,6 +709,69 @@ function MarketplaceMap({ offers, totalCount }: { offers: PublicMarketplaceOffer
       markersRef.current = [];
     };
   }, [mapStatus, points, selectedPoint?.key]);
+
+  useEffect(() => {
+    if (mapStatus !== 'ready' || !locationsPendingGeocoding.length) {
+      return;
+    }
+
+    const mapsWindow = window as GoogleMapsWindow;
+    const google = mapsWindow.google;
+    if (!google) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const resolveCoordinates = async () => {
+      try {
+        const Geocoder = await getGoogleGeocoderConstructor(google);
+        if (!Geocoder || cancelled) {
+          return;
+        }
+
+        const geocoder = new Geocoder();
+        const resolvedCoordinates: GeocodedCoordinateMap = {};
+
+        for (const [key, location] of locationsPendingGeocoding) {
+          if (cancelled) {
+            return;
+          }
+
+          try {
+            const coordinate = await geocodeMarketplaceLocation(geocoder, location);
+            if (coordinate) {
+              resolvedCoordinates[key] = coordinate;
+            } else {
+              failedGeocodedLocationKeys.add(key);
+            }
+          } catch {
+            failedGeocodedLocationKeys.add(key);
+          }
+
+          if (locationsPendingGeocoding.length > 1) {
+            await delay(75);
+          }
+        }
+
+        if (!cancelled && Object.keys(resolvedCoordinates).length) {
+          setGeocodedCoordinates((currentCoordinates) => {
+            const nextCoordinates = { ...currentCoordinates, ...resolvedCoordinates };
+            storeGeocodedCoordinates(nextCoordinates);
+            return nextCoordinates;
+          });
+        }
+      } catch {
+        locationsPendingGeocoding.forEach(([key]) => failedGeocodedLocationKeys.add(key));
+      }
+    };
+
+    void resolveCoordinates();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [locationsPendingGeocoding, locationsPendingGeocodingKey, mapStatus]);
 
   useEffect(() => {
     if (mapStatus !== 'ready' || !mapRef.current || !points.length) {
@@ -723,13 +988,13 @@ export default function HomePage() {
     <div className="min-h-screen bg-[radial-gradient(circle_at_top,#eef6ef_0%,#ffffff_34%,#f6efe4_100%)] text-slate-900">
       <Navbar />
 
-      <main className="mx-auto max-w-7xl px-4 py-5 sm:px-6 sm:py-6 lg:px-8 lg:py-7">
-        <section className="rounded-[1.6rem] border border-white/80 bg-white/92 p-3.5 shadow-[0_45px_120px_-80px_rgba(15,23,42,0.55)] sm:rounded-[1.9rem] sm:p-4">
+      <main className="mx-auto max-w-7xl px-4 pb-5 pt-2 sm:px-6 sm:pb-6 sm:pt-3 lg:px-8 lg:pb-7 lg:pt-4">
+        <section className="rounded-[1.6rem] border border-white/80 bg-white/92 p-3 shadow-[0_45px_120px_-80px_rgba(15,23,42,0.55)] sm:rounded-[1.9rem] sm:p-3.5">
           <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
             <div className="max-w-3xl">
               <p className="text-[10px] font-black uppercase tracking-[0.24em] text-slate-500 sm:text-[11px]">Marketplace</p>
-              <h1 className="mt-1 text-[1.55rem] font-black tracking-tight text-slate-950 sm:text-[1.75rem] lg:text-[1.9rem]">Ofertas e Demandas</h1>
-              <p className="mt-0.5 max-w-3xl text-[13px] leading-6 text-slate-600 sm:text-[15px] sm:leading-7">
+              <h1 className="mt-0.5 text-xl font-black tracking-tight text-slate-950 sm:text-[1.35rem] lg:text-[0.75rem]">Ofertas e Demandas</h1>
+              <p className="mt-0.5 max-w-2xl text-xs leading-5 text-slate-600 sm:text-sm sm:leading-6 lg:max-w-none lg:whitespace-nowrap">
                 Busque por qualquer campo da oferta/demanda (grão, praça, safra, frete, modalidade, pagamento e outros).
               </p>
             </div>
@@ -779,7 +1044,7 @@ export default function HomePage() {
 
           <div
             id="marketplace-mobile-filters"
-            className={`mt-2.5 gap-2 lg:grid-cols-[1.2fr_0.6fr_0.6fr_0.6fr_0.6fr] ${mobileFiltersOpen ? 'grid' : 'hidden'} sm:grid`}
+            className={`mt-2 gap-2 lg:grid-cols-[1.2fr_0.6fr_0.6fr_0.6fr_0.6fr] ${mobileFiltersOpen ? 'grid' : 'hidden'} sm:grid`}
           >
             <label className="relative block">
               <span className="sr-only">Buscar</span>
@@ -847,7 +1112,7 @@ export default function HomePage() {
           </div>
         </section>
 
-        <section className="mt-4">
+        <section className="mt-3">
           {loading ? (
             <div className="flex items-center gap-3 rounded-[1.8rem] border border-white/80 bg-white/90 px-5 py-4 text-[13px] text-slate-600 shadow-sm sm:text-sm">
               <LoaderCircle className="h-4 w-4 animate-spin" />
