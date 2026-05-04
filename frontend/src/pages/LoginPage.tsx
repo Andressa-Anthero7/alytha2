@@ -66,6 +66,7 @@ export default function LoginPage() {
           { label: 'Quem Somos', to: '/quemsomos' },
           { label: 'Vender grãos', to: '/vendedorgraos' },
           { label: 'Comprar grãos', to: '/compradorgraos' },
+          { label: 'Corretores', to: '/corretores' },
         ].map((item) => (
           <Link
             key={item.to}

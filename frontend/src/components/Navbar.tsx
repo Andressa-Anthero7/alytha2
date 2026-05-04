@@ -19,6 +19,7 @@ const navItems: NavItem[] = [
   { label: 'Quem Somos', to: '/quemsomos' },
   { label: 'Vender grãos', to: '/vendedorgraos' },
   { label: 'Comprar grãos', to: '/compradorgraos' },
+  { label: 'Corretores', to: '/corretores' },
 ];
 
 const profileNavAllowedTypes: Record<string, readonly AppUserType[]> = {

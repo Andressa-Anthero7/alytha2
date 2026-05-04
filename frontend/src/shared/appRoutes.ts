@@ -8,7 +8,11 @@ export const OPERATIONS_PATH = '/mesa-operacional';
 export const DASHBOARD_PATH = '/dashboard';
 export const HOME_PATH = '/home';
 
-export const getPrimaryAppPath = (user: UserLike) => (user?.type === 'backoffice' ? BACKOFFICE_PATH : DASHBOARD_PATH);
+export const getPrimaryAppPath = (user: UserLike) => {
+  if (user?.type === 'backoffice') return BACKOFFICE_PATH;
+  if (user?.type === 'corretor') return OPERATIONS_PATH;
+  return DASHBOARD_PATH;
+};
 
 export const canAccessProfileContent = (user: UserLike, allowedTypes?: readonly AppUserType[]) => {
   if (!allowedTypes?.length || !user) return true;
