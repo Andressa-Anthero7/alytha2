@@ -14,13 +14,14 @@ import {
   ShieldCheck,
   UserCircle2,
 } from 'lucide-react';
-import { useEffect, useState, type ComponentType, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ComponentType, type FormEvent, type ReactNode, type Ref } from 'react';
 import { Link, Navigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import { apiFetch } from '../lib/api';
 import { getCurrentUser, setCurrentUser } from '../lib/auth';
 import { getPrimaryAppPath } from '../shared/appRoutes';
 import { formatDateTime } from '../shared/format';
+import { formatZipCode, getZipCodeDigits, getZipLookupMessage, lookupBrazilZipCode, type ZipLookupStatus } from '../shared/zipCode';
 import type { User } from '../types';
 
 type ProfileFormState = {
@@ -164,6 +165,10 @@ function TextInput({
   placeholder,
   icon: Icon,
   required,
+  inputMode,
+  autoComplete,
+  maxLength,
+  inputRef,
 }: {
   label: string;
   value: string;
@@ -171,6 +176,10 @@ function TextInput({
   placeholder?: string;
   icon?: IconComponent;
   required?: boolean;
+  inputMode?: 'none' | 'text' | 'tel' | 'url' | 'email' | 'numeric' | 'decimal' | 'search';
+  autoComplete?: string;
+  maxLength?: number;
+  inputRef?: Ref<HTMLInputElement>;
 }) {
   return (
     <label className="block space-y-1.5">
@@ -178,7 +187,11 @@ function TextInput({
       <div className="relative">
         {Icon ? <Icon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /> : null}
         <input
+          ref={inputRef}
           required={required}
+          inputMode={inputMode}
+          autoComplete={autoComplete}
+          maxLength={maxLength}
           value={value}
           onChange={(event) => onChange(event.target.value)}
           placeholder={placeholder}
@@ -198,8 +211,13 @@ export default function ProfilePage() {
   const [form, setForm] = useState<ProfileFormState>(() => createProfileForm(currentUser));
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [zipLookupStatus, setZipLookupStatus] = useState<ZipLookupStatus>('idle');
+  const [zipLookupEnabled, setZipLookupEnabled] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
+  const addressNumberRef = useRef<HTMLInputElement | null>(null);
+  const zipCodeDigits = useMemo(() => getZipCodeDigits(form.address_zip_code), [form.address_zip_code]);
+  const zipLookupMessage = getZipLookupMessage(zipLookupStatus);
 
   useEffect(() => {
     const loadProfile = async () => {
@@ -217,6 +235,8 @@ export default function ProfilePage() {
         setProfile(payload);
         setCurrentUser(payload);
         setForm(createProfileForm(payload));
+        setZipLookupEnabled(false);
+        setZipLookupStatus('idle');
       } catch (loadError) {
         setError(loadError instanceof Error ? loadError.message : 'Erro inesperado ao carregar o perfil.');
       } finally {
@@ -226,6 +246,53 @@ export default function ProfilePage() {
 
     void loadProfile();
   }, []);
+
+  useEffect(() => {
+    if (!zipLookupEnabled || !form.address_zip_code || zipCodeDigits.length !== 8) {
+      setZipLookupStatus('idle');
+      return undefined;
+    }
+
+    const controller = new AbortController();
+    const lookupTimer = window.setTimeout(async () => {
+      setZipLookupStatus('loading');
+
+      try {
+        const address = await lookupBrazilZipCode(zipCodeDigits, controller.signal);
+        if (!address) {
+          setZipLookupStatus('not_found');
+          return;
+        }
+
+        setForm((previous) => ({
+          ...previous,
+          address_street: address.street || previous.address_street,
+          address_district: address.district || previous.address_district,
+          address_city: address.city || previous.address_city,
+          address_state: address.state || previous.address_state,
+          address_country: address.country,
+        }));
+        setZipLookupStatus('filled');
+        window.setTimeout(() => {
+          addressNumberRef.current?.focus();
+        }, 0);
+      } catch (lookupError) {
+        if (lookupError instanceof DOMException && lookupError.name === 'AbortError') return;
+        setZipLookupStatus('error');
+      }
+    }, 350);
+
+    return () => {
+      window.clearTimeout(lookupTimer);
+      controller.abort();
+    };
+  }, [form.address_zip_code, zipLookupEnabled, zipCodeDigits]);
+
+  const handleZipCodeChange = (value: string) => {
+    setZipLookupEnabled(true);
+    setZipLookupStatus('idle');
+    setForm((previous) => ({ ...previous, address_zip_code: formatZipCode(value) }));
+  };
 
   if (!currentUser) {
     return <Navigate to="/login" replace />;
@@ -454,11 +521,26 @@ export default function ProfilePage() {
                       value={form.state_registration}
                       onChange={(value) => setForm((previous) => ({ ...previous, state_registration: value }))}
                     />
-                    <TextInput
-                      label="CEP"
-                      value={form.address_zip_code}
-                      onChange={(value) => setForm((previous) => ({ ...previous, address_zip_code: value }))}
-                    />
+                    <div className="space-y-1">
+                      <TextInput
+                        label="CEP"
+                        value={form.address_zip_code}
+                        onChange={handleZipCodeChange}
+                        placeholder="00000-000"
+                        inputMode="numeric"
+                        autoComplete="postal-code"
+                        maxLength={9}
+                      />
+                      {zipLookupMessage ? (
+                        <p
+                          className={`text-xs font-semibold leading-5 ${
+                            zipLookupStatus === 'filled' ? 'text-emerald-700' : zipLookupStatus === 'not_found' || zipLookupStatus === 'error' ? 'text-amber-700' : 'text-slate-500'
+                          }`}
+                        >
+                          {zipLookupMessage}
+                        </p>
+                      ) : null}
+                    </div>
                     <TextInput
                       label="Endereco"
                       value={form.address_street}
@@ -469,6 +551,7 @@ export default function ProfilePage() {
                       label="Numero"
                       value={form.address_number}
                       onChange={(value) => setForm((previous) => ({ ...previous, address_number: value }))}
+                      inputRef={addressNumberRef}
                     />
                     <TextInput
                       label="Complemento"

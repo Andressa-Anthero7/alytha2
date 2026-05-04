@@ -5,6 +5,7 @@ import LegalAgreementCheckbox from '../../components/LegalAgreementCheckbox';
 import { apiFetch } from '../../shared/api';
 import { LEGAL_DOCUMENT_VERSION } from '../../shared/legal';
 import { ShellHeader } from '../../shared/ShellHeader';
+import { formatZipCode, getZipCodeDigits, getZipLookupMessage, lookupBrazilZipCode, type ZipLookupStatus } from '../../shared/zipCode';
 
 type RegisterPageProps = {
   routeBase: string;
@@ -12,7 +13,6 @@ type RegisterPageProps = {
 
 type RoleSlug = 'comprador' | 'vendedor' | 'corretor';
 type BrokerDocumentFlow = 'pf' | 'pj' | '';
-type ZipLookupStatus = 'idle' | 'loading' | 'filled' | 'not_found' | 'error';
 
 type RegisterFormState = {
   name: string;
@@ -36,14 +36,6 @@ type RegisterFormState = {
   password: string;
   confirmPassword: string;
   brokerDocumentFlow: BrokerDocumentFlow;
-};
-
-type ViaCepResponse = {
-  erro?: boolean;
-  logradouro?: string;
-  bairro?: string;
-  localidade?: string;
-  uf?: string;
 };
 
 const roleCards: Array<{ slug: RoleSlug; label: string; summary: string }> = [
@@ -241,14 +233,6 @@ const formatWhatsApp = (value: string) => {
   return `+55 (${areaCode}) ${firstPart}-${secondPart}`;
 };
 
-const getZipCodeDigits = (value: string) => value.replace(/\D/g, '').slice(0, 8);
-
-const formatZipCode = (value: string) => {
-  const digits = getZipCodeDigits(value);
-  if (digits.length <= 5) return digits;
-  return `${digits.slice(0, 5)}-${digits.slice(5)}`;
-};
-
 const validateWhatsApp = (value: string) => {
   const localDigits = getWhatsAppLocalDigits(value);
   const areaCode = localDigits.slice(0, 2);
@@ -383,16 +367,7 @@ export function RegisterPage({ routeBase }: RegisterPageProps) {
   const documentFieldDisabled = isBrokerRegistration && !resolvedDocumentType;
   const showRegistrationFields = !isBrokerRegistration || Boolean(form.brokerDocumentFlow);
   const zipCodeDigits = useMemo(() => getZipCodeDigits(form.zipCode), [form.zipCode]);
-  const zipLookupMessage =
-    zipLookupStatus === 'loading'
-      ? 'Buscando endereço pelo CEP...'
-      : zipLookupStatus === 'filled'
-        ? 'Endereço preenchido automaticamente. Confira número e complemento.'
-        : zipLookupStatus === 'not_found'
-          ? 'CEP não encontrado. Preencha o endereço manualmente.'
-          : zipLookupStatus === 'error'
-            ? 'Não foi possível buscar o CEP agora. Preencha o endereço manualmente.'
-            : '';
+  const zipLookupMessage = getZipLookupMessage(zipLookupStatus);
 
   useEffect(() => {
     if (!error) return undefined;
@@ -416,22 +391,19 @@ export function RegisterPage({ routeBase }: RegisterPageProps) {
       setZipLookupStatus('loading');
 
       try {
-        const response = await fetch(`https://viacep.com.br/ws/${zipCodeDigits}/json/`, { signal: controller.signal });
-        if (!response.ok) throw new Error('CEP lookup failed');
-
-        const payload = (await response.json()) as ViaCepResponse;
-        if (payload.erro) {
+        const address = await lookupBrazilZipCode(zipCodeDigits, controller.signal);
+        if (!address) {
           setZipLookupStatus('not_found');
           return;
         }
 
         setForm((previous) => ({
           ...previous,
-          street: payload.logradouro?.trim() || previous.street,
-          district: payload.bairro?.trim() || previous.district,
-          city: payload.localidade?.trim() || previous.city,
-          state: payload.uf?.trim().toUpperCase() || previous.state,
-          country: 'Brasil',
+          street: address.street || previous.street,
+          district: address.district || previous.district,
+          city: address.city || previous.city,
+          state: address.state || previous.state,
+          country: address.country,
         }));
         setZipLookupStatus('filled');
         window.setTimeout(() => {
