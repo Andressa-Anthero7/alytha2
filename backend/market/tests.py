@@ -278,7 +278,7 @@ class AuthFlowTests(ValidatedRegistrationAPITestCase):
         self.assertEqual(res.status_code, 201)
         self.assertTrue(Negotiation.objects.exists())
 
-    def test_broker_can_match_with_dynamic_percentage_commission(self):
+    def test_broker_match_ignores_dynamic_percentage_commission(self):
         self.client.post(reverse('register', args=['vendedor']), {
             'name': 'Seller Percent',
             'email': 'seller.percent@test.com',
@@ -324,12 +324,12 @@ class AuthFlowTests(ValidatedRegistrationAPITestCase):
 
         self.assertEqual(res.status_code, 201)
         negotiation = Negotiation.objects.get()
-        self.assertEqual(negotiation.brokerage_mode, 'percentage')
-        self.assertEqual(negotiation.brokerage_percentage, Decimal('5.00'))
-        self.assertIsNone(negotiation.brokerage_value_per_sack)
-        self.assertEqual(negotiation.brokerage_fee, Decimal('4800.00'))
-        self.assertEqual(res.data['brokerageMode'], 'percentage')
-        self.assertEqual(res.data['brokeragePercentage'], 5.00)
+        self.assertEqual(negotiation.brokerage_mode, 'per_sack')
+        self.assertIsNone(negotiation.brokerage_percentage)
+        self.assertEqual(negotiation.brokerage_value_per_sack, Decimal('1.00'))
+        self.assertEqual(negotiation.brokerage_fee, Decimal('800.00'))
+        self.assertEqual(res.data['brokerageMode'], 'per_sack')
+        self.assertEqual(res.data['brokerageValue'], 1.00)
         self.assertEqual(res.data['brokeragePayer'], 'seller')
 
     def test_broker_can_list_users_for_trading_desk(self):
@@ -364,7 +364,7 @@ class AuthFlowTests(ValidatedRegistrationAPITestCase):
         self.assertNotIn('seller.users@test.com', emails)
         self.assertNotIn('buyer.users@test.com', emails)
 
-    def test_broker_can_match_with_value_per_sack_commission(self):
+    def test_broker_match_ignores_value_per_sack_commission(self):
         self.client.post(reverse('register', args=['vendedor']), {
             'name': 'Seller Sack',
             'email': 'seller.sack@test.com',
@@ -405,7 +405,7 @@ class AuthFlowTests(ValidatedRegistrationAPITestCase):
             'buyOfferId': buy_offer['id'],
             'sellOfferId': sell_offer['id'],
             'brokerageMode': 'per_sack',
-            'brokerageValuePerSack': 1.0
+            'brokerageValuePerSack': 4.0
         }, format='json')
 
         self.assertEqual(res.status_code, 201)
@@ -418,7 +418,7 @@ class AuthFlowTests(ValidatedRegistrationAPITestCase):
         self.assertEqual(res.data['brokerageValue'], 1.00)
         self.assertEqual(res.data['brokeragePayer'], 'seller')
 
-    def test_broker_cannot_match_with_per_sack_commission_below_one_real(self):
+    def test_broker_match_ignores_per_sack_commission_below_one_real(self):
         self.client.post(reverse('register', args=['vendedor']), {
             'name': 'Seller Sack Min',
             'email': 'seller.sack.min@test.com',
@@ -462,8 +462,11 @@ class AuthFlowTests(ValidatedRegistrationAPITestCase):
             'brokerageValuePerSack': 0.5
         }, format='json')
 
-        self.assertEqual(res.status_code, 400)
-        self.assertEqual(res.data['detail'], 'Selecione uma comissão do match entre R$ 1,00 e R$ 5,00 em passos de R$ 0,50.')
+        self.assertEqual(res.status_code, 201)
+        negotiation = Negotiation.objects.get()
+        self.assertEqual(negotiation.brokerage_mode, 'per_sack')
+        self.assertEqual(negotiation.brokerage_value_per_sack, Decimal('1.00'))
+        self.assertEqual(negotiation.brokerage_fee, Decimal('750.00'))
 
     def test_match_uses_registration_commission_from_mesa_offer(self):
         self.client.post(reverse('register', args=['vendedor']), {
@@ -589,7 +592,7 @@ class AuthFlowTests(ValidatedRegistrationAPITestCase):
         self.assertEqual(negotiation.brokerage_value_per_sack, Decimal('1.50'))
         self.assertEqual(negotiation.brokerage_fee, Decimal('975.00'))
 
-    def test_broker_can_match_with_fixed_commission_and_buyer_payer(self):
+    def test_broker_match_ignores_fixed_commission_and_buyer_payer(self):
         self.client.post(reverse('register', args=['vendedor']), {
             'name': 'Seller Fixed',
             'email': 'seller.fixed@test.com',
@@ -636,16 +639,16 @@ class AuthFlowTests(ValidatedRegistrationAPITestCase):
 
         self.assertEqual(res.status_code, 201)
         negotiation = Negotiation.objects.get()
-        self.assertEqual(negotiation.brokerage_mode, 'fixed')
+        self.assertEqual(negotiation.brokerage_mode, 'per_sack')
         self.assertIsNone(negotiation.brokerage_percentage)
-        self.assertEqual(negotiation.brokerage_value_per_sack, Decimal('1500.00'))
-        self.assertEqual(negotiation.brokerage_fee, Decimal('1500.00'))
-        self.assertEqual(negotiation.brokerage_payer, 'buyer')
-        self.assertEqual(res.data['brokerageMode'], 'fixed')
-        self.assertEqual(res.data['brokerageValue'], 1500.00)
-        self.assertEqual(res.data['brokeragePayer'], 'buyer')
+        self.assertEqual(negotiation.brokerage_value_per_sack, Decimal('1.00'))
+        self.assertEqual(negotiation.brokerage_fee, Decimal('500.00'))
+        self.assertEqual(negotiation.brokerage_payer, 'seller')
+        self.assertEqual(res.data['brokerageMode'], 'per_sack')
+        self.assertEqual(res.data['brokerageValue'], 1.00)
+        self.assertEqual(res.data['brokeragePayer'], 'seller')
 
-    def test_broker_can_match_with_spread_commission(self):
+    def test_broker_match_ignores_spread_commission(self):
         self.client.post(reverse('register', args=['vendedor']), {
             'name': 'Seller Spread',
             'email': 'seller.spread@test.com',
@@ -690,15 +693,15 @@ class AuthFlowTests(ValidatedRegistrationAPITestCase):
 
         self.assertEqual(res.status_code, 201)
         negotiation = Negotiation.objects.get()
-        self.assertEqual(negotiation.brokerage_mode, 'spread')
+        self.assertEqual(negotiation.brokerage_mode, 'per_sack')
         self.assertIsNone(negotiation.brokerage_percentage)
-        self.assertEqual(negotiation.brokerage_value_per_sack, Decimal('2.50'))
-        self.assertEqual(negotiation.brokerage_fee, Decimal('1700.00'))
-        self.assertEqual(res.data['brokerageMode'], 'spread')
-        self.assertEqual(res.data['brokerageValue'], 2.50)
+        self.assertEqual(negotiation.brokerage_value_per_sack, Decimal('1.00'))
+        self.assertEqual(negotiation.brokerage_fee, Decimal('680.00'))
+        self.assertEqual(res.data['brokerageMode'], 'per_sack')
+        self.assertEqual(res.data['brokerageValue'], 1.00)
         self.assertEqual(res.data['brokeragePayer'], 'seller')
 
-    def test_broker_cannot_match_with_non_positive_spread_commission(self):
+    def test_broker_match_ignores_non_positive_spread_commission(self):
         self.client.post(reverse('register', args=['vendedor']), {
             'name': 'Seller No Spread',
             'email': 'seller.nospread@test.com',
@@ -741,9 +744,11 @@ class AuthFlowTests(ValidatedRegistrationAPITestCase):
             'brokerageMode': 'spread',
         }, format='json')
 
-        self.assertEqual(res.status_code, 400)
-        self.assertEqual(res.data['detail'], 'Spread deve ser positivo para ser usado como comissão')
-        self.assertFalse(Negotiation.objects.exists())
+        self.assertEqual(res.status_code, 201)
+        negotiation = Negotiation.objects.get()
+        self.assertEqual(negotiation.brokerage_mode, 'per_sack')
+        self.assertEqual(negotiation.brokerage_value_per_sack, Decimal('1.00'))
+        self.assertEqual(negotiation.brokerage_fee, Decimal('750.00'))
 
     def test_broker_cannot_match_different_grains(self):
         self.client.post(reverse('register', args=['vendedor']), {
@@ -1398,6 +1403,11 @@ class MarketplaceRulesTests(ValidatedRegistrationAPITestCase):
         self.assertIn(visible_offer.id, [item['id'] for item in list_response.data['items']])
         self.assertNotIn(hidden_exclusive.id, [item['id'] for item in list_response.data['items']])
 
+        self.client.credentials(HTTP_AUTHORIZATION='Bearer token-invalido')
+        invalid_token_list = self.client.get('/api/public-marketplace/offers?limit=100')
+        self.assertEqual(invalid_token_list.status_code, 200)
+        self.assertIn(visible_offer.id, [item['id'] for item in invalid_token_list.data['items']])
+
         search_notes = self.client.get('/api/public-marketplace/offers?q=especial')
         self.assertEqual(search_notes.status_code, 200)
         self.assertIn(visible_offer.id, [item['id'] for item in search_notes.data['items']])
@@ -1416,6 +1426,7 @@ class MarketplaceRulesTests(ValidatedRegistrationAPITestCase):
         self.assertTrue(detail.data['contact']['locked'])
         self.assertNotEqual(detail.data['contact']['email'], 'seller.public.search@test.com')
         self.assertNotEqual(detail.data['contact']['phone'], '16999999999')
+        self.client.credentials()
 
         self.register_user('comprador', 'Buyer Viewer', 'buyer.viewer@test.com')
         self.login('buyer.viewer@test.com')

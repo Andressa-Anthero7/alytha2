@@ -46,11 +46,11 @@ export function DashboardWorkspaceHeader({
 
   return (
     <div className="sticky top-0 z-50">
-      <div className="relative flex overflow-hidden whitespace-nowrap border-b border-emerald-900 bg-emerald-950 py-1.5 text-[11px] text-white">
+      <div className="relative flex overflow-hidden whitespace-nowrap border-b border-emerald-900 bg-emerald-950 py-1 text-[10px] text-white">
         <div className="flex w-max animate-marquee">
           {repeatedTicker.map((item, index) => (
-            <div key={`${item}-${index}`} className="mx-5 flex items-center">
-              <span className="mr-2 h-1.5 w-1.5 rounded-full bg-emerald-400" />
+            <div key={`${item}-${index}`} className="mx-4 flex items-center">
+              <span className="mr-2 h-1 w-1 rounded-full bg-emerald-400" />
               <span className="text-emerald-50">{item}</span>
             </div>
           ))}
@@ -58,12 +58,12 @@ export function DashboardWorkspaceHeader({
       </div>
 
       <nav className="border-b border-slate-200 bg-white/95 backdrop-blur">
-        <div className="mx-auto flex max-w-7xl flex-col gap-2.5 px-4 py-2.5 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-3 sm:px-6 lg:px-8">
-          <div className="flex min-w-0 items-center gap-3 sm:flex-1">
-            <BrandLogo className="h-8 sm:h-10" width={280} height={280} />
+        <div className="mx-auto flex max-w-7xl flex-col gap-2 px-4 py-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-2.5 sm:px-6 lg:px-8">
+          <div className="flex min-w-0 items-center gap-2.5 sm:flex-1">
+            <BrandLogo className="h-7 sm:h-9" width={280} height={280} />
             <div className="min-w-0">
-              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-600">{roleLabel}</p>
-              <h1 className="truncate text-base font-black tracking-tight text-emerald-950 sm:text-xl">{headline}</h1>
+              <p className="text-[9px] font-black uppercase tracking-[0.18em] text-emerald-600">{roleLabel}</p>
+              <h1 className="truncate text-sm font-black tracking-tight text-emerald-950 sm:text-lg">{headline}</h1>
             </div>
           </div>
 
@@ -75,7 +75,7 @@ export function DashboardWorkspaceHeader({
 
             <Link
               to={primaryAction.href}
-              className="inline-flex w-full items-center justify-center gap-2 rounded-[1rem] bg-emerald-600 px-4 py-2.5 text-center text-[10px] font-black uppercase tracking-[0.14em] text-white shadow-lg shadow-emerald-600/20 transition-colors hover:bg-emerald-700 sm:w-auto sm:rounded-full sm:px-3.5 sm:py-2 sm:text-[11px] sm:tracking-[0.16em]"
+              className="inline-flex w-full items-center justify-center gap-1.5 rounded-[0.9rem] bg-emerald-600 px-3.5 py-2 text-center text-[9px] font-black uppercase tracking-[0.12em] text-white shadow-lg shadow-emerald-600/20 transition-colors hover:bg-emerald-700 sm:w-auto sm:rounded-full sm:px-3 sm:py-1.5 sm:text-[10px] sm:tracking-[0.14em]"
             >
               {primaryAction.label}
             </Link>
@@ -84,14 +84,14 @@ export function DashboardWorkspaceHeader({
               <button
                 type="button"
                 onClick={() => setShowUserMenu((currentValue) => !currentValue)}
-                className="flex w-full items-center justify-between gap-3 rounded-[1rem] border border-slate-200 bg-slate-50 px-3 py-2 shadow-sm transition-colors hover:bg-white sm:w-auto sm:justify-start sm:gap-2 sm:rounded-full sm:bg-white sm:px-2.5 sm:py-1.5 sm:hover:bg-slate-50"
+                className="flex w-full items-center justify-between gap-2.5 rounded-[0.9rem] border border-slate-200 bg-slate-50 px-3 py-1.5 shadow-sm transition-colors hover:bg-white sm:w-auto sm:justify-start sm:gap-2 sm:rounded-full sm:bg-white sm:px-2.5 sm:py-1 sm:hover:bg-slate-50"
               >
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
-                  <UserRound className="h-4 w-4" />
+                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
+                  <UserRound className="h-3.5 w-3.5" />
                 </div>
                 <div className="min-w-0 flex-1 text-left sm:flex-none">
-                  <p className="truncate text-sm font-bold text-slate-900 sm:max-w-40 sm:text-xs">{displayName}</p>
-                  <p className="truncate text-[10px] font-black uppercase tracking-[0.16em] text-emerald-600 sm:max-w-40">
+                  <p className="truncate text-xs font-bold text-slate-900 sm:max-w-40 sm:text-[11px]">{displayName}</p>
+                  <p className="truncate text-[9px] font-black uppercase tracking-[0.14em] text-emerald-600 sm:max-w-40">
                     {companyLabel}
                   </p>
                 </div>

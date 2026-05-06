@@ -1001,8 +1001,10 @@ export default function HomePage() {
         <section className="rounded-[1.6rem] border border-white/80 bg-white/92 p-3 shadow-[0_45px_120px_-80px_rgba(15,23,42,0.55)] sm:rounded-[1.9rem] sm:p-3.5">
           <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
             <div className="max-w-3xl">
-              <p className="text-[10px] font-black uppercase tracking-[0.24em] text-slate-500 sm:text-[11px]">Marketplace</p>
-              <h1 className="mt-0.5 text-xl font-black tracking-tight text-slate-950 sm:text-[1.35rem] lg:text-[0.75rem]">Ofertas e Demandas</h1>
+              <h1 className="flex flex-nowrap items-baseline gap-2 whitespace-nowrap text-slate-950">
+                <span className="text-lg font-black tracking-tight sm:text-xl">Marketplace</span>
+                <span className="text-[9px] font-black uppercase tracking-[0.18em] text-slate-500 sm:text-[10px]">Ofertas e Demandas</span>
+              </h1>
               <p className="mt-0.5 max-w-2xl text-xs leading-5 text-slate-600 sm:text-sm sm:leading-6 lg:max-w-none lg:whitespace-nowrap">
                 Busque por qualquer campo da oferta/demanda (grão, praça, safra, frete, modalidade, pagamento e outros).
               </p>

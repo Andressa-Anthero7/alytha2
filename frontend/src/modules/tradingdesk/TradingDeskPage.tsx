@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   AlertCircle,
   ArrowLeftRight,
+  Building2,
   Copy,
   Bell,
   ChevronDown,
@@ -11,6 +12,7 @@ import {
   GanttChartSquare,
   Handshake,
   Headset,
+  Info,
   KeyRound,
   LayoutGrid,
   Leaf,
@@ -32,7 +34,6 @@ type TradingDeskPageProps = {
 
 type BrokerTab = 'MESA' | 'MARKET_INFO';
 type MobileMesaTab = 'SELL' | 'MATCH' | 'BUY' | 'NEGOTIATIONS';
-type MatchBrokerageMode = 'percentage' | 'per_sack' | 'spread';
 type QuoteGrain = 'Soja' | 'Milho' | 'Sorgo';
 
 type NotificationItem = {
@@ -114,12 +115,53 @@ const mobileMesaTabs: Array<{ id: MobileMesaTab; label: string }> = [
 ];
 
 const DEFAULT_MATCH_PER_SACK_COMMISSION = '1,00';
-const perSackCommissionOptions = Array.from({ length: 9 }, (_, index) => ((index + 2) * 0.5).toFixed(2).replace('.', ','));
+const DEFAULT_MATCH_PER_SACK_COMMISSION_VALUE = 1;
+const BROKER_COMMISSION_SHARE = 0.5;
 
 const grainAccent: Record<string, string> = {
   Soja: 'bg-emerald-100 text-emerald-800 border-emerald-200',
   Milho: 'bg-amber-100 text-amber-800 border-amber-200',
   Sorgo: 'bg-orange-100 text-orange-800 border-orange-200',
+};
+
+const offerTypeLabel = {
+  venda: 'Oferta de venda',
+  compra: 'Demanda de compra',
+} as const;
+
+const offerChannelLabel = {
+  mesa: 'Operando com a mesa',
+  direta: 'Oferta direta',
+} as const;
+
+const directPaymentStatusLabel = {
+  free: 'Isenta',
+  pending: 'Aguardando pagamento',
+  paid: 'Pago',
+} as const;
+
+const offerStatusLabel = {
+  ativa: 'Ativa',
+  finalizada: 'Finalizada',
+  aguardando_pagamento: 'Aguardando pagamento',
+} as const;
+
+const percentQualityKeys = new Set(['moisture', 'impurity', 'broken', 'damaged', 'ardidos']);
+const qualityFieldLabels: Record<string, string> = {
+  moisture: 'Umidade (%)',
+  impurity: 'Impureza (%)',
+  broken: 'Quebrados (%)',
+  damaged: 'Avariados (%)',
+  ardidos: 'Ardidos (%)',
+  ph: 'PH (milho)',
+  protein: 'Proteina (soja)',
+  standard: 'Padrao',
+  nonGmo: 'Non GMO',
+  damagedSoybean: 'Soja avariada',
+  deliveryWindow: 'Janela de disponibilidade',
+  funrural: 'Tratativa de Funrural',
+  notes: 'Especificacoes',
+  observations: 'Observacoes',
 };
 
 const supportHref = supportWhatsAppHref || `mailto:${supportEmail}`;
@@ -136,6 +178,10 @@ const formatCompactCurrency = (value: number) =>
 
 const formatQuantity = (quantity: number, unit: string) => `${Number(quantity).toLocaleString('pt-BR')} ${unit}`;
 
+const formatBrokerCommission = (value: number) => formatCurrency(Number(value || 0) * BROKER_COMMISSION_SHARE);
+
+const formatBrokerCommissionPerSack = (value: number) => `R$ ${formatCompactCurrency(Number(value || 0) * BROKER_COMMISSION_SHARE)}/sc`;
+
 const formatDateLabel = (value?: string) => {
   if (!value) return 'Sem atualização';
   const parsed = new Date(value);
@@ -147,6 +193,38 @@ const formatDateLabel = (value?: string) => {
     hour: '2-digit',
     minute: '2-digit',
   }).format(parsed);
+};
+
+const formatFullDateLabel = (value?: string) => {
+  if (!value) return 'Sem atualizacao';
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return 'Sem atualizacao';
+
+  return new Intl.DateTimeFormat('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(parsed);
+};
+
+const formatQualityValue = (key: string, value: unknown) => {
+  if (typeof value === 'boolean') {
+    return value ? 'Sim' : 'Nao';
+  }
+  if (typeof value === 'number' && percentQualityKeys.has(key)) {
+    return `${value}%`;
+  }
+  if (key === 'standard') {
+    if (value === 'exportacao') {
+      return 'Exportacao';
+    }
+    if (value === 'mercado_interno') {
+      return 'Mercado interno';
+    }
+  }
+  return String(value);
 };
 
 const resolveLocationState = (location: string) => {
@@ -220,7 +298,7 @@ function GrainFilterDropdown({ value, options, onChange, label, compact = false 
         type="button"
         onClick={() => setOpen((currentValue) => !currentValue)}
         className={`inline-flex w-full items-center justify-between gap-3 rounded-full border border-slate-200 bg-slate-50 text-left font-bold text-slate-800 shadow-sm transition-colors hover:border-slate-300 hover:bg-white ${
-          compact ? 'min-w-[11.5rem] px-4 py-2.5 text-sm' : 'px-4 py-3 text-sm'
+          compact ? 'min-w-[10rem] px-3 py-1.5 text-xs' : 'px-4 py-3 text-sm'
         }`}
         aria-haspopup="listbox"
         aria-expanded={open}
@@ -281,9 +359,7 @@ export function TradingDeskPage({ currentUser, onLogout }: TradingDeskPageProps)
   const [selectedGrain, setSelectedGrain] = useState<string>('Todos');
   const [selectedBuy, setSelectedBuy] = useState<Offer | null>(null);
   const [selectedSell, setSelectedSell] = useState<Offer | null>(null);
-  const [matchBrokerageMode, setMatchBrokerageMode] = useState<MatchBrokerageMode>('per_sack');
-  const [matchBrokerageValue, setMatchBrokerageValue] = useState(DEFAULT_MATCH_PER_SACK_COMMISSION);
-  const [matchBrokeragePayer, setMatchBrokeragePayer] = useState<BrokeragePayer>('seller');
+  const [selectedOfferDetails, setSelectedOfferDetails] = useState<Offer | null>(null);
   const [brokerLinks, setBrokerLinks] = useState<BrokerLinkPayload | null>(null);
   const [brokerLinkFeedback, setBrokerLinkFeedback] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -388,8 +464,8 @@ export function TradingDeskPage({ currentUser, onLogout }: TradingDeskPageProps)
   const acceptedNegotiationsThisMonth = negotiations.filter(
     (item) => item.status === 'aceita' && isSameMonth(item.createdAt, currentMonthReference),
   );
-  const brokerCommissionForecast = pendingNegotiationsThisMonth.reduce((total, item) => total + Number(item.brokerageFee || 0), 0) * 0.3;
-  const brokerCommissionConfirmed = acceptedNegotiationsThisMonth.reduce((total, item) => total + Number(item.brokerageFee || 0), 0) * 0.3;
+  const brokerCommissionForecast = pendingNegotiationsThisMonth.reduce((total, item) => total + Number(item.brokerageFee || 0), 0) * BROKER_COMMISSION_SHARE;
+  const brokerCommissionConfirmed = acceptedNegotiationsThisMonth.reduce((total, item) => total + Number(item.brokerageFee || 0), 0) * BROKER_COMMISSION_SHARE;
   const brokerCommissionForecastLabel =
     pendingNegotiationsThisMonth.length === 1
       ? '1 match pendente no mes'
@@ -400,21 +476,16 @@ export function TradingDeskPage({ currentUser, onLogout }: TradingDeskPageProps)
       : `${acceptedNegotiationsThisMonth.length} matches aceitos no mes`;
   const matchRegistrationCommissionSource =
     getRegisteredCommissionSource(selectedSell, 'oferta de venda') ?? getRegisteredCommissionSource(selectedBuy, 'demanda de compra');
-  const matchCommissionLocked = Boolean(matchRegistrationCommissionSource);
-  const lockedMatchFormattedCommission = matchRegistrationCommissionSource?.formattedCommission ?? null;
-  const effectiveMatchBrokerageMode: MatchBrokerageMode = matchCommissionLocked ? 'per_sack' : matchBrokerageMode;
+  const matchCommissionSource =
+    matchRegistrationCommissionSource ?? {
+      commission: DEFAULT_MATCH_PER_SACK_COMMISSION_VALUE,
+      formattedCommission: DEFAULT_MATCH_PER_SACK_COMMISSION,
+      sourceLabel: 'padrao da mesa',
+      offerLabel: 'match',
+    };
   const spreadValue = selectedBuy && selectedSell ? Number(selectedBuy.price) - Number(selectedSell.price) : null;
   const spreadIsPositive = spreadValue !== null && spreadValue > 0;
-  const canExecuteMatch = Boolean(selectedBuy && selectedSell) && (effectiveMatchBrokerageMode !== 'spread' || spreadIsPositive);
-
-  useEffect(() => {
-    if (!lockedMatchFormattedCommission) {
-      return;
-    }
-
-    setMatchBrokerageMode('per_sack');
-    setMatchBrokerageValue(lockedMatchFormattedCommission);
-  }, [lockedMatchFormattedCommission]);
+  const canExecuteMatch = Boolean(selectedBuy && selectedSell);
 
   let marketTrend = 'Equilibrado';
   let trendColor = 'text-slate-500';
@@ -511,18 +582,18 @@ export function TradingDeskPage({ currentUser, onLogout }: TradingDeskPageProps)
 
   const getBrokerageRuleLabel = (neg: Negotiation) => {
     if (neg.brokerageMode === 'fixed') {
-      return `em valor fixo de ${formatCurrency(Number(neg.brokerageValue ?? 0))}`;
+      return `em valor fixo de ${formatBrokerCommission(Number(neg.brokerageValue ?? 0))}`;
     }
 
     if (neg.brokerageMode === 'spread') {
-      return `apurada pelo spread de ${formatCurrency(Number(neg.brokerageValue ?? 0))} por saca entre compra e venda`;
+      return `apurada pelo spread de ${formatBrokerCommissionPerSack(Number(neg.brokerageValue ?? 0))} entre compra e venda`;
     }
 
     if (neg.brokerageMode === 'per_sack') {
-      return `de ${formatCurrency(Number(neg.brokerageValue ?? 0))} por saca`;
+      return `de ${formatBrokerCommissionPerSack(Number(neg.brokerageValue ?? 0))}`;
     }
 
-    return `${Number(neg.brokeragePercentage ?? 0).toLocaleString('pt-BR', {
+    return `${(Number(neg.brokeragePercentage ?? 0) * BROKER_COMMISSION_SHARE).toLocaleString('pt-BR', {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     })}% sobre o montante total da operação`;
@@ -530,183 +601,31 @@ export function TradingDeskPage({ currentUser, onLogout }: TradingDeskPageProps)
 
   const getUserById = (id: number) => users.find((user) => user.id === id);
 
-  const handleMatch = async () => {
-    return handleMatchSubmission();
-
-    let parsedCommissionValue: number | null = null;
-
-    if (matchBrokerageMode === 'spread') {
-      if (spreadValue === null) {
-        setError('Selecione uma venda e uma compra para apurar o spread.');
-        return;
-      }
-
-      if (!spreadIsPositive) {
-        setError('O spread precisa ser positivo para ser usado como comissão.');
-        return;
-      }
-    } else {
-      const normalizedCommissionValue = matchBrokerageValue.replace(',', '.').trim();
-    if (!normalizedCommissionValue) {
-      setError('Informe o valor da comissão para executar o match.');
-      return;
-    }
-
-      parsedCommissionValue = Number(normalizedCommissionValue);
-    if (!Number.isFinite(parsedCommissionValue)) {
-      setError('Informe um valor numérico válido para a comissão.');
-      return;
-    }
-
-    if (matchBrokerageMode === 'percentage' && (parsedCommissionValue < 0 || parsedCommissionValue > 100)) {
-      setError('A comissão em porcentagem deve estar entre 0 e 100.');
-      return;
-    }
-
-    if (matchBrokerageMode === 'per_sack' && parsedCommissionValue < 1) {
-      setError('A comissão em reais por saca deve ser maior ou igual a 1,00.');
-      return;
-    }
-
-    if (matchBrokerageMode === 'per_sack') {
-      if (parsedCommissionValue > 5) {
-        setError('A comissão em reais por saca deve ser no máximo 5,00.');
-        return;
-      }
-
-      const halfSteps = parsedCommissionValue * 2;
-      if (Math.abs(halfSteps - Math.round(halfSteps)) > 1e-9) {
-        setError('A comissão em reais por saca deve variar de 0,50 em 0,50.');
-        return;
-      }
-    }
-
-    }
-
-    const payload: Record<string, number | string> = {
-      buyOfferId: selectedBuy.id,
-      sellOfferId: selectedSell.id,
-      brokerageMode: matchBrokerageMode,
-      brokeragePayer: matchBrokeragePayer,
-    };
-
-    if (matchBrokerageMode === 'percentage' && parsedCommissionValue !== null) {
-      payload.brokeragePercentage = parsedCommissionValue;
-    } else if (matchBrokerageMode === 'per_sack' && parsedCommissionValue !== null) {
-      payload.brokerageValue = parsedCommissionValue;
-    }
-
-    setError(null);
-    const response = await apiFetch('/negotiations/match', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-
-    if (!response.ok) {
-      const payloadError = await response.json().catch(() => null);
-      setError(payloadError?.detail || 'Não foi possível executar o match.');
-      return;
-    }
-
-    setSelectedBuy(null);
-    setSelectedSell(null);
-    setMatchBrokerageMode('per_sack');
-      setMatchBrokerageValue(DEFAULT_MATCH_PER_SACK_COMMISSION);
-    setMatchBrokeragePayer('seller');
-    await loadData();
-  };
+  const handleMatch = async () => handleMatchSubmission();
 
   const handleMatchSubmission = async () => {
     if (!selectedBuy || !selectedSell) return;
 
-    let parsedCommissionValue: number | null = null;
-
-    if (matchCommissionLocked) {
-      if (!matchRegistrationCommissionSource) {
-        setError('Não foi possível identificar a comissão cadastrada para este match.');
-        return;
-      }
-
-      parsedCommissionValue = matchRegistrationCommissionSource.commission;
-    } else if (effectiveMatchBrokerageMode === 'spread') {
-      if (spreadValue === null) {
-        setError('Selecione uma venda e uma compra para apurar o spread.');
-        return;
-      }
-
-      if (!spreadIsPositive) {
-        setError('O spread precisa ser positivo para ser usado como comissão.');
-        return;
-      }
-    } else {
-      const normalizedCommissionValue = matchBrokerageValue.replace(',', '.').trim();
-      if (!normalizedCommissionValue) {
-        setError('Informe o valor da comissão para executar o match.');
-        return;
-      }
-
-      parsedCommissionValue = Number(normalizedCommissionValue);
-      if (!Number.isFinite(parsedCommissionValue)) {
-        setError('Informe um valor numérico válido para a comissão.');
-        return;
-      }
-
-      if (effectiveMatchBrokerageMode === 'percentage' && (parsedCommissionValue < 0 || parsedCommissionValue > 100)) {
-        setError('A comissão em porcentagem deve estar entre 0 e 100.');
-        return;
-      }
-
-      if (effectiveMatchBrokerageMode === 'per_sack' && parsedCommissionValue < 1) {
-        setError('A comissão em reais por saca deve ser maior ou igual a 1,00.');
-        return;
-      }
-
-      if (effectiveMatchBrokerageMode === 'per_sack') {
-        if (parsedCommissionValue > 5) {
-          setError('A comissão em reais por saca deve ser no máximo 5,00.');
-          return;
-        }
-
-        const halfSteps = parsedCommissionValue * 2;
-        if (Math.abs(halfSteps - Math.round(halfSteps)) > 1e-9) {
-          setError('A comissão em reais por saca deve variar de 0,50 em 0,50.');
-          return;
-        }
-      }
-    }
-
-    const payload: Record<string, number | string> = {
+    const lockedPayload: Record<string, number | string> = {
       buyOfferId: selectedBuy.id,
       sellOfferId: selectedSell.id,
-      brokerageMode: effectiveMatchBrokerageMode,
-      brokeragePayer: matchBrokeragePayer,
     };
 
-    if (effectiveMatchBrokerageMode === 'percentage' && parsedCommissionValue !== null) {
-      payload.brokeragePercentage = parsedCommissionValue;
-    } else if (effectiveMatchBrokerageMode === 'per_sack' && parsedCommissionValue !== null) {
-      payload.brokerageValue = parsedCommissionValue;
-    }
-
     setError(null);
-    const response = await apiFetch('/negotiations/match', {
+    const lockedResponse = await apiFetch('/negotiations/match', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
+      body: JSON.stringify(lockedPayload),
     });
 
-    if (!response.ok) {
-      const payloadError = await response.json().catch(() => null);
-      setError(payloadError?.detail || 'Não foi possível executar o match.');
+    if (!lockedResponse.ok) {
+      const payloadError = await lockedResponse.json().catch(() => null);
+      setError(payloadError?.detail || 'Nao foi possivel executar o match.');
       return;
     }
 
     setSelectedBuy(null);
     setSelectedSell(null);
-    setMatchBrokerageMode('per_sack');
-    setMatchBrokerageValue(DEFAULT_MATCH_PER_SACK_COMMISSION);
-    setMatchBrokeragePayer('seller');
     await loadData();
   };
 
@@ -735,175 +654,36 @@ export function TradingDeskPage({ currentUser, onLogout }: TradingDeskPageProps)
     }
   };
 
-  const renderBrokerageControls = (compact = false) => (
-    <div className={`rounded-2xl border border-white/10 bg-slate-950/30 ${compact ? 'p-3' : 'p-4'}`}>
-      <p className={`font-black uppercase tracking-[0.22em] text-slate-300 ${compact ? 'text-[10px]' : 'text-[11px]'}`}>Comissão</p>
-
-      <div className="mt-3 grid grid-cols-3 gap-2">
-        <label
-          className={`flex cursor-pointer items-center justify-center gap-2 rounded-xl border px-3 py-2 text-xs font-bold uppercase tracking-[0.16em] ${
-            matchBrokerageMode === 'per_sack'
-              ? 'border-emerald-400 bg-emerald-500/10 text-emerald-200'
-              : 'border-slate-700 text-slate-400 hover:border-slate-500'
-          }`}
-        >
-          <input
-            type="radio"
-            name="brokerageMode"
-            value="per_sack"
-            checked={matchBrokerageMode === 'per_sack'}
-            onChange={() => {
-              setMatchBrokerageMode('per_sack');
-              if (!perSackCommissionOptions.includes(matchBrokerageValue)) {
-                setMatchBrokerageValue(DEFAULT_MATCH_PER_SACK_COMMISSION);
-              }
-            }}
-            className="h-3.5 w-3.5 accent-emerald-500"
-          />
-          R$/sc
-        </label>
-        <label
-          className={`flex cursor-pointer items-center justify-center gap-2 rounded-xl border px-3 py-2 text-xs font-bold uppercase tracking-[0.16em] ${
-            matchBrokerageMode === 'percentage'
-              ? 'border-emerald-400 bg-emerald-500/10 text-emerald-200'
-              : 'border-slate-700 text-slate-400 hover:border-slate-500'
-          }`}
-        >
-          <input
-            type="radio"
-            name="brokerageMode"
-            value="percentage"
-            checked={matchBrokerageMode === 'percentage'}
-            onChange={() => setMatchBrokerageMode('percentage')}
-            className="h-3.5 w-3.5 accent-emerald-500"
-          />
-          %
-        </label>
-        <label
-          className={`flex cursor-pointer items-center justify-center gap-2 rounded-xl border px-3 py-2 text-xs font-bold uppercase tracking-[0.16em] ${
-            matchBrokerageMode === 'spread'
-              ? 'border-emerald-400 bg-emerald-500/10 text-emerald-200'
-              : 'border-slate-700 text-slate-400 hover:border-slate-500'
-          }`}
-        >
-          <input
-            type="radio"
-            name="brokerageMode"
-            value="spread"
-            checked={matchBrokerageMode === 'spread'}
-            onChange={() => setMatchBrokerageMode('spread')}
-            className="h-3.5 w-3.5 accent-emerald-500"
-          />
-          Spread
-        </label>
-      </div>
-
-      {matchBrokerageMode === 'per_sack' ? (
-        <div className="mt-3 rounded-xl border border-slate-700 bg-slate-900/80 px-3 py-2">
-          <label className="block">
-            <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">Valor</span>
-            <select
-              value={matchBrokerageValue}
-              onChange={(event) => setMatchBrokerageValue(event.target.value)}
-              className="mt-1 w-full border-none bg-transparent text-sm font-bold text-white outline-none"
-            >
-              {perSackCommissionOptions.map((value) => (
-                <option key={value} value={value} className="bg-slate-900 text-white">
-                  R$ {value}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-      ) : matchBrokerageMode === 'spread' ? (
-        <div className="mt-3 rounded-xl border border-slate-700 bg-slate-900/80 px-3 py-3">
-          <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">Spread apurado</span>
-          <p className={`mt-2 text-sm font-black ${spreadIsPositive ? 'text-emerald-200' : 'text-orange-300'}`}>
-            {spreadValue === null ? 'Selecione venda e compra para calcular.' : `R$ ${formatCompactCurrency(spreadValue)}/sc`}
-          </p>
-          <p className="mt-1 text-xs leading-6 text-slate-400">Diferença entre o preço da compra e o preço da venda por saca.</p>
-        </div>
-      ) : (
-        <div className="mt-3 rounded-xl border border-slate-700 bg-slate-900/80 px-3 py-2">
-          <label className="block">
-            <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">Percentual</span>
-            <input
-              type="text"
-              inputMode="decimal"
-              value={matchBrokerageValue}
-              onChange={(event) => setMatchBrokerageValue(event.target.value.replace(/[^0-9.,]/g, ''))}
-              onBlur={() => {
-                const normalized = matchBrokerageValue.replace(',', '.').trim();
-                const parsed = Number(normalized);
-                if (!Number.isFinite(parsed)) return;
-                setMatchBrokerageValue(parsed.toFixed(2).replace('.', ','));
-              }}
-              className="mt-1 w-full border-none bg-transparent text-sm font-bold text-white outline-none placeholder:text-slate-500"
-              placeholder="1,00"
-            />
-          </label>
-        </div>
-      )}
-
-      <label className="mt-3 block rounded-xl border border-slate-700 bg-slate-900/80 px-3 py-2">
-        <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">Responsável</span>
-        <select
-          value={matchBrokeragePayer}
-          onChange={(event) => setMatchBrokeragePayer(event.target.value as BrokeragePayer)}
-          className="mt-1 w-full border-none bg-transparent text-sm font-bold text-white outline-none"
-        >
-          <option value="seller" className="bg-slate-900 text-white">
-            Vendedor paga
-          </option>
-          <option value="buyer" className="bg-slate-900 text-white">
-            Comprador paga
-          </option>
-        </select>
-      </label>
-    </div>
-  );
-
   const renderMatchBrokerageControls = (compact = false) => {
-    if (!matchCommissionLocked || !matchRegistrationCommissionSource) {
-      return renderBrokerageControls(compact);
-    }
+    const commissionSource = matchCommissionSource;
+    const sourceText = matchRegistrationCommissionSource
+      ? `Valor vindo do ${commissionSource.sourceLabel} da ${commissionSource.offerLabel}.`
+      : 'Valor padrao da mesa aplicado automaticamente no match.';
 
     return (
       <div className={`rounded-2xl border border-white/10 bg-slate-950/30 ${compact ? 'p-3' : 'p-4'}`}>
-        <p className={`font-black uppercase tracking-[0.22em] text-slate-300 ${compact ? 'text-[10px]' : 'text-[11px]'}`}>Comissão</p>
+        <div className="flex items-center justify-between gap-3">
+          <p className={`font-black uppercase tracking-[0.22em] text-slate-300 ${compact ? 'text-[10px]' : 'text-[11px]'}`}>Comissao</p>
+          <span className="rounded-full border border-emerald-300/30 bg-emerald-200/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-emerald-100">
+            Travada
+          </span>
+        </div>
 
         <div className="mt-3 rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-3 py-3">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-emerald-200/80">Valor aplicado</span>
-              <p className="mt-2 text-sm font-black text-emerald-100">R$ {matchRegistrationCommissionSource.formattedCommission}/sc</p>
-            </div>
-            <span className="rounded-full border border-emerald-300/30 bg-emerald-200/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-emerald-100">
-              Vem do cadastro
-            </span>
-          </div>
+          <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-emerald-200/80">Parte do corretor</span>
+          <p className="mt-2 text-sm font-black text-emerald-100">{formatBrokerCommissionPerSack(commissionSource.commission)}</p>
           <p className="mt-2 text-xs leading-6 text-emerald-100/80">
-            Valor vindo do {matchRegistrationCommissionSource.sourceLabel} da {matchRegistrationCommissionSource.offerLabel}.
+            50% da corretagem. Os outros 50% ficam com a mesa. {sourceText}
           </p>
         </div>
 
-        <label className="mt-3 block rounded-xl border border-slate-700 bg-slate-900/80 px-3 py-2">
-          <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">Responsável</span>
-          <select
-            value={matchBrokeragePayer}
-            onChange={(event) => setMatchBrokeragePayer(event.target.value as BrokeragePayer)}
-            className="mt-1 w-full border-none bg-transparent text-sm font-bold text-white outline-none"
-          >
-            <option value="seller" className="bg-slate-900 text-white">
-              Vendedor paga
-            </option>
-            <option value="buyer" className="bg-slate-900 text-white">
-              Comprador paga
-            </option>
-          </select>
-        </label>
+        <div className="mt-3 rounded-xl border border-slate-700 bg-slate-900/80 px-3 py-3">
+          <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">Responsavel</span>
+          <p className="mt-1 text-sm font-bold text-white">Vendedor paga</p>
+        </div>
       </div>
     );
+
   };
 
   const renderSelectedOfferCard = (
@@ -948,16 +728,31 @@ export function TradingDeskPage({ currentUser, onLogout }: TradingDeskPageProps)
               <p className={`${compact ? 'mt-1.5 text-[11px] leading-4 md:text-[10px]' : 'mt-3 text-sm leading-6'}`}>Aguardando seleção desta ponta da negociação.</p>
             )}
           </div>
-          {offer && onClear && (
-            <button
-              type="button"
-              onClick={onClear}
-              className={`rounded-full border border-white/10 text-slate-400 transition-colors hover:border-white/20 hover:text-white ${
-                compact ? 'p-1 md:p-0.5' : 'p-2'
-              }`}
-            >
-              <X className={compact ? 'h-3 w-3 md:h-2.5 md:w-2.5' : 'h-4 w-4'} />
-            </button>
+          {offer && (
+            <div className={`flex shrink-0 ${compact ? 'gap-1' : 'gap-2'}`}>
+              <button
+                type="button"
+                onClick={() => setSelectedOfferDetails(offer)}
+                title="Ver detalhes"
+                aria-label="Ver detalhes da oportunidade"
+                className={`rounded-full border border-white/10 text-slate-300 transition-colors hover:border-emerald-300/40 hover:text-emerald-100 ${
+                  compact ? 'p-1 md:p-0.5' : 'p-2'
+                }`}
+              >
+                <Info className={compact ? 'h-3 w-3 md:h-2.5 md:w-2.5' : 'h-4 w-4'} />
+              </button>
+              {onClear && (
+                <button
+                  type="button"
+                  onClick={onClear}
+                  className={`rounded-full border border-white/10 text-slate-400 transition-colors hover:border-white/20 hover:text-white ${
+                    compact ? 'p-1 md:p-0.5' : 'p-2'
+                  }`}
+                >
+                  <X className={compact ? 'h-3 w-3 md:h-2.5 md:w-2.5' : 'h-4 w-4'} />
+                </button>
+              )}
+            </div>
           )}
         </div>
       </div>
@@ -1073,7 +868,7 @@ export function TradingDeskPage({ currentUser, onLogout }: TradingDeskPageProps)
                 </div>
 
                 <div className="mt-4 grid gap-2 text-sm text-slate-600">
-                  <p>Comissão: {formatCurrency(Number(neg.brokerageFee))}</p>
+                  <p>Comissao do corretor: {formatBrokerCommission(Number(neg.brokerageFee))}</p>
                   <p>Responsável: {getBrokeragePayerLabel(neg.brokeragePayer)}</p>
                   <p>Criada em: {formatDateLabel(neg.createdAt)}</p>
                 </div>
@@ -1118,7 +913,7 @@ export function TradingDeskPage({ currentUser, onLogout }: TradingDeskPageProps)
                   {seller?.name || 'Vendedor'} x {buyer?.name || 'Comprador'}
                 </p>
                 <p className="mt-1 text-xs text-slate-500">
-                  Comissão {formatCurrency(Number(neg.brokerageFee))} • {getBrokeragePayerLabel(neg.brokeragePayer)}
+                  Comissao do corretor {formatBrokerCommission(Number(neg.brokerageFee))} • {getBrokeragePayerLabel(neg.brokeragePayer)}
                 </p>
               </div>
 
@@ -1201,6 +996,7 @@ export function TradingDeskPage({ currentUser, onLogout }: TradingDeskPageProps)
                   <th className="px-4 py-3 font-black">Produto</th>
                   <th className="px-4 py-3 font-black">Praça</th>
                   <th className="px-4 py-3 text-right font-black">Preço</th>
+                  <th className="px-4 py-3 text-right font-black">Info</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -1231,6 +1027,20 @@ export function TradingDeskPage({ currentUser, onLogout }: TradingDeskPageProps)
                       </p>
                       <p className="text-[11px] text-slate-500 xl:text-xs">Safra {offer.crop}</p>
                     </td>
+                    <td className="px-3 py-2.5 text-right xl:px-4 xl:py-3">
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setSelectedOfferDetails(offer);
+                        }}
+                        title="Ver detalhes"
+                        aria-label="Ver detalhes da oportunidade"
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 text-slate-500 transition-colors hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700"
+                      >
+                        <Info className="h-4 w-4" />
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -1238,6 +1048,127 @@ export function TradingDeskPage({ currentUser, onLogout }: TradingDeskPageProps)
           </div>
         )}
       </section>
+    );
+  };
+
+  const renderOfferDetailsModal = () => {
+    if (!selectedOfferDetails) return null;
+
+    const offer = selectedOfferDetails;
+    const owner = getUserById(offer.userId);
+    const qualityEntries = Object.entries(offer.quality || {})
+      .filter(([, value]) => value !== undefined && value !== null && String(value).trim() !== '')
+      .map(([key, value]) => ({
+        key,
+        label: qualityFieldLabels[key] || key,
+        value: formatQualityValue(key, value),
+      }));
+
+    const detailCards = [
+      { label: 'Localidade', value: offer.location },
+      { label: 'Safra', value: offer.crop },
+      { label: 'Frete', value: offer.shipping },
+      { label: 'Modalidade', value: offerChannelLabel[offer.negotiationChannel] || offer.negotiationChannel },
+      { label: 'Pagamento direto', value: directPaymentStatusLabel[offer.directPaymentStatus] || offer.directPaymentStatus },
+      { label: 'Taxa direta', value: formatCurrency(Number(offer.directFee || 0)) },
+      {
+        label: 'Comissao do corretor',
+        value: offer.mesaCommission == null
+          ? formatBrokerCommissionPerSack(DEFAULT_MATCH_PER_SACK_COMMISSION_VALUE)
+          : formatBrokerCommissionPerSack(Number(offer.mesaCommission)),
+      },
+    ];
+
+    return (
+      <div className="fixed inset-0 z-[110] bg-black/60 p-0 backdrop-blur-sm sm:flex sm:items-center sm:justify-center sm:p-4">
+        <div className="relative h-full w-full overflow-y-auto bg-white p-4 shadow-2xl sm:h-auto sm:max-h-[90vh] sm:max-w-5xl sm:rounded-[1.25rem] sm:p-5">
+          <div className="mb-4 flex items-start justify-between gap-4 border-b border-slate-200 pb-3">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="inline-flex rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-slate-700">
+                  {offerTypeLabel[offer.type]}
+                </span>
+                <span className="inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-emerald-800">
+                  {offerStatusLabel[offer.status] || offer.status}
+                </span>
+                <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500">ID {offer.id}</span>
+                <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500">{formatFullDateLabel(offer.createdAt)}</span>
+              </div>
+              <h2 className="mt-2 text-2xl font-black tracking-tight text-slate-950 sm:text-3xl">{offer.grain}</h2>
+              <p className="mt-1 text-sm font-semibold text-slate-600">
+                {formatQuantity(Number(offer.quantity), offer.unit)} - {offerChannelLabel[offer.negotiationChannel] || offer.negotiationChannel}
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setSelectedOfferDetails(null)}
+              className="rounded-full border border-slate-200 p-2 text-slate-500 transition-colors hover:bg-slate-50"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+
+          <div className="grid gap-2 sm:grid-cols-3">
+            {[
+              { label: 'Valor', value: formatCurrency(Number(offer.price)), tone: 'text-emerald-800' },
+              { label: 'Quantidade', value: formatQuantity(Number(offer.quantity), offer.unit), tone: 'text-slate-950' },
+              { label: 'Pagamento', value: offer.paymentTerms, tone: 'text-slate-950' },
+            ].map((item) => (
+              <article key={item.label} className="rounded-[1rem] border border-slate-200 bg-slate-50 px-3 py-2.5">
+                <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">{item.label}</p>
+                <p className={`mt-1 text-sm font-black ${item.tone}`}>{item.value}</p>
+              </article>
+            ))}
+          </div>
+
+          <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1.45fr)_minmax(300px,0.55fr)]">
+            <div className="space-y-3">
+              <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                {detailCards.map((item) => (
+                  <article key={item.label} className="rounded-[0.95rem] border border-slate-200 bg-white px-3 py-2.5">
+                    <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">{item.label}</p>
+                    <p className="mt-1 text-sm font-bold text-slate-900">{item.value}</p>
+                  </article>
+                ))}
+              </div>
+
+              {qualityEntries.length > 0 ? (
+                <div className="rounded-[1rem] border border-slate-200 bg-slate-50 px-3 py-3">
+                  <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">Qualidade</p>
+                  <dl className="mt-2 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                    {qualityEntries.map((item) => (
+                      <div key={item.key} className="flex items-center justify-between gap-3 rounded-[0.8rem] border border-slate-200 bg-white px-3 py-2">
+                        <dt className="text-[11px] font-bold text-slate-500">{item.label}</dt>
+                        <dd className="text-sm font-black text-slate-900">{item.value}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                </div>
+              ) : null}
+            </div>
+
+            <aside className="rounded-[1rem] border border-slate-200 bg-slate-50 p-4">
+              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Contato</p>
+              <p className="mt-3 text-lg font-black text-slate-950">{owner?.name || '-'}</p>
+              {owner?.company ? (
+                <p className="mt-1 inline-flex items-center gap-2 text-sm font-semibold text-slate-700">
+                  <Building2 className="h-4 w-4 text-emerald-700" />
+                  {owner.company}
+                </p>
+              ) : null}
+              <div className="mt-3 grid gap-2 text-sm font-semibold text-slate-600">
+                {owner?.phone ? <p>{owner.phone}</p> : null}
+                <p>{owner?.email || '-'}</p>
+              </div>
+              <div className="mt-4 rounded-[0.9rem] border border-emerald-100 bg-white px-3 py-3">
+                <p className="text-[10px] font-black uppercase tracking-[0.16em] text-emerald-700">Comissao exibida</p>
+                <p className="mt-2 text-sm leading-6 text-slate-600">Valores de corretagem mostram somente os 50% do corretor.</p>
+              </div>
+            </aside>
+          </div>
+        </div>
+      </div>
     );
   };
 
@@ -1304,9 +1235,9 @@ export function TradingDeskPage({ currentUser, onLogout }: TradingDeskPageProps)
             <div className="mt-6 border-t border-slate-200 pt-5">
               <p className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500">Cláusula de corretagem</p>
               <p className="mt-3 text-sm leading-7 text-slate-600">
-                Fica acordado o pagamento de comissão de corretagem {brokerageRuleLabel}, totalizando{' '}
-                <span className="font-bold text-emerald-700">{formatCurrency(Number(selectedNeg.brokerageFee))}</span>, a ser paga
-                pelo {brokeragePayerLabel} após a liquidação financeira.
+                Fica acordado o pagamento da comissão do corretor {brokerageRuleLabel}, totalizando{' '}
+                <span className="font-bold text-emerald-700">{formatBrokerCommission(Number(selectedNeg.brokerageFee))}</span>, a ser paga
+                pelo {brokeragePayerLabel} após a liquidação financeira. Este valor representa 50% da corretagem; os outros 50% ficam com a mesa.
               </p>
             </div>
           </div>
@@ -1729,10 +1660,10 @@ export function TradingDeskPage({ currentUser, onLogout }: TradingDeskPageProps)
   return (
     <div className="min-h-screen bg-[#F8F9FA] text-slate-900">
       <div className="sticky top-0 z-50">
-        <div className="relative flex overflow-hidden whitespace-nowrap border-b border-emerald-900 bg-emerald-950 py-2 text-xs text-white">
+        <div className="relative flex overflow-hidden whitespace-nowrap border-b border-emerald-900 bg-emerald-950 py-1 text-[10px] text-white">
           <div className="flex w-max animate-marquee">
             {tickerItems.map((item, idx) => (
-              <div key={`${item.type}-${idx}`} className="mx-6 flex items-center">
+              <div key={`${item.type}-${idx}`} className="mx-4 flex items-center">
                 {item.type === 'quote' ? (
                   <>
                     <span className="mr-2 font-bold text-emerald-100">{item.label}</span>
@@ -1744,7 +1675,7 @@ export function TradingDeskPage({ currentUser, onLogout }: TradingDeskPageProps)
                   </>
                 ) : (
                   <>
-                    <span className="mr-2 h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                    <span className="mr-2 h-1 w-1 rounded-full bg-emerald-500" />
                     <span className="text-emerald-50">{item.text}</span>
                   </>
                 )}
@@ -1754,14 +1685,14 @@ export function TradingDeskPage({ currentUser, onLogout }: TradingDeskPageProps)
         </div>
 
         <nav className="border-b border-slate-200 bg-white/95 backdrop-blur">
-          <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-3 py-2 sm:px-4 md:px-6">
-            <div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-600 shadow-sm sm:h-10 sm:w-10">
-                <Leaf className="h-4 w-4 text-white sm:h-5 sm:w-5" />
+          <div className="mx-auto flex max-w-7xl items-center justify-between gap-2.5 px-3 py-1.5 sm:px-4 md:px-6">
+            <div className="flex items-center gap-2.5">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-600 shadow-sm sm:h-9 sm:w-9">
+                <Leaf className="h-3.5 w-3.5 text-white sm:h-4 sm:w-4" />
               </div>
               <div className="flex flex-col justify-center">
-                <h1 className="text-lg font-black leading-none tracking-tight text-emerald-950 sm:text-xl">Alytha</h1>
-                <span className="mt-0.5 text-[9px] font-bold uppercase tracking-[0.2em] text-emerald-600">Agromarket</span>
+                <h1 className="text-base font-black leading-none tracking-tight text-emerald-950 sm:text-lg">Alytha</h1>
+                <span className="mt-0.5 text-[8px] font-bold uppercase tracking-[0.18em] text-emerald-600">Agromarket</span>
               </div>
             </div>
 
@@ -1769,10 +1700,10 @@ export function TradingDeskPage({ currentUser, onLogout }: TradingDeskPageProps)
               <GrainFilterDropdown value={selectedGrain} options={grainOptions} onChange={setSelectedGrain} compact />
             </div>
 
-            <div className="flex items-center gap-2.5">
-              <div className="hidden border-r border-slate-200 pr-4 text-right lg:block">
-                <p className="text-xs font-bold capitalize text-slate-900">{currentDate.split(',')[0]}</p>
-                <p className="text-[10px] uppercase tracking-[0.18em] text-slate-500">{currentDate.split(',')[1]?.trim()}</p>
+            <div className="flex items-center gap-2">
+              <div className="hidden border-r border-slate-200 pr-3 text-right lg:block">
+                <p className="text-[11px] font-bold capitalize text-slate-900">{currentDate.split(',')[0]}</p>
+                <p className="text-[9px] uppercase tracking-[0.16em] text-slate-500">{currentDate.split(',')[1]?.trim()}</p>
               </div>
 
               <div className="relative">
@@ -1782,10 +1713,10 @@ export function TradingDeskPage({ currentUser, onLogout }: TradingDeskPageProps)
                     setShowUserMenu(false);
                     setShowNotifications((currentValue) => !currentValue);
                   }}
-                  className="relative flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 text-slate-500 transition-colors hover:bg-slate-50 hover:text-emerald-700 sm:h-10 sm:w-10"
+                  className="relative flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 text-slate-500 transition-colors hover:bg-slate-50 hover:text-emerald-700 sm:h-9 sm:w-9"
                 >
                   <Bell className="h-4 w-4" />
-                  <span className="absolute right-2 top-2 h-2 w-2 rounded-full border border-white bg-orange-500" />
+                  <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full border border-white bg-orange-500" />
                 </button>
 
                 {showNotifications && (
@@ -1819,7 +1750,7 @@ export function TradingDeskPage({ currentUser, onLogout }: TradingDeskPageProps)
                 href={supportHref}
                 target={supportTarget}
                 rel={supportRel}
-                className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 text-slate-500 transition-colors hover:bg-slate-50 hover:text-emerald-700 md:hidden"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 text-slate-500 transition-colors hover:bg-slate-50 hover:text-emerald-700 md:hidden"
                 aria-label="Falar com suporte"
               >
                 <Headset className="h-4 w-4" />
@@ -1829,9 +1760,9 @@ export function TradingDeskPage({ currentUser, onLogout }: TradingDeskPageProps)
                 href={supportHref}
                 target={supportTarget}
                 rel={supportRel}
-                className="hidden items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2.5 text-xs font-black uppercase tracking-[0.18em] text-slate-700 transition-colors hover:bg-slate-50 md:inline-flex"
+                className="hidden items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.16em] text-slate-700 transition-colors hover:bg-slate-50 md:inline-flex"
               >
-                <Headset className="h-4 w-4 text-emerald-600" />
+                <Headset className="h-3.5 w-3.5 text-emerald-600" />
                 Suporte
               </a>
 
@@ -1842,14 +1773,14 @@ export function TradingDeskPage({ currentUser, onLogout }: TradingDeskPageProps)
                     setShowNotifications(false);
                     setShowUserMenu((currentValue) => !currentValue);
                   }}
-                  className="flex items-center gap-2.5 rounded-full border border-slate-200 bg-white px-2.5 py-1.5 transition-colors hover:bg-slate-50 sm:px-3"
+                  className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-2 py-1 transition-colors hover:bg-slate-50 sm:px-2.5"
                 >
-                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
-                    <User className="h-4 w-4" />
+                  <div className="flex h-7 w-7 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
+                    <User className="h-3.5 w-3.5" />
                   </div>
                   <div className="hidden min-w-0 text-left sm:block">
-                    <p className="truncate text-[11px] font-bold text-slate-900">{currentUser.name || 'Equipe Alytha'}</p>
-                    <p className="text-[9px] font-black uppercase tracking-[0.18em] text-emerald-600">Corretor</p>
+                    <p className="truncate text-[10px] font-bold text-slate-900">{currentUser.name || 'Equipe Alytha'}</p>
+                    <p className="text-[8px] font-black uppercase tracking-[0.16em] text-emerald-600">Corretor</p>
                   </div>
                   <ChevronDown className={`h-3.5 w-3.5 text-slate-400 transition-transform ${showUserMenu ? 'rotate-180' : ''}`} />
                 </button>
@@ -1875,7 +1806,7 @@ export function TradingDeskPage({ currentUser, onLogout }: TradingDeskPageProps)
 
                       <div className="border-b border-slate-100 bg-emerald-50/70 px-4 py-4">
                         <p className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500">Comissoes do mes</p>
-                        <p className="mt-1 text-[11px] leading-5 text-slate-600">30% da corretagem definida em cada match do mes.</p>
+                        <p className="mt-1 text-[11px] leading-5 text-slate-600">50% da corretagem definida em cada match do mes. Os outros 50% ficam com a mesa.</p>
 
                         <div className="mt-3 grid gap-2 sm:grid-cols-2">
                           <div className="rounded-2xl border border-emerald-100 bg-white px-4 py-3">
@@ -2029,6 +1960,7 @@ export function TradingDeskPage({ currentUser, onLogout }: TradingDeskPageProps)
       )}
 
       {renderContractModal()}
+      {renderOfferDetailsModal()}
     </div>
   );
 }

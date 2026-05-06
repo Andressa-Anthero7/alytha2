@@ -17,11 +17,12 @@ from django.utils import timezone
 from django.utils.html import escape
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
-from rest_framework.exceptions import PermissionDenied, ValidationError as DRFValidationError
+from rest_framework.exceptions import AuthenticationFailed, PermissionDenied, ValidationError as DRFValidationError
 from rest_framework.permissions import BasePermission, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
+from rest_framework_simplejwt.authentication import JWTAuthentication
 
 from .models import Negotiation, Offer, PasswordResetToken, User
 from .serializers import (
@@ -355,6 +356,14 @@ class BrokerReadOnlyOrBackoffice(BasePermission):
             return market_user.type in ('backoffice', 'corretor')
 
         return market_user.type == 'backoffice'
+
+
+class OptionalJWTAuthentication(JWTAuthentication):
+    def authenticate(self, request):
+        try:
+            return super().authenticate(request)
+        except AuthenticationFailed:
+            return None
 
 
 def get_market_user(request):
@@ -1136,6 +1145,7 @@ class PublicBrokerLinkView(APIView):
 
 class PublicMarketplaceView(APIView):
     permission_classes = []
+    authentication_classes = [OptionalJWTAuthentication]
 
     def get(self, request):
         return Response(build_public_marketplace_payload(get_public_marketplace_queryset(request)))
@@ -1143,6 +1153,7 @@ class PublicMarketplaceView(APIView):
 
 class PublicMarketplaceOfferListView(APIView):
     permission_classes = []
+    authentication_classes = [OptionalJWTAuthentication]
 
     @staticmethod
     def _parse_int(value, default):
@@ -1192,6 +1203,7 @@ class PublicMarketplaceOfferListView(APIView):
 
 class PublicMarketplaceOfferDetailView(APIView):
     permission_classes = []
+    authentication_classes = [OptionalJWTAuthentication]
 
     def get(self, request, offer_id):
         offer = get_object_or_404(get_public_marketplace_queryset(request), id=offer_id)
@@ -1442,6 +1454,32 @@ class NegotiationViewSet(viewsets.ModelViewSet):
         operation_total = Decimal(proposed_price) * Decimal(proposed_quantity)
 
         registration_commission = resolve_match_registration_commission(sell_offer, buy_offer)
+        if user_role == 'corretor':
+            brokerage_mode = 'per_sack'
+            brokerage_percentage = None
+            brokerage_value = registration_commission if registration_commission is not None else validate_match_per_sack_commission(None)
+            brokerage_payer = 'seller'
+            brokerage_fee = (Decimal(proposed_quantity) * brokerage_value).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+
+            negotiation = Negotiation.objects.create(
+                offer=sell_offer,
+                buy_offer=buy_offer,
+                buyer=buy_offer.user,
+                seller=sell_offer.user,
+                broker=market_user,
+                proposed_price=proposed_price,
+                proposed_quantity=proposed_quantity,
+                brokerage_mode=brokerage_mode,
+                brokerage_percentage=brokerage_percentage,
+                brokerage_value_per_sack=brokerage_value,
+                brokerage_payer=brokerage_payer,
+                brokerage_fee=brokerage_fee,
+                status='pendente',
+            )
+
+            serializer = self.get_serializer(negotiation)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+
         brokerage_mode = 'per_sack' if registration_commission is not None else request.data.get('brokerageMode') or 'percentage'
         if brokerage_mode not in ('percentage', 'fixed', 'per_sack', 'spread'):
             return Response({'detail': 'brokerageMode inválido'}, status=status.HTTP_400_BAD_REQUEST)

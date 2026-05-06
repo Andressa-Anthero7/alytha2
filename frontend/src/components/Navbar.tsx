@@ -71,7 +71,7 @@ export default function Navbar() {
         key={to}
         to={to}
         onClick={closeMobileMenu}
-        className={`rounded-full px-4 py-2.5 text-sm font-semibold transition-colors ${
+        className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
           active ? 'bg-slate-900 text-white shadow-lg shadow-slate-900/15' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
         }`}
       >
@@ -82,31 +82,31 @@ export default function Navbar() {
 
   return (
     <header className="sticky top-0 z-50 border-b border-white/70 bg-white/90 backdrop-blur-xl">
-      <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
-        <Link to={HOME_PATH} className="flex items-center gap-3">
-          <BrandLogo className="h-10 sm:h-12" width={220} height={220} />
+      <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-2 sm:px-6">
+        <Link to={HOME_PATH} className="flex items-center gap-2.5">
+          <BrandLogo className="h-8 sm:h-10" width={220} height={220} />
         </Link>
 
-        <nav className="hidden items-center justify-end gap-3 text-sm font-semibold md:flex">
+        <nav className="hidden items-center justify-end gap-2 text-xs font-semibold md:flex">
           {visibleNavItems.map((item) => renderLink(item.label, item.to))}
 
           {loggedIn ? (
             <>
               <Link
                 to={dashboardHref}
-                className={`inline-flex items-center gap-2 rounded-full px-4 py-2.5 ${
+                className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 ${
                   location.pathname === dashboardHref
                     ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/20'
                     : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
                 }`}
               >
-                <LayoutDashboard className="h-4 w-4" />
+                <LayoutDashboard className="h-3.5 w-3.5" />
                 Dashboard
               </Link>
               {user?.type === 'backoffice' ? (
                 <Link
                   to={OPERATIONS_PATH}
-                  className={`inline-flex items-center gap-2 rounded-full px-4 py-2.5 ${
+                  className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 ${
                     location.pathname === OPERATIONS_PATH
                       ? 'bg-slate-900 text-white shadow-lg shadow-slate-900/15'
                       : 'bg-slate-50 text-slate-700 hover:bg-slate-100'
@@ -115,34 +115,34 @@ export default function Navbar() {
                   Mesa de negociação
                 </Link>
               ) : null}
-              <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-xs font-black uppercase tracking-[0.22em] text-slate-500">
-                <ShieldCheck className="h-4 w-4 text-emerald-600" />
+              <div className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
+                <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" />
                 {roleLabels[user?.type as keyof typeof roleLabels] || 'Conta'}
               </div>
               <button
                 type="button"
                 onClick={handleLogout}
-                className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2.5 text-slate-700 hover:border-red-200 hover:bg-red-50 hover:text-red-600"
+                className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-slate-700 hover:border-red-200 hover:bg-red-50 hover:text-red-600"
               >
-                <LogOut className="h-4 w-4" />
+                <LogOut className="h-3.5 w-3.5" />
                 Sair
               </button>
             </>
           ) : (
             <>
               {showHomeSignupCta ? (
-                <Link to="/login" className="rounded-full px-4 py-2.5 text-slate-600 hover:bg-slate-100 hover:text-slate-900">
+                <Link to="/login" className="rounded-full px-3 py-1.5 text-slate-600 hover:bg-slate-100 hover:text-slate-900">
                   Entrar
                 </Link>
               ) : null}
               <Link
                 to={showHomeSignupCta ? '/cadastro' : '/login'}
-                className={`inline-flex items-center gap-2 rounded-full bg-emerald-600 px-5 py-2.5 text-white shadow-lg shadow-emerald-600/25 hover:bg-emerald-700 ${
+                className={`inline-flex items-center gap-1.5 rounded-full bg-emerald-600 px-4 py-1.5 text-white shadow-lg shadow-emerald-600/25 hover:bg-emerald-700 ${
                   showHomeSignupCta ? 'animate-signup-blink' : ''
                 }`}
               >
                 {showHomeSignupCta ? 'Inscreva-se' : 'Entrar'}
-                <ArrowRight className="h-4 w-4" />
+                <ArrowRight className="h-3.5 w-3.5" />
               </Link>
             </>
           )}
@@ -151,15 +151,15 @@ export default function Navbar() {
         <button
           type="button"
           onClick={() => setMobileMenuOpen((currentValue) => !currentValue)}
-          className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700 shadow-sm md:hidden"
+          className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700 shadow-sm md:hidden"
           aria-label={mobileMenuOpen ? 'Fechar menu' : 'Abrir menu'}
         >
-          {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+          {mobileMenuOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
         </button>
       </div>
 
       {mobileMenuOpen && (
-        <div className="border-t border-slate-200 bg-white px-4 pb-4 pt-3 shadow-sm md:hidden">
+        <div className="border-t border-slate-200 bg-white px-4 pb-3 pt-2.5 shadow-sm md:hidden">
           <div className="flex flex-col gap-2">
             {visibleNavItems.map((item) => renderLink(item.label, item.to))}
 
@@ -168,7 +168,7 @@ export default function Navbar() {
                 <Link
                   to={dashboardHref}
                   onClick={closeMobileMenu}
-                  className={`inline-flex items-center justify-center gap-2 rounded-full px-4 py-3 text-sm font-semibold ${
+                  className={`inline-flex items-center justify-center gap-2 rounded-full px-4 py-2.5 text-xs font-semibold ${
                     location.pathname === dashboardHref
                       ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/20'
                       : 'bg-emerald-50 text-emerald-700'
@@ -181,21 +181,21 @@ export default function Navbar() {
                   <Link
                     to={OPERATIONS_PATH}
                     onClick={closeMobileMenu}
-                    className={`inline-flex items-center justify-center gap-2 rounded-full px-4 py-3 text-sm font-semibold ${
+                    className={`inline-flex items-center justify-center gap-2 rounded-full px-4 py-2.5 text-xs font-semibold ${
                       location.pathname === OPERATIONS_PATH ? 'bg-slate-900 text-white shadow-lg shadow-slate-900/15' : 'bg-slate-50 text-slate-700'
                     }`}
                   >
                     Mesa de negociação
                   </Link>
                 ) : null}
-                <div className="inline-flex items-center justify-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-4 py-3 text-xs font-black uppercase tracking-[0.22em] text-slate-500">
+                <div className="inline-flex items-center justify-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-4 py-2.5 text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
                   <ShieldCheck className="h-4 w-4 text-emerald-600" />
                   {roleLabels[user?.type as keyof typeof roleLabels] || 'Conta'}
                 </div>
                 <button
                   type="button"
                   onClick={handleLogout}
-                  className="inline-flex items-center justify-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700"
+                  className="inline-flex items-center justify-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2.5 text-xs font-semibold text-slate-700"
                 >
                   <LogOut className="h-4 w-4" />
                   Sair
@@ -207,7 +207,7 @@ export default function Navbar() {
                   <Link
                     to="/login"
                     onClick={closeMobileMenu}
-                    className="inline-flex items-center justify-center rounded-full px-4 py-3 text-sm font-semibold text-slate-600"
+                    className="inline-flex items-center justify-center rounded-full px-4 py-2.5 text-xs font-semibold text-slate-600"
                   >
                     Entrar
                   </Link>
@@ -215,7 +215,7 @@ export default function Navbar() {
                 <Link
                   to={showHomeSignupCta ? '/cadastro' : '/login'}
                   onClick={closeMobileMenu}
-                  className={`inline-flex items-center justify-center gap-2 rounded-full bg-emerald-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-emerald-600/25 ${
+                  className={`inline-flex items-center justify-center gap-2 rounded-full bg-emerald-600 px-5 py-2.5 text-xs font-semibold text-white shadow-lg shadow-emerald-600/25 ${
                     showHomeSignupCta ? 'animate-signup-blink' : ''
                   }`}
                 >
