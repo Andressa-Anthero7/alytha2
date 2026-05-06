@@ -706,13 +706,13 @@ export function TradingDeskPage({ currentUser, onLogout }: TradingDeskPageProps)
           offer ? accentClass : 'border-slate-800 bg-slate-900/55 text-slate-500'
         }`}
       >
-        <div className={`flex items-start justify-between ${compact ? 'gap-2 md:gap-1.5' : 'gap-3'}`}>
-          <div>
+        <div className={`flex items-start justify-between ${compact ? 'gap-2' : 'gap-3'}`}>
+          <div className="min-w-0 flex-1">
             <p className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">{label}</p>
             {offer ? (
               <>
-                <h4 className={`font-black text-white ${compact ? 'mt-1 text-[15px] md:text-[14px]' : 'mt-2 text-lg'}`}>{offer.grain}</h4>
-                <p className={`text-slate-300 ${compact ? 'mt-0.5 text-[11px] leading-4 md:text-[10px]' : 'mt-1 text-sm'}`}>{offer.location}</p>
+                <h4 className={`truncate font-black text-white ${compact ? 'mt-1 text-[15px] md:text-[14px]' : 'mt-2 text-lg'}`}>{offer.grain}</h4>
+                <p className={`truncate text-slate-300 ${compact ? 'mt-0.5 text-[11px] leading-4 md:text-[10px]' : 'mt-1 text-sm'}`}>{offer.location}</p>
                 <p className={`font-mono font-black text-white ${compact ? 'mt-1.5 text-base md:mt-1 md:text-[15px]' : 'mt-3 text-xl'}`}>
                   {formatCurrency(Number(offer.price))}
                 </p>
@@ -729,27 +729,27 @@ export function TradingDeskPage({ currentUser, onLogout }: TradingDeskPageProps)
             )}
           </div>
           {offer && (
-            <div className={`flex shrink-0 ${compact ? 'gap-1' : 'gap-2'}`}>
+            <div className={`flex shrink-0 items-center ${compact ? 'gap-1' : 'gap-2'}`}>
               <button
                 type="button"
                 onClick={() => setSelectedOfferDetails(offer)}
                 title="Ver detalhes"
                 aria-label="Ver detalhes da oportunidade"
-                className={`rounded-full border border-white/10 text-slate-300 transition-colors hover:border-emerald-300/40 hover:text-emerald-100 ${
-                  compact ? 'p-1 md:p-0.5' : 'p-2'
+                className={`inline-flex shrink-0 items-center justify-center rounded-full border border-white/10 text-slate-300 transition-colors hover:border-emerald-300/40 hover:text-emerald-100 ${
+                  compact ? 'h-7 w-7' : 'h-9 w-9'
                 }`}
               >
-                <Info className={compact ? 'h-3 w-3 md:h-2.5 md:w-2.5' : 'h-4 w-4'} />
+                <Info className={compact ? 'h-3.5 w-3.5' : 'h-4 w-4'} />
               </button>
               {onClear && (
                 <button
                   type="button"
                   onClick={onClear}
-                  className={`rounded-full border border-white/10 text-slate-400 transition-colors hover:border-white/20 hover:text-white ${
-                    compact ? 'p-1 md:p-0.5' : 'p-2'
+                  className={`inline-flex shrink-0 items-center justify-center rounded-full border border-white/10 text-slate-400 transition-colors hover:border-white/20 hover:text-white ${
+                    compact ? 'h-7 w-7' : 'h-9 w-9'
                   }`}
                 >
-                  <X className={compact ? 'h-3 w-3 md:h-2.5 md:w-2.5' : 'h-4 w-4'} />
+                  <X className={compact ? 'h-3.5 w-3.5' : 'h-4 w-4'} />
                 </button>
               )}
             </div>

@@ -323,6 +323,7 @@ type GoogleMapsApi = {
     marker?: {
       AdvancedMarkerElement: new (options: Record<string, unknown>) => {
         map: Record<string, unknown> | null;
+        addEventListener?: (eventName: string, handler: () => void) => void;
         addListener?: (eventName: string, handler: () => void) => void;
       };
     };
@@ -703,9 +704,16 @@ function MarketplaceMap({ offers, totalCount }: { offers: PublicMarketplaceOffer
         position: { lat: point.lat, lng: point.lng },
         title: `${point.location}: ${point.offers.length} oportunidade(s)`,
         content: createMapMarkerContent(point, selectedPoint?.key === point.key),
+        gmpClickable: true,
       });
 
-      marker.addListener?.('click', () => setSelectedPointKey(point.key));
+      const handleMarkerClick = () => setSelectedPointKey(point.key);
+      if (marker.addEventListener) {
+        marker.addEventListener('gmp-click', handleMarkerClick);
+      } else {
+        marker.addListener?.('click', handleMarkerClick);
+      }
+
       return marker;
     });
 
