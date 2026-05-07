@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import PageLoadingOverlay from './components/PageLoadingOverlay';
 import ProfileContentRoute from './components/ProfileContentRoute';
@@ -25,6 +25,8 @@ import PublicMarketplaceOfferPage from './pages/PublicMarketplaceOfferPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
 import SellerLandingPage from './pages/SellerLandingPage';
 import { trackGoogleAnalyticsPageView } from './shared/analytics';
+import { useDocumentMetadata, type DocumentMetadata } from './shared/metadata';
+import { buildAbsolutePublicUrl } from './shared/share';
 
 const footerHiddenPaths = [
   '/app/admin/backoffice',
@@ -35,10 +37,117 @@ const footerHiddenPaths = [
   '/ofertas/compra/nova',
 ];
 
+const defaultSeoImage = buildAbsolutePublicUrl('/logo.png');
+const publicRouteMetadata: Record<string, Omit<DocumentMetadata, 'canonicalUrl' | 'imageUrl' | 'type' | 'robots'> & { canonicalPath: string }> = {
+  '/': {
+    title: 'Alytha | Marketplace de grãos',
+    description: 'Consulte ofertas de venda e demandas de compra de grãos com praça, volume, frete, safra e valor na plataforma Alytha.',
+    canonicalPath: '/',
+  },
+  '/home': {
+    title: 'Alytha | Marketplace de grãos',
+    description: 'Consulte ofertas de venda e demandas de compra de grãos com praça, volume, frete, safra e valor na plataforma Alytha.',
+    canonicalPath: '/',
+  },
+  '/vendedorgraos': {
+    title: 'Venda grãos com apoio comercial | Alytha',
+    description: 'Cadastre ofertas de soja, milho e sorgo e conecte sua produção a compradores e corretores dentro da Alytha.',
+    canonicalPath: '/vendedorgraos',
+  },
+  '/compradorgraos': {
+    title: 'Compre grãos com ofertas qualificadas | Alytha',
+    description: 'Encontre demandas e oportunidades de compra de grãos com informações de praça, volume, safra, frete e valor.',
+    canonicalPath: '/compradorgraos',
+  },
+  '/corretores': {
+    title: 'Mesa e corretagem de grãos | Alytha',
+    description: 'Alytha apoia corretores na captação, leitura de mercado e conexão entre compradores e vendedores de grãos.',
+    canonicalPath: '/corretores',
+  },
+  '/quemsomos': {
+    title: 'Quem somos | Alytha',
+    description: 'Conheça a Alytha, plataforma para conectar produtores, compradores e corretores no mercado de grãos.',
+    canonicalPath: '/quemsomos',
+  },
+  '/lgpd': {
+    title: 'LGPD e privacidade | Alytha',
+    description: 'Veja as diretrizes de privacidade, LGPD e tratamento de dados aplicadas aos usuários da Alytha.',
+    canonicalPath: '/lgpd',
+  },
+  '/termos-de-servico': {
+    title: 'Termos de serviço | Alytha',
+    description: 'Consulte os termos de uso e prestação de serviços da plataforma Alytha.',
+    canonicalPath: '/termos-de-servico',
+  },
+};
+
+const noIndexRoutePrefixes = [
+  '/app',
+  '/backoffice',
+  '/cadastro',
+  '/corretor',
+  '/dashboard',
+  '/demo',
+  '/esqueci-minha-senha',
+  '/login',
+  '/mesa-operacional',
+  '/ofertas',
+  '/perfil',
+  '/redefinir-senha',
+];
+
+const normalizePathname = (pathname: string) => {
+  const normalizedPathname = pathname.replace(/\/+$/, '');
+  return normalizedPathname || '/';
+};
+
+const buildRouteMetadata = (pathname: string): DocumentMetadata => {
+  const normalizedPathname = normalizePathname(pathname);
+
+  if (normalizedPathname.startsWith('/oportunidades/') || normalizedPathname.startsWith('/oportunidade/')) {
+    const canonicalPath = normalizedPathname.replace(/^\/oportunidade\//, '/oportunidades/');
+    return {
+      title: 'Oportunidade no marketplace | Alytha',
+      description: 'Consulte os detalhes desta oportunidade no marketplace público de grãos da Alytha.',
+      canonicalUrl: buildAbsolutePublicUrl(canonicalPath),
+      imageUrl: defaultSeoImage,
+      type: 'article',
+      robots: 'index, follow',
+    };
+  }
+
+  const publicMetadata = publicRouteMetadata[normalizedPathname];
+  if (publicMetadata) {
+    return {
+      title: publicMetadata.title,
+      description: publicMetadata.description,
+      canonicalUrl: buildAbsolutePublicUrl(publicMetadata.canonicalPath),
+      imageUrl: defaultSeoImage,
+      type: 'website',
+      robots: 'index, follow',
+    };
+  }
+
+  const noIndex = noIndexRoutePrefixes.some((pathPrefix) => normalizedPathname === pathPrefix || normalizedPathname.startsWith(`${pathPrefix}/`));
+  return {
+    title: noIndex ? 'Área restrita | Alytha' : 'Página não encontrada | Alytha',
+    description: noIndex
+      ? 'Área operacional da plataforma Alytha reservada a usuários autenticados.'
+      : 'Esta página não foi encontrada na plataforma Alytha.',
+    canonicalUrl: buildAbsolutePublicUrl(normalizedPathname),
+    imageUrl: defaultSeoImage,
+    type: 'website',
+    robots: 'noindex, follow',
+  };
+};
+
 export default function App() {
   const location = useLocation();
   const [pageLoading, setPageLoading] = useState(true);
   const hideFooter = footerHiddenPaths.some((path) => location.pathname === path || location.pathname.startsWith(`${path}/`));
+  const routeMetadata = useMemo(() => buildRouteMetadata(location.pathname), [location.pathname]);
+
+  useDocumentMetadata(routeMetadata);
 
   useEffect(() => {
     setPageLoading(true);

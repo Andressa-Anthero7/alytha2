@@ -6,6 +6,7 @@ export interface DocumentMetadata {
   canonicalUrl?: string;
   imageUrl?: string;
   type?: 'website' | 'article';
+  robots?: string;
 }
 
 const managedAttribute = 'data-alytha-managed';
@@ -57,6 +58,7 @@ export function useDocumentMetadata(metadata: DocumentMetadata) {
     setCanonicalUrl(metadata.canonicalUrl);
 
     setMetaContent('name', 'description', metadata.description);
+    setMetaContent('name', 'robots', metadata.robots || 'index, follow');
     setMetaContent('name', 'twitter:card', metadata.imageUrl ? 'summary_large_image' : 'summary');
     setMetaContent('name', 'twitter:title', metadata.title);
     setMetaContent('name', 'twitter:description', metadata.description);
@@ -69,5 +71,5 @@ export function useDocumentMetadata(metadata: DocumentMetadata) {
     setMetaContent('property', 'og:description', metadata.description);
     setMetaContent('property', 'og:url', metadata.canonicalUrl);
     setMetaContent('property', 'og:image', metadata.imageUrl);
-  }, [metadata.canonicalUrl, metadata.description, metadata.imageUrl, metadata.title, metadata.type]);
+  }, [metadata.canonicalUrl, metadata.description, metadata.imageUrl, metadata.robots, metadata.title, metadata.type]);
 }

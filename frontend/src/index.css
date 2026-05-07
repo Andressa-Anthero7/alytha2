@@ -247,6 +247,140 @@ button:disabled {
   text-transform: none !important;
 }
 
+.broker-link-compact-page .text-\[10px\] {
+  font-size: 10px;
+  line-height: 1.2;
+}
+
+.broker-link-compact-form {
+  font-size: 100%;
+}
+
+.broker-link-compact-form .text-\[10px\],
+.broker-link-compact-form .text-\[11px\] {
+  font-size: 11px;
+  line-height: 1.25;
+}
+
+.broker-link-compact-form .text-xs {
+  font-size: 0.75rem;
+  line-height: 1.05rem;
+}
+
+.broker-link-compact-form .text-sm {
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+}
+
+.broker-link-compact-form .text-2xl {
+  font-size: 1.25rem;
+  line-height: 1.55rem;
+}
+
+.broker-link-compact-form input,
+.broker-link-compact-form select,
+.broker-link-compact-form textarea {
+  border-radius: 0.75rem !important;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  padding: 0.55rem 0.8rem;
+}
+
+.broker-link-compact-form textarea {
+  min-height: 4.5rem !important;
+}
+
+.broker-link-compact-form label[class*="rounded"],
+.broker-link-compact-form div[class*="rounded"],
+.broker-link-compact-form button[class*="rounded"] {
+  border-radius: 0.75rem !important;
+}
+
+.broker-link-compact-form .rounded-full,
+.broker-link-compact-form label.rounded-full,
+.broker-link-compact-form div.rounded-full,
+.broker-link-compact-form button.rounded-full {
+  border-radius: 999px !important;
+}
+
+.broker-link-compact-form .px-4 {
+  padding-left: 0.75rem;
+  padding-right: 0.75rem;
+}
+
+.broker-link-compact-form .py-3,
+.broker-link-compact-form .py-2\.5 {
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
+}
+
+.broker-link-compact-form .py-4 {
+  padding-top: 0.625rem;
+  padding-bottom: 0.625rem;
+}
+
+.broker-link-compact-form .p-4,
+.broker-link-compact-form .p-5 {
+  padding: 0.75rem;
+}
+
+.broker-link-compact-form .mt-8,
+.broker-link-compact-form .mt-6,
+.broker-link-compact-form .mt-5 {
+  margin-top: 0.875rem;
+}
+
+.broker-link-compact-form .mt-4 {
+  margin-top: 0.75rem;
+}
+
+.broker-link-compact-form .mt-3 {
+  margin-top: 0.625rem;
+}
+
+.broker-link-compact-form .mt-2 {
+  margin-top: 0.375rem;
+}
+
+.broker-link-compact-form .mt-1 {
+  margin-top: 0.2rem;
+}
+
+.broker-link-compact-form .gap-3 {
+  gap: 0.625rem;
+}
+
+.broker-link-compact-form .gap-4 {
+  gap: 0.75rem;
+}
+
+.broker-link-compact-form .space-y-2 > :not([hidden]) ~ :not([hidden]) {
+  --tw-space-y-reverse: 0;
+  margin-top: calc(0.375rem * calc(1 - var(--tw-space-y-reverse)));
+  margin-bottom: calc(0.375rem * var(--tw-space-y-reverse));
+}
+
+.broker-link-compact-form input[type='checkbox'],
+.broker-link-compact-form input[type='radio'] {
+  height: 0.875rem;
+  min-height: 0.875rem;
+  padding: 0;
+  width: 0.875rem;
+}
+
+@media (min-width: 640px) {
+  .broker-link-compact-form .sm\:text-2xl,
+  .broker-link-compact-form .sm\:text-3xl {
+    font-size: 1.35rem;
+    line-height: 1.65rem;
+  }
+
+  .broker-link-compact-form .sm\:p-4,
+  .broker-link-compact-form .sm\:p-5 {
+    padding: 0.875rem;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .animate-signup-blink {
     animation: none;
