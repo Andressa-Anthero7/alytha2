@@ -14,9 +14,23 @@ declare global {
 
 let initializedAnalyticsId: string | null = null;
 let lastTrackedPageLocation: string | null = null;
+let skippedInitialStaticPageView = false;
 
 function canUseGoogleAnalytics() {
   return Boolean(googleAnalyticsId) && typeof window !== 'undefined' && typeof document !== 'undefined';
+}
+
+function hasGoogleAnalyticsScript() {
+  if (!googleAnalyticsId || typeof document === 'undefined') {
+    return false;
+  }
+
+  const encodedId = encodeURIComponent(googleAnalyticsId);
+  return Boolean(
+    document.querySelector(
+      `script[src*="googletagmanager.com/gtag/js?id=${googleAnalyticsId}"], script[src*="googletagmanager.com/gtag/js?id=${encodedId}"]`,
+    ),
+  );
 }
 
 export function initializeGoogleAnalytics() {
@@ -31,13 +45,17 @@ export function initializeGoogleAnalytics() {
       window.dataLayer?.push(args);
     };
 
-  window.gtag('js', new Date());
-  window.gtag('config', googleAnalyticsId, { send_page_view: false });
+  const scriptAlreadyPresent = hasGoogleAnalyticsScript();
 
-  const script = document.createElement('script');
-  script.async = true;
-  script.src = `https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(googleAnalyticsId)}`;
-  document.head.appendChild(script);
+  if (!scriptAlreadyPresent) {
+    window.gtag('js', new Date());
+    window.gtag('config', googleAnalyticsId, { send_page_view: false });
+
+    const script = document.createElement('script');
+    script.async = true;
+    script.src = `https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(googleAnalyticsId)}`;
+    document.head.appendChild(script);
+  }
 
   initializedAnalyticsId = googleAnalyticsId;
 }
@@ -52,6 +70,12 @@ export function trackGoogleAnalyticsPageView(path: string) {
   const pageLocation = new URL(path, window.location.origin).toString();
 
   if (pageLocation === lastTrackedPageLocation) {
+    return;
+  }
+
+  if (hasGoogleAnalyticsScript() && !skippedInitialStaticPageView) {
+    skippedInitialStaticPageView = true;
+    lastTrackedPageLocation = pageLocation;
     return;
   }
 
