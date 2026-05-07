@@ -661,19 +661,11 @@ def create_offer_with_rules(*, validated_data, target_user: User, exclusive_brok
 
 
 def get_public_marketplace_queryset(request=None):
-    queryset = (
+    return (
         Offer.objects.select_related('user', 'exclusive_broker')
-        .filter(status='ativa', exclusive_broker__isnull=True)
+        .filter(status='ativa')
         .order_by('-created_at')
     )
-
-    market_user = get_market_user(request) if request else None
-    user_role = getattr(market_user, 'type', None)
-    if market_user and not getattr(request.user, 'is_staff', False) and user_role != 'backoffice':
-        if user_role not in CLIENT_OFFER_TYPE_BY_ROLE:
-            return queryset.none()
-
-    return queryset
 
 
 def _parse_decimal_query_value(value):

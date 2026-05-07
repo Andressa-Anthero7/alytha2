@@ -1287,7 +1287,7 @@ class MarketplaceRulesTests(ValidatedRegistrationAPITestCase):
         self.assertEqual(blocked_sell.status_code, 403)
         self.assertEqual(blocked_sell.data['detail'], 'Perfil Comprador so pode cadastrar demanda de compra.')
 
-    def test_broker_link_creates_exclusive_offer_visible_only_to_owner_broker(self):
+    def test_broker_link_offer_appears_in_public_marketplace_but_desk_stays_private(self):
         self.register_user('corretor', 'Broker A', 'broker.a@test.com')
         self.register_user('corretor', 'Broker B', 'broker.b@test.com')
 
@@ -1337,7 +1337,7 @@ class MarketplaceRulesTests(ValidatedRegistrationAPITestCase):
 
         public_market = self.client.get('/api/public-marketplace')
         self.assertEqual(public_market.status_code, 200)
-        self.assertNotIn(offer_id, [offer['id'] for offer in public_market.data['latest']])
+        self.assertIn(offer_id, [offer['id'] for offer in public_market.data['latest']])
 
     def test_public_marketplace_offer_list_and_detail_support_search_and_contact(self):
         self.register_user('vendedor', 'Seller Public Search', 'seller.public.search@test.com')
@@ -1380,7 +1380,7 @@ class MarketplaceRulesTests(ValidatedRegistrationAPITestCase):
             payment_terms='14 dias',
             status='ativa',
         )
-        hidden_exclusive = Offer.objects.create(
+        exclusive_offer = Offer.objects.create(
             user=seller,
             exclusive_broker=broker,
             offer_type='venda',
@@ -1401,12 +1401,13 @@ class MarketplaceRulesTests(ValidatedRegistrationAPITestCase):
         list_response = self.client.get('/api/public-marketplace/offers?q=Sinop')
         self.assertEqual(list_response.status_code, 200)
         self.assertIn(visible_offer.id, [item['id'] for item in list_response.data['items']])
-        self.assertNotIn(hidden_exclusive.id, [item['id'] for item in list_response.data['items']])
+        self.assertIn(exclusive_offer.id, [item['id'] for item in list_response.data['items']])
 
         self.client.credentials(HTTP_AUTHORIZATION='Bearer token-invalido')
         invalid_token_list = self.client.get('/api/public-marketplace/offers?limit=100')
         self.assertEqual(invalid_token_list.status_code, 200)
         self.assertIn(visible_offer.id, [item['id'] for item in invalid_token_list.data['items']])
+        self.assertIn(exclusive_offer.id, [item['id'] for item in invalid_token_list.data['items']])
 
         search_notes = self.client.get('/api/public-marketplace/offers?q=especial')
         self.assertEqual(search_notes.status_code, 200)
@@ -1416,7 +1417,7 @@ class MarketplaceRulesTests(ValidatedRegistrationAPITestCase):
         self.assertEqual(grain_filter.status_code, 200)
         self.assertIn(visible_offer.id, [item['id'] for item in grain_filter.data['items']])
         self.assertNotIn(other_public_offer.id, [item['id'] for item in grain_filter.data['items']])
-        self.assertNotIn(hidden_exclusive.id, [item['id'] for item in grain_filter.data['items']])
+        self.assertNotIn(exclusive_offer.id, [item['id'] for item in grain_filter.data['items']])
 
         detail = self.client.get(f'/api/public-marketplace/offers/{visible_offer.id}')
         self.assertEqual(detail.status_code, 200)
@@ -1424,6 +1425,10 @@ class MarketplaceRulesTests(ValidatedRegistrationAPITestCase):
         self.assertEqual(detail.data['contact']['name'], 'Acesso restrito')
         self.assertEqual(detail.data['contact']['company'], '')
         self.assertTrue(detail.data['contact']['locked'])
+
+        exclusive_detail = self.client.get(f'/api/public-marketplace/offers/{exclusive_offer.id}')
+        self.assertEqual(exclusive_detail.status_code, 200)
+        self.assertEqual(exclusive_detail.data['id'], exclusive_offer.id)
         self.assertNotEqual(detail.data['contact']['email'], 'seller.public.search@test.com')
         self.assertNotEqual(detail.data['contact']['phone'], '16999999999')
         self.client.credentials()
@@ -1455,9 +1460,10 @@ class MarketplaceRulesTests(ValidatedRegistrationAPITestCase):
         self.login('broker.hidden@test.com')
         broker_marketplace = self.client.get('/api/public-marketplace')
         self.assertEqual(broker_marketplace.status_code, 200)
-        self.assertEqual(broker_marketplace.data['stats']['sellOffers'], 0)
+        self.assertEqual(broker_marketplace.data['stats']['sellOffers'], 3)
         self.assertEqual(broker_marketplace.data['stats']['buyOffers'], 0)
-        self.assertEqual(broker_marketplace.data['latest'], [])
+        self.assertIn(visible_offer.id, [item['id'] for item in broker_marketplace.data['latest']])
+        self.assertIn(exclusive_offer.id, [item['id'] for item in broker_marketplace.data['latest']])
 
     def test_client_dashboard_returns_backend_payload_for_seller(self):
         self.register_user('vendedor', 'Seller Dashboard', 'seller.dashboard@test.com')

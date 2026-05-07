@@ -57,7 +57,9 @@ export function trackGoogleAnalyticsPageView(path: string) {
 
   const pageReferrer = lastTrackedPageLocation || document.referrer;
   const pageParameters: Record<string, string> = {
+    send_to: googleAnalyticsId,
     page_location: pageLocation,
+    page_path: `${window.location.pathname}${window.location.search}${window.location.hash}`,
     page_title: document.title,
   };
 
