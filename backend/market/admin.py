@@ -24,9 +24,9 @@ class NegotiationAdmin(admin.ModelAdmin):
 
 @admin.register(NegotiationMessage)
 class NegotiationMessageAdmin(admin.ModelAdmin):
-    list_display = ('id', 'negotiation', 'audience', 'sender', 'created_at')
-    list_filter = ('audience', 'created_at')
-    search_fields = ('body', 'sender__name', 'sender__email')
+    list_display = ('id', 'negotiation', 'audience', 'sender', 'delivery_channel', 'delivery_status', 'created_at')
+    list_filter = ('audience', 'delivery_channel', 'delivery_status', 'created_at')
+    search_fields = ('body', 'external_id', 'sender__name', 'sender__email')
 
 
 @admin.register(PasswordResetToken)

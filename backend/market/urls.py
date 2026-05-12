@@ -19,6 +19,7 @@ from .views import (
     PublicMarketplaceOfferListView,
     RegisterView,
     UserViewSet,
+    WhatsAppWebhookView,
 )
 
 router = SimpleRouter(trailing_slash=False)
@@ -41,4 +42,5 @@ urlpatterns = router.urls + [
     path('public-marketplace', PublicMarketplaceView.as_view(), name='public_marketplace'),
     path('public-marketplace/offers', PublicMarketplaceOfferListView.as_view(), name='public_marketplace_offers'),
     path('public-marketplace/offers/<int:offer_id>', PublicMarketplaceOfferDetailView.as_view(), name='public_marketplace_offer_detail'),
+    path('whatsapp/webhook', WhatsAppWebhookView.as_view(), name='whatsapp_webhook'),
 ]

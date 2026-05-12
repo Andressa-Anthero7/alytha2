@@ -369,6 +369,9 @@ class NegotiationMessageSerializer(serializers.ModelSerializer):
     negotiationId = serializers.IntegerField(source='negotiation_id', read_only=True)
     senderId = serializers.IntegerField(source='sender_id', read_only=True)
     senderName = serializers.SerializerMethodField()
+    deliveryChannel = serializers.CharField(source='delivery_channel', read_only=True)
+    deliveryStatus = serializers.CharField(source='delivery_status', read_only=True)
+    externalId = serializers.CharField(source='external_id', read_only=True)
     createdAt = serializers.DateTimeField(source='created_at', read_only=True)
     body = serializers.CharField(max_length=2000, trim_whitespace=True)
 
@@ -380,10 +383,13 @@ class NegotiationMessageSerializer(serializers.ModelSerializer):
             'audience',
             'senderId',
             'senderName',
+            'deliveryChannel',
+            'deliveryStatus',
+            'externalId',
             'body',
             'createdAt',
         ]
-        read_only_fields = ['id', 'negotiationId', 'senderId', 'senderName', 'createdAt']
+        read_only_fields = ['id', 'negotiationId', 'senderId', 'senderName', 'deliveryChannel', 'deliveryStatus', 'externalId', 'createdAt']
 
     def get_senderName(self, obj):
         return obj.sender.name if obj.sender else 'Alytha'

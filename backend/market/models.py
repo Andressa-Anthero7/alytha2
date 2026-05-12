@@ -174,11 +174,18 @@ class NegotiationMessage(models.Model):
         ('buyer', 'Comprador'),
         ('seller', 'Vendedor'),
     )
+    DELIVERY_CHANNEL_CHOICES = (
+        ('app', 'Aplicacao'),
+        ('whatsapp', 'WhatsApp'),
+    )
 
     negotiation = models.ForeignKey(Negotiation, on_delete=models.CASCADE, related_name='messages')
     sender = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='negotiation_messages')
     audience = models.CharField(max_length=10, choices=AUDIENCE_CHOICES)
     body = models.TextField()
+    delivery_channel = models.CharField(max_length=20, choices=DELIVERY_CHANNEL_CHOICES, default='app')
+    delivery_status = models.CharField(max_length=30, blank=True)
+    external_id = models.CharField(max_length=120, blank=True, db_index=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

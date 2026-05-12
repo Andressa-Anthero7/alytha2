@@ -96,6 +96,9 @@ export interface NegotiationMessage {
   audience: NegotiationAudience;
   senderId: number | null;
   senderName: string;
+  deliveryChannel?: 'app' | 'whatsapp';
+  deliveryStatus?: string;
+  externalId?: string;
   body: string;
   createdAt: string;
 }

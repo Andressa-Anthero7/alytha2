@@ -1,5 +1,7 @@
 ﻿from decimal import Decimal
 
+from unittest.mock import patch
+
 from django.core.cache import cache
 from django.core.management import call_command
 from django.test import override_settings
@@ -9,6 +11,7 @@ from django.urls import reverse
 from django.contrib.auth import get_user_model
 
 from .models import Negotiation, NegotiationMessage, Offer, PasswordResetToken, User
+from .services.whatsapp import WhatsAppSendResult
 
 
 @override_settings(ALYTHA_PUBLIC_SITE_URL='https://app.alytha.test', ALYTHA_SHARE_IMAGE_URL='https://app.alytha.test/logo.png')
@@ -359,11 +362,16 @@ class AuthFlowTests(ValidatedRegistrationAPITestCase):
         }, format='json')
         negotiation_id = match.data['id']
 
-        seller_room = self.client.post(
-            f'/api/negotiations/{negotiation_id}/messages',
-            {'audience': 'seller', 'body': 'Mensagem privada para o vendedor.'},
-            format='json',
-        )
+        with patch(
+            'market.views.send_negotiation_whatsapp_message',
+            return_value=WhatsAppSendResult(sent=True, message_id='wamid.seller.test', status='sent'),
+        ) as mocked_whatsapp:
+            seller_room = self.client.post(
+                f'/api/negotiations/{negotiation_id}/messages',
+                {'audience': 'seller', 'body': 'Mensagem privada para o vendedor.'},
+                format='json',
+            )
+        mocked_whatsapp.assert_called_once()
         buyer_room = self.client.post(
             f'/api/negotiations/{negotiation_id}/messages',
             {'audience': 'buyer', 'body': 'Mensagem privada para o comprador.'},
@@ -371,7 +379,28 @@ class AuthFlowTests(ValidatedRegistrationAPITestCase):
         )
         self.assertEqual(seller_room.status_code, 201)
         self.assertEqual(buyer_room.status_code, 201)
+        self.assertEqual(seller_room.data['deliveryChannel'], 'whatsapp')
+        self.assertEqual(seller_room.data['deliveryStatus'], 'sent')
+        self.assertEqual(seller_room.data['externalId'], 'wamid.seller.test')
         self.assertEqual(NegotiationMessage.objects.count(), 2)
+
+        webhook_response = self.client.post('/api/whatsapp/webhook', {
+            'entry': [{
+                'changes': [{
+                    'value': {
+                        'messages': [{
+                            'id': 'wamid.reply.test',
+                            'from': '5516999991111',
+                            'type': 'text',
+                            'context': {'id': 'wamid.seller.test'},
+                            'text': {'body': 'Resposta pelo WhatsApp.'},
+                        }],
+                    },
+                }],
+            }],
+        }, format='json')
+        self.assertEqual(webhook_response.status_code, 200)
+        self.assertEqual(webhook_response.data['processedMessages'], 1)
 
         res = self.client.post('/api/login/', {'email': 'buyer.chat@test.com', 'password': 'pass'}, format='json')
         self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {res.data['access']}")
@@ -391,8 +420,9 @@ class AuthFlowTests(ValidatedRegistrationAPITestCase):
         self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {res.data['access']}")
         seller_messages = self.client.get(f'/api/negotiations/{negotiation_id}/messages')
         self.assertEqual(seller_messages.status_code, 200)
-        self.assertEqual([item['audience'] for item in seller_messages.data], ['seller'])
+        self.assertEqual([item['audience'] for item in seller_messages.data], ['seller', 'seller'])
         self.assertEqual(seller_messages.data[0]['body'], 'Mensagem privada para o vendedor.')
+        self.assertEqual(seller_messages.data[1]['body'], 'Resposta pelo WhatsApp.')
 
     def test_broker_match_ignores_dynamic_percentage_commission(self):
         self.client.post(reverse('register', args=['vendedor']), {

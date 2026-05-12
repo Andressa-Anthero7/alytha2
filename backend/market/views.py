@@ -25,7 +25,12 @@ from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 from rest_framework_simplejwt.authentication import JWTAuthentication
 
-from .models import Negotiation, Offer, PasswordResetToken, User
+from .models import Negotiation, NegotiationMessage, Offer, PasswordResetToken, User
+from .services.whatsapp import (
+    normalize_whatsapp_phone,
+    send_negotiation_whatsapp_message,
+    verify_whatsapp_signature,
+)
 from .serializers import (
     BrokerLinkOfferSubmissionSerializer,
     BrokerUserSummarySerializer,
@@ -1737,6 +1742,25 @@ class NegotiationViewSet(viewsets.ModelViewSet):
         serializer = NegotiationMessageSerializer(data=data)
         serializer.is_valid(raise_exception=True)
         message = serializer.save(negotiation=negotiation, sender=market_user)
+        can_forward_to_whatsapp = (
+            request.user.is_staff
+            or getattr(market_user, 'type', None) == 'backoffice'
+            or negotiation.broker_id == getattr(market_user, 'id', None)
+        )
+
+        if can_forward_to_whatsapp:
+            recipient = negotiation.buyer if requested_audience == 'buyer' else negotiation.seller
+            sender_name = market_user.name if market_user else (request.user.get_username() or 'Alytha')
+            result = send_negotiation_whatsapp_message(
+                negotiation=negotiation,
+                recipient=recipient,
+                sender_name=sender_name,
+                body=message.body,
+            )
+            message.delivery_channel = 'whatsapp' if result.sent else 'app'
+            message.delivery_status = result.status
+            message.external_id = result.message_id
+            message.save(update_fields=['delivery_channel', 'delivery_status', 'external_id'])
 
         return Response(NegotiationMessageSerializer(message).data, status=status.HTTP_201_CREATED)
 
@@ -1913,6 +1937,126 @@ class NegotiationViewSet(viewsets.ModelViewSet):
         if not full_access and not is_participant:
             raise PermissionDenied('Sem permissão para remover esta negociação.')
         return super().destroy(request, *args, **kwargs)
+
+
+def find_user_by_whatsapp_phone(phone):
+    target = normalize_whatsapp_phone(phone)
+    if not target:
+        return None
+
+    for user in User.objects.exclude(phone='').only('id', 'name', 'phone', 'type'):
+        if normalize_whatsapp_phone(user.phone) == target:
+            return user
+
+    return None
+
+
+def resolve_whatsapp_message_target(from_phone, context_message_id=''):
+    reference = None
+    if context_message_id:
+        reference = (
+            NegotiationMessage.objects.select_related('negotiation', 'negotiation__buyer', 'negotiation__seller')
+            .filter(external_id=context_message_id)
+            .order_by('-created_at')
+            .first()
+        )
+    user = find_user_by_whatsapp_phone(from_phone)
+
+    if reference:
+        negotiation = reference.negotiation
+        sender = user or (negotiation.buyer if reference.audience == 'buyer' else negotiation.seller)
+        return negotiation, reference.audience, sender
+
+    if not user:
+        return None, '', None
+
+    if user.type == 'comprador':
+        audience = 'buyer'
+        queryset = Negotiation.objects.filter(buyer=user)
+    elif user.type == 'vendedor':
+        audience = 'seller'
+        queryset = Negotiation.objects.filter(seller=user)
+    else:
+        return None, '', user
+
+    negotiation = queryset.filter(status='pendente').order_by('-updated_at', '-created_at').first()
+    if not negotiation:
+        negotiation = queryset.order_by('-updated_at', '-created_at').first()
+
+    return negotiation, audience, user
+
+
+class WhatsAppWebhookView(APIView):
+    permission_classes = []
+    authentication_classes = []
+
+    def get(self, request):
+        mode = request.query_params.get('hub.mode')
+        token = request.query_params.get('hub.verify_token')
+        challenge = request.query_params.get('hub.challenge', '')
+
+        if mode == 'subscribe' and token and token == settings.ALYTHA_WHATSAPP_VERIFY_TOKEN:
+            return HttpResponse(challenge, content_type='text/plain')
+
+        return HttpResponse('Forbidden', status=403, content_type='text/plain')
+
+    def post(self, request):
+        if not verify_whatsapp_signature(request.body, request.META.get('HTTP_X_HUB_SIGNATURE_256', '')):
+            return Response({'detail': 'Assinatura invalida.'}, status=status.HTTP_403_FORBIDDEN)
+
+        try:
+            payload = json.loads(request.body.decode('utf-8') or '{}')
+        except json.JSONDecodeError:
+            return Response({'detail': 'Payload invalido.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        processed_messages = 0
+        processed_statuses = 0
+
+        for entry in payload.get('entry', []):
+            for change in entry.get('changes', []):
+                value = change.get('value') or {}
+
+                for status_payload in value.get('statuses', []):
+                    message_id = str(status_payload.get('id') or '')
+                    delivery_status = str(status_payload.get('status') or '')
+                    if message_id and delivery_status:
+                        processed_statuses += NegotiationMessage.objects.filter(external_id=message_id).update(
+                            delivery_status=delivery_status,
+                        )
+
+                for incoming in value.get('messages', []):
+                    external_id = str(incoming.get('id') or '')
+                    if external_id and NegotiationMessage.objects.filter(external_id=external_id).exists():
+                        continue
+
+                    from_phone = incoming.get('from')
+                    context_message_id = str((incoming.get('context') or {}).get('id') or '')
+                    negotiation, audience, sender = resolve_whatsapp_message_target(from_phone, context_message_id)
+                    if not negotiation or audience not in {'buyer', 'seller'}:
+                        logger.info('WhatsApp webhook ignored: negotiation not found for phone %s.', from_phone)
+                        continue
+
+                    message_type = incoming.get('type')
+                    if message_type == 'text':
+                        body = str((incoming.get('text') or {}).get('body') or '').strip()
+                    else:
+                        body = f'Mensagem recebida pelo WhatsApp ({message_type or "tipo nao informado"}).'
+
+                    if not body:
+                        continue
+
+                    NegotiationMessage.objects.create(
+                        negotiation=negotiation,
+                        sender=sender,
+                        audience=audience,
+                        body=body,
+                        delivery_channel='whatsapp',
+                        delivery_status='received',
+                        external_id=external_id,
+                    )
+                    processed_messages += 1
+
+        return Response({'processedMessages': processed_messages, 'processedStatuses': processed_statuses})
 
 
 class RegisterView(APIView):
