@@ -32,6 +32,15 @@ const channelLabel = {
   direta: 'Oferta direta',
 } as const;
 
+const seoQuickLinks = [
+  { label: 'Vender soja', to: '/vender-soja' },
+  { label: 'Comprar soja', to: '/comprar-soja' },
+  { label: 'Vender milho', to: '/vender-milho' },
+  { label: 'Comprar milho', to: '/comprar-milho' },
+  { label: 'Corretora de graos', to: '/corretora-de-graos' },
+  { label: 'Marketplace de graos', to: '/marketplace-de-graos' },
+] as const;
+
 type MapCoordinate = {
   lat: number;
   lng: number;
@@ -1060,6 +1069,18 @@ export default function HomePage() {
               ) : null}
             </div>
           </div>
+
+          <nav className="mt-3 flex flex-wrap gap-2 border-t border-slate-100 pt-3" aria-label="Atalhos de mercado">
+            {seoQuickLinks.map((link) => (
+              <Link
+                key={link.to}
+                to={link.to}
+                className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.14em] text-slate-700 hover:border-slate-300 hover:bg-white"
+              >
+                {link.label}
+              </Link>
+            ))}
+          </nav>
 
           <div
             id="marketplace-mobile-filters"

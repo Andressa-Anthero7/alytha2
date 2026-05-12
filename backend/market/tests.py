@@ -76,6 +76,9 @@ class PublicMarketplaceOfferShareTests(APITestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response['Content-Type'], 'application/xml; charset=utf-8')
         self.assertIn('<loc>https://app.alytha.test/vendedorgraos</loc>', content)
+        self.assertIn('<loc>https://app.alytha.test/vender-soja</loc>', content)
+        self.assertIn('<loc>https://app.alytha.test/comprar-soja</loc>', content)
+        self.assertIn('<loc>https://app.alytha.test/marketplace-de-graos</loc>', content)
         self.assertIn(f'<loc>https://app.alytha.test/oportunidades/{active_offer.id}</loc>', content)
         self.assertNotIn(f'<loc>https://app.alytha.test/oportunidades/{finished_offer.id}</loc>', content)
 

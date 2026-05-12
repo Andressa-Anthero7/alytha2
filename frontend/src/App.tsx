@@ -24,6 +24,7 @@ import ProfilePage from './pages/ProfilePage';
 import PublicMarketplaceOfferPage from './pages/PublicMarketplaceOfferPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
 import SellerLandingPage from './pages/SellerLandingPage';
+import SeoKeywordLandingPage, { seoKeywordLandingPages } from './pages/SeoKeywordLandingPage';
 import { trackGoogleAnalyticsPageView } from './shared/analytics';
 import { useDocumentMetadata, type DocumentMetadata } from './shared/metadata';
 import { buildAbsolutePublicUrl } from './shared/share';
@@ -79,6 +80,16 @@ const publicRouteMetadata: Record<string, Omit<DocumentMetadata, 'canonicalUrl' 
     description: 'Consulte os termos de uso e prestação de serviços da plataforma Alytha.',
     canonicalPath: '/termos-de-servico',
   },
+  ...Object.fromEntries(
+    seoKeywordLandingPages.map((page) => [
+      page.path,
+      {
+        title: page.title,
+        description: page.description,
+        canonicalPath: page.path,
+      },
+    ]),
+  ),
 };
 
 const noIndexRoutePrefixes = [
@@ -193,6 +204,9 @@ export default function App() {
         <Route path="/vendendorgraos" element={<Navigate to="/vendedorgraos" replace />} />
         <Route path="/vender" element={<Navigate to="/vendedorgraos" replace />} />
         <Route path="/comprar" element={<Navigate to="/compradorgraos" replace />} />
+        {seoKeywordLandingPages.map((page) => (
+          <Route key={page.slug} path={page.path} element={<SeoKeywordLandingPage slug={page.slug} />} />
+        ))}
         <Route
           path="/corretores"
           element={

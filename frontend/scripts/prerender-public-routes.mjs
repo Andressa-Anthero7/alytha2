@@ -122,6 +122,166 @@ const renderRootContent = ({ eyebrow, heading, paragraphs = [], sections = [], l
         }
       </main>`;
 
+const keywordRoutes = [
+  {
+    path: '/vender-soja',
+    title: 'Vender soja | Alytha',
+    description: 'Publique ofertas de soja com praca, volume, safra, frete e valor. A Alytha conecta vendedores a compradores e corretores de graos.',
+    eyebrow: 'Vender soja',
+    heading: 'Vender soja com apoio comercial e compradores qualificados.',
+    paragraphs: [
+      'A Alytha ajuda produtores, silos e originadores a organizar ofertas de soja para negociacao com dados claros de praca, volume, safra, frete e pagamento.',
+      'A oferta de soja fica pronta para consulta no marketplace e pode seguir com apoio da mesa Alytha quando houver oportunidade comercial aderente.',
+    ],
+    sections: [
+      { title: 'Como vender soja', body: ['Cadastre quantidade, unidade, localidade, modalidade FOB ou CIF, safra, valor pretendido e condicoes de pagamento.'] },
+    ],
+    links: [
+      { href: '/login', label: 'Cadastrar oferta de soja' },
+      { href: '/comprar-soja', label: 'Comprar soja' },
+      { href: '/vendedorgraos', label: 'Vender graos' },
+    ],
+  },
+  {
+    path: '/comprar-soja',
+    title: 'Comprar soja | Alytha',
+    description: 'Encontre ofertas e demandas de soja com praca, volume, safra, frete e valor. A Alytha aproxima compradores, vendedores e corretores.',
+    eyebrow: 'Comprar soja',
+    heading: 'Comprar soja com oportunidades qualificadas no marketplace.',
+    paragraphs: [
+      'Compradores encontram oportunidades de soja com informacoes comerciais organizadas para avaliar volume, localidade, safra, frete e condicoes de pagamento.',
+      'Quando nao houver uma oferta aderente, o comprador pode registrar a demanda para que a operacao comercial seja acompanhada com mais contexto.',
+    ],
+    sections: [
+      { title: 'Como comprar soja', body: ['Consulte oportunidades por praca, volume, safra e valor ou publique uma demanda de compra para o mercado encontrar sua necessidade.'] },
+    ],
+    links: [
+      { href: '/login', label: 'Cadastrar demanda de soja' },
+      { href: '/vender-soja', label: 'Vender soja' },
+      { href: '/compradorgraos', label: 'Comprar graos' },
+    ],
+  },
+  {
+    path: '/vender-milho',
+    title: 'Vender milho | Alytha',
+    description: 'Cadastre ofertas de milho com volume, praca, safra, frete e valor para conectar sua producao a compradores de graos.',
+    eyebrow: 'Vender milho',
+    heading: 'Vender milho com informacoes comerciais claras.',
+    paragraphs: [
+      'A Alytha organiza ofertas de milho para que compradores avaliem a oportunidade com dados objetivos de localidade, quantidade, safra, frete e pagamento.',
+      'O vendedor pode indicar modalidade FOB ou CIF, valor pretendido e condicoes de pagamento para deixar a negociacao mais objetiva desde o inicio.',
+    ],
+    sections: [
+      { title: 'Oferta de milho', body: ['Publique volume, praca, safra, frete e pagamento para deixar a oferta pronta para consulta no marketplace.'] },
+    ],
+    links: [
+      { href: '/login', label: 'Cadastrar oferta de milho' },
+      { href: '/comprar-milho', label: 'Comprar milho' },
+      { href: '/vendedorgraos', label: 'Vender graos' },
+    ],
+  },
+  {
+    path: '/comprar-milho',
+    title: 'Comprar milho | Alytha',
+    description: 'Consulte oportunidades para comprar milho com informacoes de praca, volume, safra, frete, pagamento e valor.',
+    eyebrow: 'Comprar milho',
+    heading: 'Comprar milho com oportunidades organizadas por praca e volume.',
+    paragraphs: [
+      'A Alytha aproxima compradores de milho de ofertas e demandas com leitura comercial, dados de safra e informacoes de frete.',
+      'A demanda de compra tambem pode ser cadastrada para que vendedores e corretores encontrem uma oportunidade aderente.',
+    ],
+    sections: [
+      { title: 'Demanda de milho', body: ['Registre produto, volume, localidade e condicoes comerciais para encontrar uma oferta compativel.'] },
+    ],
+    links: [
+      { href: '/login', label: 'Cadastrar demanda de milho' },
+      { href: '/vender-milho', label: 'Vender milho' },
+      { href: '/compradorgraos', label: 'Comprar graos' },
+    ],
+  },
+  {
+    path: '/vender-sorgo',
+    title: 'Vender sorgo | Alytha',
+    description: 'Publique ofertas de sorgo com praca, volume, safra, frete e valor para encontrar compradores e corretores de graos.',
+    eyebrow: 'Vender sorgo',
+    heading: 'Vender sorgo com oferta organizada para o mercado de graos.',
+    paragraphs: [
+      'A Alytha ajuda o vendedor a apresentar ofertas de sorgo com informacoes comerciais suficientes para avaliacao rapida de compradores.',
+      'Com dados organizados, a oportunidade fica mais facil de ser encontrada no marketplace e acompanhada pela operacao comercial.',
+    ],
+    sections: [
+      { title: 'Oferta de sorgo', body: ['Informe quantidade, praca, safra, frete, valor e pagamento para deixar o lote pronto para negociacao.'] },
+    ],
+    links: [
+      { href: '/login', label: 'Cadastrar oferta de sorgo' },
+      { href: '/comprar-sorgo', label: 'Comprar sorgo' },
+      { href: '/vendedorgraos', label: 'Vender graos' },
+    ],
+  },
+  {
+    path: '/comprar-sorgo',
+    title: 'Comprar sorgo | Alytha',
+    description: 'Encontre oportunidades para comprar sorgo com praca, volume, safra, frete, pagamento e valor na plataforma Alytha.',
+    eyebrow: 'Comprar sorgo',
+    heading: 'Comprar sorgo com oportunidades comerciais qualificadas.',
+    paragraphs: [
+      'Compradores podem consultar ofertas de sorgo ou registrar demandas para aproximar a necessidade de compra de vendedores e corretores.',
+      'O marketplace organiza informacoes que ajudam na avaliacao de disponibilidade, frete, safra e valor.',
+    ],
+    sections: [
+      { title: 'Demanda de sorgo', body: ['Cadastre sua necessidade de compra com dados comerciais claros para facilitar a conexao com vendedores.'] },
+    ],
+    links: [
+      { href: '/login', label: 'Cadastrar demanda de sorgo' },
+      { href: '/vender-sorgo', label: 'Vender sorgo' },
+      { href: '/compradorgraos', label: 'Comprar graos' },
+    ],
+  },
+  {
+    path: '/corretora-de-graos',
+    title: 'Corretora de graos | Alytha',
+    description: 'Alytha atua como corretora e intermediadora de graos, conectando compradores, vendedores e corretores de soja, milho e sorgo.',
+    eyebrow: 'Corretora de graos',
+    heading: 'Corretora de graos para conectar oferta, demanda e mesa comercial.',
+    paragraphs: [
+      'A Alytha combina marketplace, cadastro de oportunidades e rotina de corretagem para aproximar vendedores, compradores e corretores.',
+      'A operacao cobre soja, milho e sorgo, com foco em praca, volume, safra, frete, valor e condicoes de pagamento.',
+    ],
+    sections: [
+      { title: 'Intermediacao comercial', body: ['Corretores acompanham oportunidades e organizam negociacoes com informacoes comerciais padronizadas.'] },
+    ],
+    links: [
+      { href: '/corretores', label: 'Corretores' },
+      { href: '/marketplace-de-graos', label: 'Marketplace de graos' },
+      { href: '/quemsomos', label: 'Quem somos' },
+    ],
+  },
+  {
+    path: '/marketplace-de-graos',
+    title: 'Marketplace de graos | Alytha',
+    description: 'Marketplace de graos para consultar ofertas de venda e demandas de compra de soja, milho e sorgo com praca, volume, frete e valor.',
+    eyebrow: 'Marketplace de graos',
+    heading: 'Marketplace de graos para ofertas e demandas de soja, milho e sorgo.',
+    paragraphs: [
+      'A Alytha centraliza oportunidades do mercado fisico de graos para que compradores, vendedores e corretores encontrem informacoes comerciais em um so lugar.',
+      'Cada oportunidade pode reunir produto, quantidade, unidade, localidade, safra, frete, pagamento e valor.',
+    ],
+    sections: [
+      { title: 'Ofertas e demandas', body: ['Consulte oportunidades ativas ou registre uma oferta/demanda para iniciar uma conversa comercial com mais contexto.'] },
+    ],
+    links: [
+      { href: '/', label: 'Abrir marketplace' },
+      { href: '/vender-soja', label: 'Vender soja' },
+      { href: '/comprar-soja', label: 'Comprar soja' },
+    ],
+  },
+].map((route) => ({
+  ...route,
+  outputPath: `${route.path.slice(1)}/index.html`,
+  canonicalPath: route.path,
+  rootContent: renderRootContent(route),
+}));
+
 const routes = [
   {
     path: '/',
@@ -139,6 +299,8 @@ const routes = [
       links: [
         { href: '/vendedorgraos', label: 'Vender graos' },
         { href: '/compradorgraos', label: 'Comprar graos' },
+        { href: '/vender-soja', label: 'Vender soja' },
+        { href: '/comprar-soja', label: 'Comprar soja' },
         { href: '/corretores', label: 'Corretores' },
       ],
     }),
@@ -159,6 +321,8 @@ const routes = [
       links: [
         { href: '/vendedorgraos', label: 'Vender graos' },
         { href: '/compradorgraos', label: 'Comprar graos' },
+        { href: '/vender-soja', label: 'Vender soja' },
+        { href: '/comprar-soja', label: 'Comprar soja' },
         { href: '/corretores', label: 'Corretores' },
       ],
     }),
@@ -295,6 +459,7 @@ const routes = [
       ],
     }),
   },
+  ...keywordRoutes,
 ];
 
 const notFoundRoute = {
