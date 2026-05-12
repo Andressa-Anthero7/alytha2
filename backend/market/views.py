@@ -848,6 +848,7 @@ def build_offer_share_metadata(request, offer):
 
 
 def build_offer_structured_data(metadata, offer):
+    type_label = 'Oferta de venda' if offer.offer_type == 'venda' else 'Demanda de compra'
     return {
         '@context': 'https://schema.org',
         '@graph': [
@@ -890,6 +891,24 @@ def build_offer_structured_data(metadata, offer):
                     },
                 },
             },
+            {
+                '@type': 'BreadcrumbList',
+                '@id': f"{metadata['frontend_url']}#breadcrumb",
+                'itemListElement': [
+                    {
+                        '@type': 'ListItem',
+                        'position': 1,
+                        'name': 'Marketplace de grãos',
+                        'item': f"{metadata['site_url']}/",
+                    },
+                    {
+                        '@type': 'ListItem',
+                        'position': 2,
+                        'name': type_label,
+                        'item': metadata['frontend_url'],
+                    },
+                ],
+            },
         ],
     }
 
@@ -905,6 +924,26 @@ def render_offer_seo_html(request, offer):
     image_url = escape(metadata['image_url'])
     type_label = 'Oferta de venda' if offer.offer_type == 'venda' else 'Demanda de compra'
     channel_label = 'Operando com a mesa' if offer.negotiation_channel == 'mesa' else 'Oferta direta'
+    quantity_label = format_quantity_pt_br(offer.quantity, offer.unit)
+    price_label = format_currency_pt_br(offer.price)
+    created_label = timezone.localtime(offer.created_at).strftime('%d/%m/%Y')
+    h1 = f'{type_label} de {offer.grain} em {offer.location}'
+    grain_key = str(offer.grain or '').strip().lower()
+    grain_slug = 'soja' if 'soja' in grain_key else 'milho' if 'milho' in grain_key else 'sorgo' if 'sorgo' in grain_key else 'graos'
+    intent_path = f"/{'vender' if offer.offer_type == 'venda' else 'comprar'}-{grain_slug}" if grain_slug != 'graos' else '/'
+    intent_label = f"{'Vender' if offer.offer_type == 'venda' else 'Comprar'} {offer.grain}"
+    opposite_path = f"/{'comprar' if offer.offer_type == 'venda' else 'vender'}-{grain_slug}" if grain_slug != 'graos' else '/'
+    opposite_label = f"{'Comprar' if offer.offer_type == 'venda' else 'Vender'} {offer.grain}"
+    quality_items = []
+    for key, value in (offer.quality or {}).items():
+        if value is None or str(value).strip() == '':
+            continue
+        quality_items.append(f'<li><strong>{escape(str(key))}:</strong> {escape(str(value))}</li>')
+    quality_html = (
+        '<section><h2>Informações de qualidade</h2><ul>' + ''.join(quality_items[:8]) + '</ul></section>'
+        if quality_items
+        else ''
+    )
     stylesheet_tags = '\n    '.join(
         f'<link rel="stylesheet" crossorigin href="{escape(stylesheet)}">' for stylesheet in assets['stylesheets']
     )
@@ -913,19 +952,48 @@ def render_offer_seo_html(request, offer):
 
     root_content = f"""
       <main class="mx-auto max-w-5xl px-6 py-8 text-slate-900">
-        <p>{escape(type_label)}</p>
-        <h1>{escape(offer.grain)}</h1>
+        <p>{escape(type_label)} no marketplace Alytha</p>
+        <h1>{escape(h1)}</h1>
         <p>{description}</p>
+        <p>
+          Esta página reúne os dados comerciais da oportunidade para apoiar a análise de compradores, vendedores e corretores de grãos.
+          A negociação considera produto, praça, volume, safra, frete, pagamento e modalidade de atendimento.
+        </p>
         <dl>
           <div><dt>Localidade</dt><dd>{escape(offer.location)}</dd></div>
-          <div><dt>Quantidade</dt><dd>{escape(format_quantity_pt_br(offer.quantity, offer.unit))}</dd></div>
-          <div><dt>Valor</dt><dd>{escape(format_currency_pt_br(offer.price))}</dd></div>
+          <div><dt>Quantidade</dt><dd>{escape(quantity_label)}</dd></div>
+          <div><dt>Valor</dt><dd>{escape(price_label)}</dd></div>
           <div><dt>Safra</dt><dd>{escape(offer.crop)}</dd></div>
           <div><dt>Frete</dt><dd>{escape(offer.shipping)}</dd></div>
           <div><dt>Pagamento</dt><dd>{escape(offer.payment_terms)}</dd></div>
           <div><dt>Modalidade</dt><dd>{escape(channel_label)}</dd></div>
+          <div><dt>Publicada em</dt><dd>{escape(created_label)}</dd></div>
         </dl>
-        <p><a href="/">Ver marketplace Alytha</a></p>
+        <section>
+          <h2>Resumo da oportunidade</h2>
+          <p>
+            {escape(type_label)} de {escape(offer.grain)} em {escape(offer.location)}, com volume de {escape(quantity_label)},
+            valor de referência de {escape(price_label)}, safra {escape(offer.crop)} e frete {escape(offer.shipping)}.
+            As condições de pagamento informadas são: {escape(offer.payment_terms)}.
+          </p>
+          <p>
+            A Alytha organiza oportunidades de soja, milho e sorgo para facilitar a leitura comercial e aproximar pontas com interesse real
+            no mercado físico de grãos.
+          </p>
+        </section>
+        <section>
+          <h2>Como negociar esta oportunidade</h2>
+          <p>
+            Para avançar, acesse a plataforma, avalie os dados da oferta ou demanda e siga o fluxo comercial indicado. As informações de contato
+            podem exigir cadastro autenticado para preservar a segurança dos usuários.
+          </p>
+        </section>
+        {quality_html}
+        <nav aria-label="Links relacionados">
+          <a href="/">Ver marketplace Alytha</a>
+          <a href="{escape(intent_path)}">{escape(intent_label)}</a>
+          <a href="{escape(opposite_path)}">{escape(opposite_label)}</a>
+        </nav>
       </main>"""
 
     return f"""<!doctype html>

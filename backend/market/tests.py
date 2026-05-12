@@ -63,6 +63,10 @@ class PublicMarketplaceOfferShareTests(APITestCase):
         self.assertIn(f'<link rel="canonical" href="https://app.alytha.test/oportunidades/{offer.id}">', content)
         self.assertIn('<meta name="robots" content="index, follow">', content)
         self.assertIn('Ivaipora - PR', content)
+        self.assertIn('<h1>Oferta de venda de Milho em Ivaipora - PR</h1>', content)
+        self.assertIn('Resumo da oportunidade', content)
+        self.assertIn('Como negociar esta oportunidade', content)
+        self.assertIn('Vender Milho', content)
         self.assertIn('application/ld+json', content)
         self.assertIn('<div id="root">', content)
 
