@@ -30,6 +30,7 @@ from .serializers import (
     BrokerLinkOfferSubmissionSerializer,
     BrokerUserSummarySerializer,
     MarketplaceOfferSerializer,
+    NegotiationMessageSerializer,
     NegotiationSerializer,
     OfferSerializer,
     PasswordResetConfirmSerializer,
@@ -1686,6 +1687,58 @@ class NegotiationViewSet(viewsets.ModelViewSet):
         if user_role == 'corretor':
             return queryset.filter(broker=market_user)
         return queryset.filter(Q(buyer=market_user) | Q(seller=market_user) | Q(broker=market_user))
+
+    def get_message_audiences(self, negotiation, market_user):
+        user_role = getattr(market_user, 'type', None)
+        if self.request.user.is_staff or user_role == 'backoffice' or negotiation.broker_id == getattr(market_user, 'id', None):
+            return {'buyer', 'seller'}
+
+        audiences = set()
+        if negotiation.buyer_id == getattr(market_user, 'id', None):
+            audiences.add('buyer')
+        if negotiation.seller_id == getattr(market_user, 'id', None):
+            audiences.add('seller')
+        return audiences
+
+    @action(detail=True, methods=['get', 'post'], url_path='messages')
+    def messages(self, request, pk=None):
+        negotiation = self.get_object()
+        market_user = get_market_user(request)
+        if not market_user and not request.user.is_staff:
+            raise PermissionDenied('UsuÃ¡rio nÃ£o localizado.')
+
+        allowed_audiences = self.get_message_audiences(negotiation, market_user)
+        if not allowed_audiences:
+            raise PermissionDenied('Sem permissÃ£o para acessar as mensagens desta negociaÃ§Ã£o.')
+
+        if request.method == 'GET':
+            requested_audience = str(request.query_params.get('audience') or '').strip()
+            if requested_audience and requested_audience not in allowed_audiences:
+                raise PermissionDenied('Sem permissÃ£o para acessar esta sala.')
+
+            queryset = negotiation.messages.select_related('sender').filter(audience__in=allowed_audiences)
+            if requested_audience:
+                queryset = queryset.filter(audience=requested_audience)
+
+            serializer = NegotiationMessageSerializer(queryset, many=True)
+            return Response(serializer.data)
+
+        data = request.data.copy()
+        requested_audience = str(data.get('audience') or '').strip()
+        if not requested_audience and len(allowed_audiences) == 1:
+            requested_audience = next(iter(allowed_audiences))
+            data['audience'] = requested_audience
+
+        if requested_audience not in {'buyer', 'seller'}:
+            return Response({'detail': 'Informe a sala do comprador ou vendedor.'}, status=status.HTTP_400_BAD_REQUEST)
+        if requested_audience not in allowed_audiences:
+            raise PermissionDenied('Sem permissÃ£o para enviar mensagem nesta sala.')
+
+        serializer = NegotiationMessageSerializer(data=data)
+        serializer.is_valid(raise_exception=True)
+        message = serializer.save(negotiation=negotiation, sender=market_user)
+
+        return Response(NegotiationMessageSerializer(message).data, status=status.HTTP_201_CREATED)
 
     @action(detail=False, methods=['post'], url_path='match')
     def match(self, request):

@@ -167,3 +167,25 @@ class Negotiation(models.Model):
 
     def __str__(self):
         return f"Negociacao {self.id} - {self.status}"
+
+
+class NegotiationMessage(models.Model):
+    AUDIENCE_CHOICES = (
+        ('buyer', 'Comprador'),
+        ('seller', 'Vendedor'),
+    )
+
+    negotiation = models.ForeignKey(Negotiation, on_delete=models.CASCADE, related_name='messages')
+    sender = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='negotiation_messages')
+    audience = models.CharField(max_length=10, choices=AUDIENCE_CHOICES)
+    body = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['created_at', 'id']
+        indexes = [
+            models.Index(fields=['negotiation', 'audience', 'created_at']),
+        ]
+
+    def __str__(self):
+        return f"Mensagem {self.id} - negociacao {self.negotiation_id}"

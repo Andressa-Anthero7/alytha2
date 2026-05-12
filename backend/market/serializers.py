@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import Negotiation, Offer, User
+from .models import Negotiation, NegotiationMessage, Offer, User
 
 
 BUYER_PROFILE_SEGMENTS = {
@@ -363,6 +363,36 @@ class NegotiationSerializer(serializers.ModelSerializer):
             'status',
             'createdAt',
         ]
+
+
+class NegotiationMessageSerializer(serializers.ModelSerializer):
+    negotiationId = serializers.IntegerField(source='negotiation_id', read_only=True)
+    senderId = serializers.IntegerField(source='sender_id', read_only=True)
+    senderName = serializers.SerializerMethodField()
+    createdAt = serializers.DateTimeField(source='created_at', read_only=True)
+    body = serializers.CharField(max_length=2000, trim_whitespace=True)
+
+    class Meta:
+        model = NegotiationMessage
+        fields = [
+            'id',
+            'negotiationId',
+            'audience',
+            'senderId',
+            'senderName',
+            'body',
+            'createdAt',
+        ]
+        read_only_fields = ['id', 'negotiationId', 'senderId', 'senderName', 'createdAt']
+
+    def get_senderName(self, obj):
+        return obj.sender.name if obj.sender else 'Alytha'
+
+    def validate_body(self, value):
+        body = str(value or '').strip()
+        if not body:
+            raise serializers.ValidationError('Informe a mensagem.')
+        return body
 
 
 class MarketplaceOfferSerializer(serializers.ModelSerializer):

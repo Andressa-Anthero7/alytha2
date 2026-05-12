@@ -8,7 +8,7 @@ from rest_framework.throttling import ScopedRateThrottle
 from django.urls import reverse
 from django.contrib.auth import get_user_model
 
-from .models import Negotiation, Offer, PasswordResetToken, User
+from .models import Negotiation, NegotiationMessage, Offer, PasswordResetToken, User
 
 
 @override_settings(ALYTHA_PUBLIC_SITE_URL='https://app.alytha.test', ALYTHA_SHARE_IMAGE_URL='https://app.alytha.test/logo.png')
@@ -316,6 +316,83 @@ class AuthFlowTests(ValidatedRegistrationAPITestCase):
         }, format='json')
         self.assertEqual(res.status_code, 201)
         self.assertTrue(Negotiation.objects.exists())
+
+    def test_negotiation_chat_is_split_between_buyer_and_seller(self):
+        self.client.post(reverse('register', args=['vendedor']), {
+            'name': 'Seller Chat',
+            'email': 'seller.chat@test.com',
+            'password': 'pass',
+            'phone': '5516999991111',
+        }, format='json')
+        self.client.post(reverse('register', args=['comprador']), {
+            'name': 'Buyer Chat',
+            'email': 'buyer.chat@test.com',
+            'password': 'pass',
+            'phone': '5516999992222',
+        }, format='json')
+        self.client.post(reverse('register', args=['corretor']), {
+            'name': 'Broker Chat',
+            'email': 'broker.chat@test.com',
+            'password': 'pass',
+        }, format='json')
+
+        res = self.client.post('/api/login/', {'email': 'broker.chat@test.com', 'password': 'pass'}, format='json')
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {res.data['access']}")
+        seller = User.objects.get(email='seller.chat@test.com')
+        buyer = User.objects.get(email='buyer.chat@test.com')
+
+        sell_offer = self.client.post('/api/offers', {
+            'userId': seller.id, 'type': 'venda', 'grain': 'Soja', 'quantity': 1000, 'unit': 'Sacas',
+            'price': 120, 'location': 'MT', 'crop': '24/25', 'shipping': 'FOB',
+            'negotiationChannel': 'direta',
+            'quality': {}, 'paymentTerms': 'À vista'
+        }, format='json').data
+        buy_offer = self.client.post('/api/offers', {
+            'userId': buyer.id, 'type': 'compra', 'grain': 'Soja', 'quantity': 800, 'unit': 'Sacas',
+            'price': 125, 'location': 'MT', 'crop': '24/25', 'shipping': 'FOB',
+            'negotiationChannel': 'direta',
+            'quality': {}, 'paymentTerms': '30 dias'
+        }, format='json').data
+        match = self.client.post('/api/negotiations/match', {
+            'buyOfferId': buy_offer['id'],
+            'sellOfferId': sell_offer['id']
+        }, format='json')
+        negotiation_id = match.data['id']
+
+        seller_room = self.client.post(
+            f'/api/negotiations/{negotiation_id}/messages',
+            {'audience': 'seller', 'body': 'Mensagem privada para o vendedor.'},
+            format='json',
+        )
+        buyer_room = self.client.post(
+            f'/api/negotiations/{negotiation_id}/messages',
+            {'audience': 'buyer', 'body': 'Mensagem privada para o comprador.'},
+            format='json',
+        )
+        self.assertEqual(seller_room.status_code, 201)
+        self.assertEqual(buyer_room.status_code, 201)
+        self.assertEqual(NegotiationMessage.objects.count(), 2)
+
+        res = self.client.post('/api/login/', {'email': 'buyer.chat@test.com', 'password': 'pass'}, format='json')
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {res.data['access']}")
+        buyer_messages = self.client.get(f'/api/negotiations/{negotiation_id}/messages')
+        self.assertEqual(buyer_messages.status_code, 200)
+        self.assertEqual([item['audience'] for item in buyer_messages.data], ['buyer'])
+        self.assertEqual(buyer_messages.data[0]['body'], 'Mensagem privada para o comprador.')
+
+        blocked = self.client.post(
+            f'/api/negotiations/{negotiation_id}/messages',
+            {'audience': 'seller', 'body': 'Tentativa fora da sala.'},
+            format='json',
+        )
+        self.assertEqual(blocked.status_code, 403)
+
+        res = self.client.post('/api/login/', {'email': 'seller.chat@test.com', 'password': 'pass'}, format='json')
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {res.data['access']}")
+        seller_messages = self.client.get(f'/api/negotiations/{negotiation_id}/messages')
+        self.assertEqual(seller_messages.status_code, 200)
+        self.assertEqual([item['audience'] for item in seller_messages.data], ['seller'])
+        self.assertEqual(seller_messages.data[0]['body'], 'Mensagem privada para o vendedor.')
 
     def test_broker_match_ignores_dynamic_percentage_commission(self):
         self.client.post(reverse('register', args=['vendedor']), {

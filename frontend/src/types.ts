@@ -69,6 +69,7 @@ export interface Offer {
 
 export type BrokerageMode = 'percentage' | 'fixed' | 'per_sack' | 'spread';
 export type BrokeragePayer = 'seller' | 'buyer';
+export type NegotiationAudience = 'buyer' | 'seller';
 
 export interface Negotiation {
   id: number;
@@ -86,6 +87,16 @@ export interface Negotiation {
   brokerageFee: number;
   brokerName?: string | null;
   status: 'pendente' | 'aceita' | 'recusada';
+  createdAt: string;
+}
+
+export interface NegotiationMessage {
+  id: number;
+  negotiationId: number;
+  audience: NegotiationAudience;
+  senderId: number | null;
+  senderName: string;
+  body: string;
   createdAt: string;
 }
 

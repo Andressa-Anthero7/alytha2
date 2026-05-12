@@ -10,7 +10,6 @@ import {
   ChevronUp,
   FileText,
   GanttChartSquare,
-  Handshake,
   Headset,
   Home,
   Info,
@@ -19,7 +18,9 @@ import {
   Leaf,
   LogOut,
   MapPin,
+  MessageCircle,
   Search,
+  Send,
   ShieldCheck,
   TrendingDown,
   TrendingUp,
@@ -28,7 +29,7 @@ import {
 } from 'lucide-react';
 import { apiFetch, supportEmail, supportWhatsAppHref } from '../../shared/api';
 import { HOME_PATH } from '../../shared/appRoutes';
-import type { BrokeragePayer, BrokerLinkPayload, Negotiation, Offer, User as UserType } from '../../types';
+import type { BrokeragePayer, BrokerLinkPayload, Negotiation, NegotiationAudience, NegotiationMessage, Offer, User as UserType } from '../../types';
 
 type TradingDeskPageProps = {
   currentUser: UserType;
@@ -47,11 +48,9 @@ type NotificationItem = {
   unread: boolean;
 };
 
-type ChatMessage = {
-  id: number;
-  text: string;
-  sender: string;
-  time: string;
+type ActiveChatRoom = {
+  negotiationId: number;
+  audience: NegotiationAudience;
 };
 
 type MarketTickerItem =
@@ -140,6 +139,11 @@ const offerStatusLabel = {
   finalizada: 'Finalizada',
   aguardando_pagamento: 'Aguardando pagamento',
 } as const;
+
+const negotiationAudienceLabel: Record<NegotiationAudience, string> = {
+  buyer: 'Comprador',
+  seller: 'Vendedor',
+};
 
 const percentQualityKeys = new Set(['moisture', 'impurity', 'broken', 'damaged', 'ardidos']);
 const qualityFieldLabels: Record<string, string> = {
@@ -280,8 +284,12 @@ export function TradingDeskPage({ currentUser, onLogout }: TradingDeskPageProps)
   const [showNotifications, setShowNotifications] = useState(false);
   const [showContractModal, setShowContractModal] = useState(false);
   const [selectedNeg, setSelectedNeg] = useState<Negotiation | null>(null);
-  const [activeChat, setActiveChat] = useState<number | null>(null);
-  const [messages, setMessages] = useState<Record<number, ChatMessage[]>>({});
+  const [activeChat, setActiveChat] = useState<ActiveChatRoom | null>(null);
+  const [messages, setMessages] = useState<Record<string, NegotiationMessage[]>>({});
+  const [messageDrafts, setMessageDrafts] = useState<Record<string, string>>({});
+  const [chatLoadingKey, setChatLoadingKey] = useState<string | null>(null);
+  const [chatSendingKey, setChatSendingKey] = useState<string | null>(null);
+  const [chatError, setChatError] = useState<string | null>(null);
   const [isDraggingOverSell, setIsDraggingOverSell] = useState(false);
   const [isDraggingOverBuy, setIsDraggingOverBuy] = useState(false);
   const [showMobileIndicators, setShowMobileIndicators] = useState(false);
@@ -507,21 +515,72 @@ export function TradingDeskPage({ currentUser, onLogout }: TradingDeskPageProps)
     },
   ];
 
-  const sendMessage = (negId: number, text: string, sender: string) => {
-    const cleaned = text.trim();
+  const getChatKey = (negotiationId: number, audience: NegotiationAudience) => `${negotiationId}:${audience}`;
+
+  const loadMessages = async (negotiationId: number, audience: NegotiationAudience) => {
+    const key = getChatKey(negotiationId, audience);
+    setChatLoadingKey(key);
+    setChatError(null);
+
+    try {
+      const response = await apiFetch(`/negotiations/${negotiationId}/messages?audience=${audience}`);
+      const payload = (await response.json().catch(() => null)) as NegotiationMessage[] | { detail?: string } | null;
+
+      if (!response.ok || !Array.isArray(payload)) {
+        throw new Error((payload && 'detail' in payload && payload.detail) || 'Nao foi possivel carregar as mensagens.');
+      }
+
+      setMessages((previous) => ({
+        ...previous,
+        [key]: payload,
+      }));
+    } catch (loadError) {
+      setChatError(loadError instanceof Error ? loadError.message : 'Erro inesperado ao carregar as mensagens.');
+    } finally {
+      setChatLoadingKey((currentKey) => (currentKey === key ? null : currentKey));
+    }
+  };
+
+  const openChatRoom = (negotiationId: number, audience: NegotiationAudience) => {
+    setActiveChat({ negotiationId, audience });
+    void loadMessages(negotiationId, audience);
+  };
+
+  const switchChatAudience = (negotiationId: number, audience: NegotiationAudience) => {
+    setActiveChat({ negotiationId, audience });
+    void loadMessages(negotiationId, audience);
+  };
+
+  const sendMessage = async (negotiationId: number, audience: NegotiationAudience) => {
+    const key = getChatKey(negotiationId, audience);
+    const cleaned = (messageDrafts[key] || '').trim();
     if (!cleaned) return;
 
-    const newMsg: ChatMessage = {
-      id: Date.now(),
-      text: cleaned,
-      sender,
-      time: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
-    };
+    setChatSendingKey(key);
+    setChatError(null);
 
-    setMessages((previous) => ({
-      ...previous,
-      [negId]: [...(previous[negId] || []), newMsg],
-    }));
+    try {
+      const response = await apiFetch(`/negotiations/${negotiationId}/messages`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ audience, body: cleaned }),
+      });
+      const payload = (await response.json().catch(() => null)) as NegotiationMessage | { detail?: string } | null;
+
+      if (!response.ok || !payload || !('id' in payload)) {
+        throw new Error((payload && 'detail' in payload && payload.detail) || 'Nao foi possivel enviar a mensagem.');
+      }
+
+      setMessages((previous) => ({
+        ...previous,
+        [key]: [...(previous[key] || []), payload],
+      }));
+      setMessageDrafts((previous) => ({ ...previous, [key]: '' }));
+    } catch (sendError) {
+      setChatError(sendError instanceof Error ? sendError.message : 'Erro inesperado ao enviar a mensagem.');
+    } finally {
+      setChatSendingKey((currentKey) => (currentKey === key ? null : currentKey));
+    }
   };
 
   const getBrokeragePayerLabel = (payer?: BrokeragePayer | null) => (payer === 'buyer' ? 'comprador' : 'vendedor');
@@ -610,9 +669,14 @@ export function TradingDeskPage({ currentUser, onLogout }: TradingDeskPageProps)
       return;
     }
 
+    const createdNegotiation = (await lockedResponse.json().catch(() => null)) as Negotiation | null;
     setSelectedBuy(null);
     setSelectedSell(null);
     await loadData();
+    if (createdNegotiation?.id) {
+      setMobileMesaTab('NEGOTIATIONS');
+      openChatRoom(createdNegotiation.id, 'seller');
+    }
   };
 
   const updateNegStatus = async (id: number, status: Negotiation['status']) => {
@@ -866,11 +930,19 @@ export function TradingDeskPage({ currentUser, onLogout }: TradingDeskPageProps)
                 <div className="mt-4 flex flex-col gap-2">
                   <button
                     type="button"
-                    onClick={() => setActiveChat(neg.id)}
+                    onClick={() => openChatRoom(neg.id, 'seller')}
                     className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-emerald-200 px-4 py-3 text-sm font-black uppercase tracking-[0.18em] text-emerald-700"
                   >
-                    <Handshake className="h-4 w-4" />
-                    Chat
+                    <MessageCircle className="h-4 w-4" />
+                    Chat vendedor
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => openChatRoom(neg.id, 'buyer')}
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-sky-200 px-4 py-3 text-sm font-black uppercase tracking-[0.18em] text-sky-700"
+                  >
+                    <MessageCircle className="h-4 w-4" />
+                    Chat comprador
                   </button>
                   <button
                     type="button"
@@ -918,11 +990,19 @@ export function TradingDeskPage({ currentUser, onLogout }: TradingDeskPageProps)
               <div className="flex shrink-0 gap-2">
                 <button
                   type="button"
-                  onClick={() => setActiveChat(neg.id)}
-                  title="Abrir chat"
+                  onClick={() => openChatRoom(neg.id, 'seller')}
+                  title="Abrir chat com vendedor"
                   className="rounded-full border border-emerald-200 p-2 text-emerald-700 transition-colors hover:bg-emerald-50"
                 >
-                  <Handshake className="h-4 w-4" />
+                  <MessageCircle className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => openChatRoom(neg.id, 'buyer')}
+                  title="Abrir chat com comprador"
+                  className="rounded-full border border-sky-200 p-2 text-sky-700 transition-colors hover:bg-sky-50"
+                >
+                  <MessageCircle className="h-4 w-4" />
                 </button>
                 <button
                   type="button"
@@ -1254,21 +1334,29 @@ export function TradingDeskPage({ currentUser, onLogout }: TradingDeskPageProps)
     );
   };
 
-  const renderChat = (negId: number) => {
-    const neg = negotiations.find((item) => item.id === negId);
+  const renderChat = (chat: ActiveChatRoom) => {
+    const { negotiationId, audience } = chat;
+    const neg = negotiations.find((item) => item.id === negotiationId);
     if (!neg) return null;
 
     const buyer = getUserById(neg.buyerId);
     const seller = getUserById(neg.sellerId);
+    const party = audience === 'buyer' ? buyer : seller;
+    const key = getChatKey(negotiationId, audience);
+    const roomMessages = messages[key] || [];
+    const draft = messageDrafts[key] || '';
+    const isLoading = chatLoadingKey === key;
+    const isSending = chatSendingKey === key;
 
     return (
       <div className="flex h-full flex-col overflow-hidden bg-white sm:h-[520px] sm:rounded-[1.8rem] sm:border sm:border-slate-200 sm:shadow-2xl">
         <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50 px-4 py-4">
-          <div>
-            <p className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500">Intermediação #{negId}</p>
-            <p className="mt-1 text-sm font-bold text-slate-900">
-              {buyer?.name || 'Comprador'} x {seller?.name || 'Vendedor'}
+          <div className="min-w-0">
+            <p className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500">Sala protegida #{negotiationId}</p>
+            <p className="mt-1 truncate text-sm font-bold text-slate-900">
+              {negotiationAudienceLabel[audience]}: {party?.name || negotiationAudienceLabel[audience]}
             </p>
+            <p className="mt-1 text-xs text-slate-500">Contato direto oculto. A conversa fica registrada na Alytha.</p>
           </div>
           <button
             type="button"
@@ -1279,24 +1367,52 @@ export function TradingDeskPage({ currentUser, onLogout }: TradingDeskPageProps)
           </button>
         </div>
 
-        <div className="custom-scrollbar flex-1 space-y-3 overflow-y-auto p-4">
-          {(messages[negId] || []).map((msg) => (
-            <div key={msg.id} className={`flex flex-col ${msg.sender === 'Corretor' ? 'items-end' : 'items-start'}`}>
-              <span className="mb-1 text-[11px] font-bold text-slate-400">
-                {msg.sender} • {msg.time}
-              </span>
-              <div
-                className={`max-w-[84%] rounded-2xl px-4 py-3 text-sm ${
-                  msg.sender === 'Corretor' ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-800'
-                }`}
-              >
-                {msg.text}
-              </div>
-            </div>
+        <div className="grid grid-cols-2 gap-2 border-b border-slate-100 px-4 py-3">
+          {(['seller', 'buyer'] as NegotiationAudience[]).map((item) => (
+            <button
+              key={item}
+              type="button"
+              onClick={() => switchChatAudience(negotiationId, item)}
+              className={`rounded-full border px-3 py-2 text-[11px] font-black uppercase tracking-[0.16em] transition-colors ${
+                audience === item
+                  ? 'border-emerald-500 bg-emerald-600 text-white'
+                  : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+              }`}
+            >
+              {negotiationAudienceLabel[item]}
+            </button>
           ))}
+        </div>
 
-          {(messages[negId] || []).length === 0 && (
-            <p className="pt-14 text-center text-sm text-slate-400">Inicie o diálogo com as partes para alinhar o contrato.</p>
+        <div className="custom-scrollbar flex-1 space-y-3 overflow-y-auto p-4">
+          {chatError ? (
+            <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{chatError}</div>
+          ) : null}
+
+          {isLoading ? (
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">Carregando mensagens...</div>
+          ) : null}
+
+          {roomMessages.map((msg) => {
+            const sentByCurrentUser = msg.senderId === currentUser.id;
+            return (
+              <div key={msg.id} className={`flex flex-col ${sentByCurrentUser ? 'items-end' : 'items-start'}`}>
+                <span className="mb-1 text-[11px] font-bold text-slate-400">
+                  {msg.senderName} - {formatFullDateLabel(msg.createdAt)}
+                </span>
+                <div
+                  className={`max-w-[84%] rounded-2xl px-4 py-3 text-sm ${
+                    sentByCurrentUser ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-800'
+                  }`}
+                >
+                  {msg.body}
+                </div>
+              </div>
+            );
+          })}
+
+          {!isLoading && roomMessages.length === 0 && (
+            <p className="pt-14 text-center text-sm text-slate-400">Inicie uma conversa separada com {negotiationAudienceLabel[audience].toLowerCase()}.</p>
           )}
         </div>
 
@@ -1304,25 +1420,24 @@ export function TradingDeskPage({ currentUser, onLogout }: TradingDeskPageProps)
           <div className="flex gap-2">
             <input
               type="text"
-              placeholder="Mensagem para as partes..."
+              value={draft}
+              placeholder={`Mensagem para ${negotiationAudienceLabel[audience].toLowerCase()}...`}
+              onChange={(event) => setMessageDrafts((previous) => ({ ...previous, [key]: event.target.value }))}
               className="flex-1 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none focus:border-emerald-500 focus:bg-white"
               onKeyDown={(event) => {
                 if (event.key === 'Enter') {
-                  sendMessage(negId, (event.target as HTMLInputElement).value, 'Corretor');
-                  (event.target as HTMLInputElement).value = '';
+                  event.preventDefault();
+                  void sendMessage(negotiationId, audience);
                 }
               }}
             />
             <button
               type="button"
-              onClick={(event) => {
-                const input = (event.currentTarget.previousElementSibling as HTMLInputElement | null);
-                if (!input) return;
-                sendMessage(negId, input.value, 'Corretor');
-                input.value = '';
-              }}
-              className="rounded-full bg-emerald-600 px-5 py-3 text-sm font-black uppercase tracking-[0.18em] text-white transition-colors hover:bg-emerald-700"
+              onClick={() => void sendMessage(negotiationId, audience)}
+              disabled={!draft.trim() || isSending}
+              className="inline-flex items-center gap-2 rounded-full bg-emerald-600 px-5 py-3 text-sm font-black uppercase tracking-[0.18em] text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
             >
+              <Send className="h-4 w-4" />
               Enviar
             </button>
           </div>
@@ -1437,7 +1552,7 @@ export function TradingDeskPage({ currentUser, onLogout }: TradingDeskPageProps)
     return (
       <div className="flex flex-col gap-3">
         <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-          <div>
+          <div className="min-w-0">
             <h2 className="text-xl font-black tracking-tight text-slate-950">Mesa de Operações</h2>
             <p className="mt-0.5 text-xs leading-5 text-slate-500">Fluxo de vendas, match, compras e negociações da Alytha.</p>
           </div>

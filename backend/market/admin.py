@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Negotiation, Offer, PasswordResetToken, User
+from .models import Negotiation, NegotiationMessage, Offer, PasswordResetToken, User
 
 
 @admin.register(User)
@@ -20,6 +20,13 @@ class OfferAdmin(admin.ModelAdmin):
 class NegotiationAdmin(admin.ModelAdmin):
     list_display = ('id', 'status', 'brokerage_mode', 'brokerage_fee', 'offer', 'buy_offer', 'buyer', 'seller', 'broker')
     list_filter = ('status', 'brokerage_mode')
+
+
+@admin.register(NegotiationMessage)
+class NegotiationMessageAdmin(admin.ModelAdmin):
+    list_display = ('id', 'negotiation', 'audience', 'sender', 'created_at')
+    list_filter = ('audience', 'created_at')
+    search_fields = ('body', 'sender__name', 'sender__email')
 
 
 @admin.register(PasswordResetToken)
