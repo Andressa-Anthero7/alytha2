@@ -6,6 +6,7 @@
 - Frontend: configurar as variaveis do build a partir de `frontend/.env.production.example`.
 - Nunca usar `frontend/.env` de desenvolvimento para gerar o build de producao.
 - Rodar o backend com `DJANGO_ENV=production`, `DJANGO_DEBUG=false` e `ALYTHA_EXPOSE_PASSWORD_RESET_TOKEN=false`.
+- Em producao, definir `ALYTHA_FRONTEND_DIST_DIR=/srv/alytha/frontend/dist` para o backend conseguir carregar os assets do frontend nas paginas SEO server-side.
 
 ## Banco de dados
 
@@ -113,6 +114,8 @@ npm run lint
 npm run build
 ```
 
+O build do frontend gera HTML pre-renderizado das paginas publicas fixas e `404.html`. O Nginx deve servir esses arquivos quando existirem e retornar 404 para rotas desconhecidas.
+
 Depois de publicar, testar manualmente:
 
 - Login com o backoffice inicial.
@@ -121,6 +124,19 @@ Depois de publicar, testar manualmente:
 - Recuperacao de senha recebendo e-mail real.
 - `/home`, `/mesa-operacional`, `/perfil` e `/app/admin/backoffice`.
 - Compartilhamento Facebook em `/share/oportunidades/{id}`.
+- SEO canonical de oportunidade em `/oportunidades/{id}` com HTML inicial contendo title, description, canonical e dados da oferta.
+- Sitemap dinamico em `/sitemap.xml`, incluindo oportunidades ativas.
+- URL inexistente retornando HTTP 404.
+
+## Google Search Console
+
+Esta etapa depende de acesso a conta Google/verificacao do dominio:
+
+1. Abrir `https://search.google.com/search-console`.
+2. Confirmar ou criar a propriedade de `plataforma.alytha.agr.br`/`alytha.agr.br`.
+3. Enviar `https://plataforma.alytha.agr.br/sitemap.xml` em Sitemaps.
+4. Rodar "Inspecao de URL" para `/`, `/quemsomos`, `/vendedorgraos` e uma oportunidade ativa (`/oportunidades/{id}`).
+5. Solicitar indexacao das URLs principais apos a pagina renderizada aparecer correta.
 
 ## Pontos que dependem do provedor
 

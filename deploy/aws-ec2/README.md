@@ -81,6 +81,7 @@ DJANGO_CSRF_TRUSTED_ORIGINS=https://plataforma.alytha.agr.br
 DATABASE_URL=postgresql://alytha:senha-forte@127.0.0.1:5432/alytha
 ALYTHA_PUBLIC_SITE_URL=https://plataforma.alytha.agr.br
 ALYTHA_SHARE_IMAGE_URL=https://plataforma.alytha.agr.br/logo.png
+ALYTHA_FRONTEND_DIST_DIR=/srv/alytha/frontend/dist
 ALYTHA_EXPOSE_PASSWORD_RESET_TOKEN=false
 DJANGO_THROTTLE_AUTH_LOGIN=20/min
 DJANGO_THROTTLE_AUTH_REGISTER=30/hour
@@ -130,6 +131,8 @@ cp .env.production.example .env.production
 npm run lint
 npm run build
 ```
+
+O `npm run build` tambem gera HTML pre-renderizado para as paginas publicas fixas (`/`, `/vendedorgraos`, `/compradorgraos`, `/corretores`, `/quemsomos`, `/lgpd`, `/termos-de-servico`) e `404.html`. Nao remova os subdiretorios criados dentro de `frontend/dist`.
 
 Confirmar que `.env.production` aponta para:
 
@@ -239,5 +242,18 @@ Validar no navegador:
 - `https://plataforma.alytha.agr.br/app/admin/backoffice`
 - `https://plataforma.alytha.agr.br/mesa-operacional`
 - `https://plataforma.alytha.agr.br/share/oportunidades/1`
+- `https://plataforma.alytha.agr.br/oportunidades/1` deve entregar HTML server-side com titulo, description, canonical e conteudo da oportunidade.
+- `https://plataforma.alytha.agr.br/sitemap.xml` deve vir do backend e incluir oportunidades ativas.
+- Uma URL inexistente, como `https://plataforma.alytha.agr.br/rota-inexistente-seo-check`, deve retornar HTTP 404.
+
+## Google Search Console
+
+Depois do deploy, usar uma conta com acesso ao dominio:
+
+1. Abrir `https://search.google.com/search-console`.
+2. Confirmar a propriedade `plataforma.alytha.agr.br` ou criar uma propriedade de dominio para `alytha.agr.br`.
+3. Enviar o sitemap `https://plataforma.alytha.agr.br/sitemap.xml`.
+4. Usar "Inspecao de URL" para testar `/`, `/quemsomos`, `/vendedorgraos` e uma oportunidade ativa (`/oportunidades/{id}`).
+5. Solicitar indexacao das URLs principais se o teste renderizado estiver correto.
 
 Restaurar backup mensalmente em banco separado para validar os arquivos `.dump`.

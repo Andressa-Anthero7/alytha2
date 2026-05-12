@@ -2,6 +2,7 @@ import json
 import logging
 from datetime import timedelta
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
+from pathlib import Path
 
 from django.conf import settings
 from django.contrib.auth import authenticate, get_user_model
@@ -791,6 +792,41 @@ def build_share_image_url(request):
     return build_public_site_url(request, '/logo.png')
 
 
+def build_public_canonical_url(request, path):
+    return build_public_site_url(request, path)
+
+
+def get_frontend_dist_dir():
+    configured_dir = getattr(settings, 'ALYTHA_FRONTEND_DIST_DIR', '')
+    if configured_dir:
+        return Path(configured_dir)
+    return settings.BASE_DIR.parent / 'frontend' / 'dist'
+
+
+def get_frontend_entry_assets():
+    dist_dir = get_frontend_dist_dir()
+    manifest_path = dist_dir / '.vite' / 'manifest.json'
+
+    if manifest_path.exists():
+        try:
+            manifest = json.loads(manifest_path.read_text(encoding='utf-8'))
+            entry = manifest.get('src/main.tsx') or next((item for item in manifest.values() if item.get('isEntry')), None)
+            if entry and entry.get('file'):
+                return {
+                    'script': f"/{entry['file'].lstrip('/')}",
+                    'stylesheets': [f"/{stylesheet.lstrip('/')}" for stylesheet in entry.get('css', [])],
+                }
+        except (OSError, json.JSONDecodeError, StopIteration):
+            logger.warning('Nao foi possivel ler o manifest do frontend para SEO.', exc_info=True)
+
+    scripts = sorted((dist_dir / 'assets').glob('index-*.js'))
+    stylesheets = sorted((dist_dir / 'assets').glob('index-*.css'))
+    return {
+        'script': f"/assets/{scripts[-1].name}" if scripts else '',
+        'stylesheets': [f"/assets/{stylesheet.name}" for stylesheet in stylesheets[-1:]],
+    }
+
+
 def build_offer_share_metadata(request, offer):
     offer_type_label = 'Oferta de venda' if offer.offer_type == 'venda' else 'Demanda de compra'
     title = f'{offer_type_label} de {offer.grain} | Alytha'
@@ -809,6 +845,163 @@ def build_offer_share_metadata(request, offer):
         'share_url': share_url,
         'image_url': image_url,
     }
+
+
+def build_offer_structured_data(metadata, offer):
+    return {
+        '@context': 'https://schema.org',
+        '@graph': [
+            {
+                '@type': 'Organization',
+                '@id': f"{metadata['site_url']}/#organization",
+                'name': 'Alytha',
+                'url': f"{metadata['site_url']}/",
+                'logo': metadata['image_url'],
+            },
+            {
+                '@type': 'WebSite',
+                '@id': f"{metadata['site_url']}/#website",
+                'url': f"{metadata['site_url']}/",
+                'name': 'Alytha',
+                'publisher': {'@id': f"{metadata['site_url']}/#organization"},
+                'inLanguage': 'pt-BR',
+            },
+            {
+                '@type': 'WebPage',
+                '@id': f"{metadata['frontend_url']}#webpage",
+                'url': metadata['frontend_url'],
+                'name': metadata['title'],
+                'description': metadata['description'],
+                'isPartOf': {'@id': f"{metadata['site_url']}/#website"},
+                'inLanguage': 'pt-BR',
+                'mainEntity': {
+                    '@type': 'Offer',
+                    'name': metadata['title'],
+                    'description': metadata['description'],
+                    'url': metadata['frontend_url'],
+                    'price': str(offer.price),
+                    'priceCurrency': 'BRL',
+                    'availability': 'https://schema.org/InStock',
+                    'areaServed': offer.location,
+                    'itemOffered': {
+                        '@type': 'Product',
+                        'name': offer.grain,
+                        'category': 'Grãos',
+                    },
+                },
+            },
+        ],
+    }
+
+
+def render_offer_seo_html(request, offer):
+    metadata = build_offer_share_metadata(request, offer)
+    metadata['site_url'] = getattr(settings, 'ALYTHA_PUBLIC_SITE_URL', '').rstrip('/') or request.build_absolute_uri('/').rstrip('/')
+    assets = get_frontend_entry_assets()
+
+    title = escape(metadata['title'])
+    description = escape(metadata['description'])
+    frontend_url = escape(metadata['frontend_url'])
+    image_url = escape(metadata['image_url'])
+    type_label = 'Oferta de venda' if offer.offer_type == 'venda' else 'Demanda de compra'
+    channel_label = 'Operando com a mesa' if offer.negotiation_channel == 'mesa' else 'Oferta direta'
+    stylesheet_tags = '\n    '.join(
+        f'<link rel="stylesheet" crossorigin href="{escape(stylesheet)}">' for stylesheet in assets['stylesheets']
+    )
+    script_tag = f'<script type="module" crossorigin src="{escape(assets["script"])}"></script>' if assets['script'] else ''
+    structured_data = json.dumps(build_offer_structured_data(metadata, offer), ensure_ascii=False).replace('</', '<\\/')
+
+    root_content = f"""
+      <main class="mx-auto max-w-5xl px-6 py-8 text-slate-900">
+        <p>{escape(type_label)}</p>
+        <h1>{escape(offer.grain)}</h1>
+        <p>{description}</p>
+        <dl>
+          <div><dt>Localidade</dt><dd>{escape(offer.location)}</dd></div>
+          <div><dt>Quantidade</dt><dd>{escape(format_quantity_pt_br(offer.quantity, offer.unit))}</dd></div>
+          <div><dt>Valor</dt><dd>{escape(format_currency_pt_br(offer.price))}</dd></div>
+          <div><dt>Safra</dt><dd>{escape(offer.crop)}</dd></div>
+          <div><dt>Frete</dt><dd>{escape(offer.shipping)}</dd></div>
+          <div><dt>Pagamento</dt><dd>{escape(offer.payment_terms)}</dd></div>
+          <div><dt>Modalidade</dt><dd>{escape(channel_label)}</dd></div>
+        </dl>
+        <p><a href="/">Ver marketplace Alytha</a></p>
+      </main>"""
+
+    return f"""<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{title}</title>
+    <meta name="description" content="{description}">
+    <meta name="robots" content="index, follow">
+    <meta name="theme-color" content="#059669">
+    <meta property="og:locale" content="pt_BR">
+    <meta property="og:site_name" content="Alytha">
+    <meta property="og:type" content="article">
+    <meta property="og:title" content="{title}">
+    <meta property="og:description" content="{description}">
+    <meta property="og:url" content="{frontend_url}">
+    <meta property="og:image" content="{image_url}">
+    <meta property="og:image:alt" content="{title}">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="{title}">
+    <meta name="twitter:description" content="{description}">
+    <meta name="twitter:image" content="{image_url}">
+    <link rel="canonical" href="{frontend_url}">
+    {stylesheet_tags}
+    <script type="application/ld+json">{structured_data}</script>
+  </head>
+  <body>
+    <div id="root">{root_content}
+    </div>
+    {script_tag}
+  </body>
+</html>"""
+
+
+PUBLIC_SITEMAP_ROUTES = [
+    ('/', 'daily', '1.0'),
+    ('/vendedorgraos', 'weekly', '0.8'),
+    ('/compradorgraos', 'weekly', '0.8'),
+    ('/corretores', 'weekly', '0.8'),
+    ('/quemsomos', 'monthly', '0.6'),
+    ('/lgpd', 'monthly', '0.3'),
+    ('/termos-de-servico', 'monthly', '0.3'),
+]
+
+
+def render_public_sitemap_xml(request):
+    lines = ['<?xml version="1.0" encoding="UTF-8"?>', '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">']
+
+    for path, changefreq, priority in PUBLIC_SITEMAP_ROUTES:
+        lines.extend(
+            [
+                '  <url>',
+                f'    <loc>{escape(build_public_canonical_url(request, path))}</loc>',
+                f'    <changefreq>{changefreq}</changefreq>',
+                f'    <priority>{priority}</priority>',
+                '  </url>',
+            ]
+        )
+
+    for offer in get_public_marketplace_queryset().values('id', 'created_at'):
+        offer_path = f'/oportunidades/{offer["id"]}'
+        offer_lastmod = offer['created_at'].date().isoformat()
+        lines.extend(
+            [
+                '  <url>',
+                f'    <loc>{escape(build_public_canonical_url(request, offer_path))}</loc>',
+                f'    <lastmod>{offer_lastmod}</lastmod>',
+                '    <changefreq>daily</changefreq>',
+                '    <priority>0.7</priority>',
+                '  </url>',
+            ]
+        )
+
+    lines.append('</urlset>')
+    return '\n'.join(lines)
 
 
 def render_offer_share_html(metadata):
@@ -1200,6 +1393,23 @@ class PublicMarketplaceOfferDetailView(APIView):
     def get(self, request, offer_id):
         offer = get_object_or_404(get_public_marketplace_queryset(request), id=offer_id)
         return Response(PublicMarketplaceOfferDetailSerializer(offer, context={'request': request}).data)
+
+
+class PublicSitemapView(APIView):
+    permission_classes = []
+    authentication_classes = []
+
+    def get(self, request):
+        return HttpResponse(render_public_sitemap_xml(request), content_type='application/xml; charset=utf-8')
+
+
+class PublicMarketplaceOfferSeoView(APIView):
+    permission_classes = []
+    authentication_classes = []
+
+    def get(self, request, offer_id):
+        offer = get_object_or_404(get_public_marketplace_queryset(), id=offer_id)
+        return HttpResponse(render_offer_seo_html(request, offer), content_type='text/html; charset=utf-8')
 
 
 class PublicMarketplaceOfferShareView(APIView):

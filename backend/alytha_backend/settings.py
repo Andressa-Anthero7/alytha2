@@ -250,6 +250,7 @@ APPEND_SLASH = False
 # Public frontend URL used by share-preview HTML pages.
 ALYTHA_PUBLIC_SITE_URL = os.environ.get('ALYTHA_PUBLIC_SITE_URL', 'https://plataforma.alytha.agr.br').rstrip('/')
 ALYTHA_SHARE_IMAGE_URL = os.environ.get('ALYTHA_SHARE_IMAGE_URL', f'{ALYTHA_PUBLIC_SITE_URL}/logo.png').rstrip('/')
+ALYTHA_FRONTEND_DIST_DIR = os.environ.get('ALYTHA_FRONTEND_DIST_DIR', str(BASE_DIR.parent / 'frontend' / 'dist')).rstrip('/')
 ALYTHA_EXPOSE_PASSWORD_RESET_TOKEN = env_bool('ALYTHA_EXPOSE_PASSWORD_RESET_TOKEN', default=DEBUG)
 
 EMAIL_BACKEND = os.environ.get(

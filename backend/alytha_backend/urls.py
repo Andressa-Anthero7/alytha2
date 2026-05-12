@@ -16,10 +16,13 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path, include
-from market.views import PublicMarketplaceOfferShareView
+from market.views import PublicMarketplaceOfferSeoView, PublicMarketplaceOfferShareView, PublicSitemapView
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+    path('sitemap.xml', PublicSitemapView.as_view(), name='public_sitemap'),
+    path('oportunidades/<int:offer_id>', PublicMarketplaceOfferSeoView.as_view(), name='public_marketplace_offer_seo'),
+    path('oportunidades/<int:offer_id>/', PublicMarketplaceOfferSeoView.as_view(), name='public_marketplace_offer_seo_slash'),
     path('share/oportunidades/<int:offer_id>', PublicMarketplaceOfferShareView.as_view(), name='public_marketplace_offer_share'),
     path('api/', include('market.urls')),
 ]

@@ -13,29 +13,33 @@ from .models import Negotiation, Offer, PasswordResetToken, User
 
 @override_settings(ALYTHA_PUBLIC_SITE_URL='https://app.alytha.test', ALYTHA_SHARE_IMAGE_URL='https://app.alytha.test/logo.png')
 class PublicMarketplaceOfferShareTests(APITestCase):
-    def test_offer_share_page_renders_server_side_open_graph_metadata(self):
+    def create_public_offer(self, **overrides):
         seller = User.objects.create(
-            name='Seller Share',
-            email='seller.share@test.com',
+            name=overrides.pop('seller_name', 'Seller Share'),
+            email=overrides.pop('seller_email', 'seller.share@test.com'),
             type='vendedor',
             phone='5516999999999',
             company='Fazenda Share',
         )
-        offer = Offer.objects.create(
+        return Offer.objects.create(
             user=seller,
-            offer_type='venda',
-            grain='Soja',
-            quantity=Decimal('1000.00'),
-            unit='Sacas',
-            price=Decimal('120.50'),
-            location='Sorriso - MT',
-            crop='24/25',
-            shipping='FOB',
-            negotiation_channel='direta',
-            quality={},
-            payment_terms='A vista',
-            status='ativa',
+            offer_type=overrides.pop('offer_type', 'venda'),
+            grain=overrides.pop('grain', 'Soja'),
+            quantity=overrides.pop('quantity', Decimal('1000.00')),
+            unit=overrides.pop('unit', 'Sacas'),
+            price=overrides.pop('price', Decimal('120.50')),
+            location=overrides.pop('location', 'Sorriso - MT'),
+            crop=overrides.pop('crop', '24/25'),
+            shipping=overrides.pop('shipping', 'FOB'),
+            negotiation_channel=overrides.pop('negotiation_channel', 'direta'),
+            quality=overrides.pop('quality', {}),
+            payment_terms=overrides.pop('payment_terms', 'A vista'),
+            status=overrides.pop('status', 'ativa'),
+            **overrides,
         )
+
+    def test_offer_share_page_renders_server_side_open_graph_metadata(self):
+        offer = self.create_public_offer()
 
         response = self.client.get(reverse('public_marketplace_offer_share', args=[offer.id]))
         content = response.content.decode('utf-8')
@@ -46,6 +50,34 @@ class PublicMarketplaceOfferShareTests(APITestCase):
         self.assertIn('property="og:description" content="Oferta de venda em Sorriso - MT:', content)
         self.assertIn('property="og:image" content="https://app.alytha.test/logo.png"', content)
         self.assertIn(f'href="https://app.alytha.test/oportunidades/{offer.id}"', content)
+
+    def test_offer_canonical_page_renders_server_side_seo_content(self):
+        offer = self.create_public_offer(grain='Milho', price=Decimal('53.00'), location='Ivaipora - PR')
+
+        response = self.client.get(reverse('public_marketplace_offer_seo', args=[offer.id]))
+        content = response.content.decode('utf-8')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Content-Type'], 'text/html; charset=utf-8')
+        self.assertIn('<title>Oferta de venda de Milho | Alytha</title>', content)
+        self.assertIn(f'<link rel="canonical" href="https://app.alytha.test/oportunidades/{offer.id}">', content)
+        self.assertIn('<meta name="robots" content="index, follow">', content)
+        self.assertIn('Ivaipora - PR', content)
+        self.assertIn('application/ld+json', content)
+        self.assertIn('<div id="root">', content)
+
+    def test_dynamic_sitemap_includes_static_pages_and_active_offers(self):
+        active_offer = self.create_public_offer(seller_email='seller.active.sitemap@test.com', grain='Milho')
+        finished_offer = self.create_public_offer(seller_email='seller.finished.sitemap@test.com', grain='Sorgo', status='finalizada')
+
+        response = self.client.get(reverse('public_sitemap'))
+        content = response.content.decode('utf-8')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Content-Type'], 'application/xml; charset=utf-8')
+        self.assertIn('<loc>https://app.alytha.test/vendedorgraos</loc>', content)
+        self.assertIn(f'<loc>https://app.alytha.test/oportunidades/{active_offer.id}</loc>', content)
+        self.assertNotIn(f'<loc>https://app.alytha.test/oportunidades/{finished_offer.id}</loc>', content)
 
 
 class ValidatedRegistrationAPITestCase(APITestCase):
