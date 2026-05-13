@@ -3,6 +3,7 @@ import logging
 from datetime import timedelta
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from pathlib import Path
+from urllib.parse import parse_qs
 
 from django.conf import settings
 from django.contrib.auth import authenticate, get_user_model
@@ -29,6 +30,7 @@ from .models import Negotiation, NegotiationMessage, Offer, PasswordResetToken, 
 from .services.whatsapp import (
     normalize_whatsapp_phone,
     send_negotiation_whatsapp_message,
+    verify_twilio_signature,
     verify_whatsapp_signature,
 )
 from .serializers import (
@@ -2000,7 +2002,52 @@ class WhatsAppWebhookView(APIView):
 
         return HttpResponse('Forbidden', status=403, content_type='text/plain')
 
+    def post_twilio(self, request):
+        raw_params = parse_qs(request.body.decode('utf-8'), keep_blank_values=True)
+        params = {key: values[-1] if values else '' for key, values in raw_params.items()}
+
+        if not verify_twilio_signature(request.build_absolute_uri(), params, request.META.get('HTTP_X_TWILIO_SIGNATURE', '')):
+            return HttpResponse('Forbidden', status=403, content_type='text/plain')
+
+        message_id = str(params.get('MessageSid') or params.get('SmsMessageSid') or params.get('SmsSid') or '')
+        delivery_status = str(params.get('MessageStatus') or params.get('SmsStatus') or '').strip()
+        body = str(params.get('Body') or '').strip()
+        from_phone = params.get('From')
+
+        processed_messages = 0
+        processed_statuses = 0
+
+        if message_id and delivery_status:
+            processed_statuses = NegotiationMessage.objects.filter(external_id=message_id).update(
+                delivery_status=delivery_status,
+            )
+
+        if body and from_phone and (not message_id or not NegotiationMessage.objects.filter(external_id=message_id).exists()):
+            context_message_id = str(params.get('OriginalRepliedMessageSid') or params.get('ContextMessageSid') or '').strip()
+            negotiation, audience, sender = resolve_whatsapp_message_target(from_phone, context_message_id)
+
+            if negotiation and audience in {'buyer', 'seller'}:
+                NegotiationMessage.objects.create(
+                    negotiation=negotiation,
+                    sender=sender,
+                    audience=audience,
+                    body=body,
+                    delivery_channel='whatsapp',
+                    delivery_status='received',
+                    external_id=message_id,
+                )
+                processed_messages = 1
+            else:
+                logger.info('Twilio WhatsApp webhook ignored: negotiation not found for phone %s.', from_phone)
+
+        logger.info('Twilio WhatsApp webhook processed messages=%s statuses=%s.', processed_messages, processed_statuses)
+        return HttpResponse('<Response></Response>', content_type='text/xml')
+
     def post(self, request):
+        content_type = request.META.get('CONTENT_TYPE', '')
+        if settings.ALYTHA_WHATSAPP_PROVIDER == 'twilio' or 'application/x-www-form-urlencoded' in content_type:
+            return self.post_twilio(request)
+
         if not verify_whatsapp_signature(request.body, request.META.get('HTTP_X_HUB_SIGNATURE_256', '')):
             return Response({'detail': 'Assinatura invalida.'}, status=status.HTTP_403_FORBIDDEN)
 

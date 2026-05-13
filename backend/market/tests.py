@@ -402,6 +402,13 @@ class AuthFlowTests(ValidatedRegistrationAPITestCase):
         self.assertEqual(webhook_response.status_code, 200)
         self.assertEqual(webhook_response.data['processedMessages'], 1)
 
+        twilio_webhook_response = self.client.post(
+            '/api/whatsapp/webhook',
+            'MessageSid=SMtwilioreply&From=whatsapp%3A%2B5516999991111&Body=Resposta+Twilio',
+            content_type='application/x-www-form-urlencoded',
+        )
+        self.assertEqual(twilio_webhook_response.status_code, 200)
+
         res = self.client.post('/api/login/', {'email': 'buyer.chat@test.com', 'password': 'pass'}, format='json')
         self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {res.data['access']}")
         buyer_messages = self.client.get(f'/api/negotiations/{negotiation_id}/messages')
@@ -420,9 +427,10 @@ class AuthFlowTests(ValidatedRegistrationAPITestCase):
         self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {res.data['access']}")
         seller_messages = self.client.get(f'/api/negotiations/{negotiation_id}/messages')
         self.assertEqual(seller_messages.status_code, 200)
-        self.assertEqual([item['audience'] for item in seller_messages.data], ['seller', 'seller'])
+        self.assertEqual([item['audience'] for item in seller_messages.data], ['seller', 'seller', 'seller'])
         self.assertEqual(seller_messages.data[0]['body'], 'Mensagem privada para o vendedor.')
         self.assertEqual(seller_messages.data[1]['body'], 'Resposta pelo WhatsApp.')
+        self.assertEqual(seller_messages.data[2]['body'], 'Resposta Twilio')
 
     def test_broker_match_ignores_dynamic_percentage_commission(self):
         self.client.post(reverse('register', args=['vendedor']), {
