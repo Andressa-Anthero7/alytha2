@@ -26,7 +26,8 @@ const highlights = [
 
 export default function BrokerLandingPage() {
   const currentUser = getCurrentUser<User>();
-  const dashboardHref = isAuthenticated() ? getPrimaryAppPath(currentUser) : '/login';
+  const loggedIn = isAuthenticated();
+  const dashboardHref = loggedIn ? getPrimaryAppPath(currentUser) : '/app/cadastro/corretor';
 
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top,#eef3ff_0%,#ffffff_40%,#f5efe3_100%)] text-slate-900">
@@ -49,14 +50,14 @@ export default function BrokerLandingPage() {
                 to={dashboardHref}
                 className="inline-flex items-center justify-center gap-3 rounded-full bg-sky-700 px-6 py-4 text-sm font-black uppercase tracking-[0.22em] text-white shadow-lg shadow-sky-700/20 hover:bg-sky-800"
               >
-                {isAuthenticated() ? 'Abrir dashboard' : 'Quero me inscrever'}
+                {loggedIn ? 'Abrir dashboard' : 'Quero me inscrever'}
                 <ArrowRight className="h-4 w-4" />
               </Link>
               <Link
-                to="/quemsomos"
+                to={loggedIn ? '/quemsomos' : '/login'}
                 className="inline-flex items-center justify-center rounded-full border border-slate-300 bg-white px-6 py-4 text-sm font-black uppercase tracking-[0.22em] text-slate-900 shadow-sm hover:border-slate-400"
               >
-                Conhecer a Alytha
+                {loggedIn ? 'Conhecer a Alytha' : 'Já sou corretor'}
               </Link>
             </div>
           </div>

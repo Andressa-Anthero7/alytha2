@@ -1,0 +1,22 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: alytha-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-alytha}
+      POSTGRES_USER: ${POSTGRES_USER:-alytha}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-alytha_local_password}
+      TZ: America/Sao_Paulo
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - alytha_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-alytha} -d ${POSTGRES_DB:-alytha}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  alytha_postgres_data:

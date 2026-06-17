@@ -9,6 +9,12 @@ const sellerSteps = [
   'Deixe sua oferta pronta para consulta.',
 ] as const;
 
+const sellerSeoLinks = [
+  { label: 'Vender soja', to: '/vender-soja' },
+  { label: 'Vender milho', to: '/vender-milho' },
+  { label: 'Vender sorgo', to: '/vender-sorgo' },
+] as const;
+
 export default function SellerLandingPage() {
   const primaryHref = isAuthenticated() ? '/ofertas/venda/nova' : '/login';
 
@@ -47,7 +53,7 @@ export default function SellerLandingPage() {
               Publique ofertas de soja, milho e sorgo com mais clareza comercial.
             </h1>
             <p className="mt-4 max-w-2xl text-[15px] leading-7 text-slate-600 sm:text-[17px] sm:leading-8">
-              Cadastre sua oferta, organize as informações do lote e deixe a oportunidade pronta para negociação.
+              Cadastre sua oferta de soja, milho ou sorgo, organize as informações do lote e deixe a oportunidade pronta para negociação.
             </p>
           </div>
 
@@ -61,6 +67,36 @@ export default function SellerLandingPage() {
                   <span>{item}</span>
                 </div>
               ))}
+            </div>
+          </div>
+        </section>
+
+        <section className="mt-6 rounded-[1.6rem] border border-white/80 bg-white/92 p-5 shadow-[0_35px_100px_-80px_rgba(15,23,42,0.55)] sm:p-6">
+          <div className="grid gap-5 lg:grid-cols-[0.8fr_1.2fr] lg:items-start">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.22em] text-emerald-700">Venda por produto</p>
+              <h2 className="mt-2 text-2xl font-black tracking-tight text-slate-950">Como vender soja, milho e sorgo pela Alytha.</h2>
+            </div>
+            <div className="space-y-3 text-sm leading-7 text-slate-600 sm:text-base">
+              <p>
+                Para vender soja, milho ou sorgo, informe produto, volume, praça, safra, frete FOB ou CIF, valor pretendido e condições
+                de pagamento. Esses dados ajudam compradores e corretores a avaliar a oportunidade com menos ruído operacional.
+              </p>
+              <p>
+                A Alytha organiza a oferta no marketplace e permite que a negociação avance com apoio comercial quando houver aderência entre
+                vendedor, comprador e mesa.
+              </p>
+              <div className="flex flex-wrap gap-2 pt-1">
+                {sellerSeoLinks.map((link) => (
+                  <Link
+                    key={link.to}
+                    to={link.to}
+                    className="rounded-full border border-emerald-100 bg-emerald-50 px-4 py-2 text-xs font-black uppercase tracking-[0.16em] text-emerald-800 hover:bg-white"
+                  >
+                    {link.label}
+                  </Link>
+                ))}
+              </div>
             </div>
           </div>
         </section>

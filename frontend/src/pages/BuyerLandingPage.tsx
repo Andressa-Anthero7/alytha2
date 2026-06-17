@@ -11,6 +11,12 @@ const buyerSteps = [
   'Receba oportunidades de forma organizada.',
 ] as const;
 
+const buyerSeoLinks = [
+  { label: 'Comprar soja', to: '/comprar-soja' },
+  { label: 'Comprar milho', to: '/comprar-milho' },
+  { label: 'Comprar sorgo', to: '/comprar-sorgo' },
+] as const;
+
 export default function BuyerLandingPage() {
   const currentUser = getCurrentUser<User>();
   const primaryHref = isAuthenticated() ? '/ofertas/compra/nova' : '/login';
@@ -51,7 +57,7 @@ export default function BuyerLandingPage() {
               Encontre oportunidades de soja, milho e sorgo com mais rapidez.
             </h1>
             <p className="mt-4 max-w-2xl text-[15px] leading-7 text-slate-600 sm:text-[17px] sm:leading-8">
-              Consulte o marketplace, publique sua demanda e acompanhe oportunidades com apoio comercial da Alytha.
+              Consulte o marketplace, publique sua demanda de soja, milho ou sorgo e acompanhe oportunidades com apoio comercial da Alytha.
             </p>
           </div>
 
@@ -65,6 +71,36 @@ export default function BuyerLandingPage() {
                   <span>{item}</span>
                 </div>
               ))}
+            </div>
+          </div>
+        </section>
+
+        <section className="mt-6 rounded-[1.6rem] border border-white/80 bg-white/92 p-5 shadow-[0_35px_100px_-80px_rgba(15,23,42,0.55)] sm:p-6">
+          <div className="grid gap-5 lg:grid-cols-[0.8fr_1.2fr] lg:items-start">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.22em] text-amber-700">Compra por produto</p>
+              <h2 className="mt-2 text-2xl font-black tracking-tight text-slate-950">Como comprar soja, milho e sorgo pela Alytha.</h2>
+            </div>
+            <div className="space-y-3 text-sm leading-7 text-slate-600 sm:text-base">
+              <p>
+                Para comprar soja, milho ou sorgo, consulte oportunidades por praça, volume, safra, frete, pagamento e valor. Quando não houver
+                uma oferta aderente, registre a demanda para deixar sua necessidade clara para vendedores e corretores.
+              </p>
+              <p>
+                A Alytha aproxima compradores de ofertas qualificadas e organiza a conversa comercial em torno dos dados que importam para o
+                mercado físico de grãos.
+              </p>
+              <div className="flex flex-wrap gap-2 pt-1">
+                {buyerSeoLinks.map((link) => (
+                  <Link
+                    key={link.to}
+                    to={link.to}
+                    className="rounded-full border border-amber-100 bg-amber-50 px-4 py-2 text-xs font-black uppercase tracking-[0.16em] text-amber-900 hover:bg-white"
+                  >
+                    {link.label}
+                  </Link>
+                ))}
+              </div>
             </div>
           </div>
         </section>

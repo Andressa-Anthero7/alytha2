@@ -82,11 +82,12 @@ export const buildOfferDocumentMetadata = (offer: PublicMarketplaceOfferListItem
 });
 
 export const buildMarketplaceDocumentMetadata = (): DocumentMetadata => ({
-  title: 'Ofertas e Demandas | Alytha',
-  description: 'Marketplace Alytha para consultar ofertas de venda e demandas de compra de graos com praca, volume, frete e valor.',
+  title: 'Alytha | Marketplace de grãos',
+  description: 'Marketplace Alytha para consultar ofertas de venda e demandas de compra de grãos com praça, volume, frete, safra e valor.',
   canonicalUrl: buildAbsolutePublicUrl('/'),
   imageUrl: buildAbsolutePublicUrl('/logo.png'),
   type: 'website',
+  robots: 'index, follow',
 });
 
 export const buildOfferSocialLinks = (offer: PublicMarketplaceOfferListItem) => {

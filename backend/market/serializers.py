@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import Negotiation, Offer, User
+from .models import Negotiation, NegotiationMessage, Offer, User
 
 
 BUYER_PROFILE_SEGMENTS = {
@@ -169,9 +169,13 @@ def find_duplicate_document(document_number, instance=None):
     if not target_digits:
         return None
 
-    queryset = User.objects.exclude(document_number='').only('id', 'document_number')
+    queryset = User.objects.exclude(document_number_digits='').only('id', 'document_number', 'document_number_digits')
     if instance:
         queryset = queryset.exclude(pk=instance.pk)
+
+    exact_match = queryset.filter(document_number_digits=target_digits).first()
+    if exact_match:
+        return exact_match
 
     for user in queryset:
         if document_digits(user.document_number) == target_digits:
@@ -215,7 +219,7 @@ class UserSerializer(serializers.ModelSerializer):
             attrs['document_number'] = ''
 
         if email is not None:
-            attrs['email'] = str(email).strip()
+            attrs['email'] = str(email).strip().lower()
 
         if name is not None:
             attrs['name'] = str(name).strip()
@@ -239,6 +243,22 @@ class UserSerializer(serializers.ModelSerializer):
             'name': {'required': True},
             'type': {'required': True},
         }
+
+
+class BrokerUserSummarySerializer(serializers.ModelSerializer):
+    email = serializers.SerializerMethodField()
+    phone = serializers.SerializerMethodField()
+
+    class Meta:
+        model = User
+        fields = ['id', 'name', 'email', 'type', 'is_validated', 'phone', 'company']
+        read_only_fields = fields
+
+    def get_email(self, obj):
+        return mask_email(obj.email)
+
+    def get_phone(self, obj):
+        return mask_phone(obj.phone)
 
 
 class ProfileSerializer(serializers.ModelSerializer):
@@ -343,6 +363,42 @@ class NegotiationSerializer(serializers.ModelSerializer):
             'status',
             'createdAt',
         ]
+
+
+class NegotiationMessageSerializer(serializers.ModelSerializer):
+    negotiationId = serializers.IntegerField(source='negotiation_id', read_only=True)
+    senderId = serializers.IntegerField(source='sender_id', read_only=True)
+    senderName = serializers.SerializerMethodField()
+    deliveryChannel = serializers.CharField(source='delivery_channel', read_only=True)
+    deliveryStatus = serializers.CharField(source='delivery_status', read_only=True)
+    externalId = serializers.CharField(source='external_id', read_only=True)
+    createdAt = serializers.DateTimeField(source='created_at', read_only=True)
+    body = serializers.CharField(max_length=2000, trim_whitespace=True)
+
+    class Meta:
+        model = NegotiationMessage
+        fields = [
+            'id',
+            'negotiationId',
+            'audience',
+            'senderId',
+            'senderName',
+            'deliveryChannel',
+            'deliveryStatus',
+            'externalId',
+            'body',
+            'createdAt',
+        ]
+        read_only_fields = ['id', 'negotiationId', 'senderId', 'senderName', 'deliveryChannel', 'deliveryStatus', 'externalId', 'createdAt']
+
+    def get_senderName(self, obj):
+        return obj.sender.name if obj.sender else 'Alytha'
+
+    def validate_body(self, value):
+        body = str(value or '').strip()
+        if not body:
+            raise serializers.ValidationError('Informe a mensagem.')
+        return body
 
 
 class MarketplaceOfferSerializer(serializers.ModelSerializer):

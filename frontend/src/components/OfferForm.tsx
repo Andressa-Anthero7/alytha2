@@ -1,5 +1,5 @@
 import { AlertCircle, CheckCircle2, Copy, LoaderCircle, ShieldCheck } from 'lucide-react';
-import { useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { apiFetch } from '../lib/api';
 import { LEGAL_DOCUMENT_VERSION } from '../shared/legal';
 import type { OfferPixData, OfferRegistration } from '../types';
@@ -13,6 +13,7 @@ type OfferFormProps = {
   offerType: OfferType;
   title: string;
   subtitle: string;
+  compactSpacing?: boolean;
   mode?: 'authenticated' | 'broker-link';
   brokerToken?: string;
   brokerName?: string;
@@ -27,12 +28,15 @@ type OfferFormState = {
   quantity: string;
   unit: string;
   price: string;
-  location: string;
+  locationState: string;
+  locationCity: string;
+  locationComplement: string;
   crop: string;
   shipping: 'FOB' | 'CIF';
   negotiationChannel: OfferChannel;
   mesaCommission: string;
   nonGmo: boolean;
+  damagedSoybean: boolean;
   moisture: string;
   impurity: string;
   damaged: string;
@@ -53,10 +57,67 @@ type OfferSubmissionResponse = {
   registration?: OfferRegistration | null;
 };
 
+type IbgeMunicipality = {
+  id: number;
+  nome: string;
+};
+
 const isOfferSubmissionResponse = (payload: unknown): payload is OfferSubmissionResponse =>
   Boolean(payload && typeof payload === 'object' && 'id' in payload && typeof (payload as { id?: unknown }).id === 'number');
 
 const mesaCommissionOptions = ['0.50', '1.00', '1.50', '2.00', '2.50', '3.00', '3.50', '4.00', '4.50', '5.00'] as const;
+const grainOptions = ['Soja', 'Milho', 'Sorgo'] as const;
+const shippingOptions = [
+  {
+    value: 'FOB',
+    title: 'FOB',
+    description: 'Retirada na origem ou ponto indicado pelo vendedor.',
+  },
+  {
+    value: 'CIF',
+    title: 'CIF',
+    description: 'Entrega no destino ou base combinada com o comprador.',
+  },
+] as const;
+const paymentTermSuggestions = ['A vista', '7 dias', '15 dias', '30 dias', 'Contra entrega'] as const;
+const ibgeLocalitiesApiBaseUrl = 'https://servicodados.ibge.gov.br/api/v1/localidades';
+const brazilStates = [
+  { code: 'AC', name: 'Acre' },
+  { code: 'AL', name: 'Alagoas' },
+  { code: 'AP', name: 'Amapa' },
+  { code: 'AM', name: 'Amazonas' },
+  { code: 'BA', name: 'Bahia' },
+  { code: 'CE', name: 'Ceara' },
+  { code: 'DF', name: 'Distrito Federal' },
+  { code: 'ES', name: 'Espirito Santo' },
+  { code: 'GO', name: 'Goias' },
+  { code: 'MA', name: 'Maranhao' },
+  { code: 'MT', name: 'Mato Grosso' },
+  { code: 'MS', name: 'Mato Grosso do Sul' },
+  { code: 'MG', name: 'Minas Gerais' },
+  { code: 'PA', name: 'Para' },
+  { code: 'PB', name: 'Paraiba' },
+  { code: 'PR', name: 'Parana' },
+  { code: 'PE', name: 'Pernambuco' },
+  { code: 'PI', name: 'Piaui' },
+  { code: 'RJ', name: 'Rio de Janeiro' },
+  { code: 'RN', name: 'Rio Grande do Norte' },
+  { code: 'RS', name: 'Rio Grande do Sul' },
+  { code: 'RO', name: 'Rondonia' },
+  { code: 'RR', name: 'Roraima' },
+  { code: 'SC', name: 'Santa Catarina' },
+  { code: 'SP', name: 'Sao Paulo' },
+  { code: 'SE', name: 'Sergipe' },
+  { code: 'TO', name: 'Tocantins' },
+] as const;
+
+const cropSuggestions = (() => {
+  const currentYear = new Date().getFullYear();
+  return Array.from({ length: 3 }, (_, index) => {
+    const startYear = currentYear - 1 + index;
+    return `${startYear}/${String(startYear + 1).slice(-2)}`;
+  });
+})();
 
 const initialState: OfferFormState = {
   name: '',
@@ -67,12 +128,15 @@ const initialState: OfferFormState = {
   quantity: '',
   unit: 'Sacas',
   price: '',
-  location: '',
+  locationState: '',
+  locationCity: '',
+  locationComplement: '',
   crop: '',
   shipping: 'FOB',
   negotiationChannel: 'mesa',
   mesaCommission: '1.00',
   nonGmo: false,
+  damagedSoybean: false,
   moisture: '',
   impurity: '',
   damaged: '',
@@ -131,19 +195,6 @@ const channelCards = [
   },
 ] as const;
 
-const publicChannelCards = [
-  {
-    id: 'mesa',
-    title: 'Conduzir com a mesa Alytha',
-    description: 'A oportunidade segue com apoio comercial da mesa e atendimento do corretor responsável por este link.',
-  },
-  {
-    id: 'direta',
-    title: 'Publicar sem intermediação da mesa',
-    description: 'O cadastro continua vinculado ao corretor deste link, mas entra sem atuação comercial da mesa Alytha.',
-  },
-] as const;
-
 const funruralOptions = ['Incluso no preço', 'Destacado no faturamento', 'A definir na negociação'] as const;
 const grainStandardOptions = [
   { value: 'exportacao', label: 'Exportação' },
@@ -175,6 +226,20 @@ const getErrorMessage = (payload: unknown) => {
 const formatCurrency = (value: number) =>
   Number(value).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+const formatQuantityPreview = (value: string, unit: string) => {
+  const parsedValue = Number(value.trim().replace(',', '.'));
+  if (!Number.isFinite(parsedValue) || parsedValue <= 0) {
+    return 'Ainda nao informado';
+  }
+
+  return `${parsedValue.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} ${unit}`;
+};
+
+const formatCurrencyPreview = (value: string) => {
+  const parsedValue = Number(value.trim().replace(',', '.'));
+  return Number.isFinite(parsedValue) && parsedValue > 0 ? formatCurrency(parsedValue) : 'Ainda nao informado';
+};
+
 const parseOptionalNumber = (value: string) => {
   const normalized = value.trim().replace(',', '.');
   if (!normalized) {
@@ -185,10 +250,32 @@ const parseOptionalNumber = (value: string) => {
   return Number.isFinite(parsed) ? parsed : undefined;
 };
 
+const buildLocationLabel = (city: string, stateCode: string, complement: string) => {
+  const cityLabel = city.trim();
+  const stateLabel = stateCode.trim().toUpperCase();
+  const complementLabel = complement.trim();
+  const baseLocation = [cityLabel, stateLabel].filter(Boolean).join(' - ');
+
+  if (!baseLocation) {
+    return '';
+  }
+
+  return complementLabel ? `${baseLocation} (${complementLabel})` : baseLocation;
+};
+
+const isIbgeMunicipality = (value: unknown): value is IbgeMunicipality =>
+  Boolean(
+    value
+    && typeof value === 'object'
+    && typeof (value as { id?: unknown }).id === 'number'
+    && typeof (value as { nome?: unknown }).nome === 'string',
+  );
+
 export default function OfferForm({
   offerType,
   title,
   subtitle,
+  compactSpacing = false,
   mode = 'authenticated',
   brokerToken,
   brokerName,
@@ -201,18 +288,91 @@ export default function OfferForm({
   const [registration, setRegistration] = useState<OfferRegistration | null>(null);
   const [copyFeedback, setCopyFeedback] = useState('');
   const [legalAccepted, setLegalAccepted] = useState(false);
+  const [municipalitiesByState, setMunicipalitiesByState] = useState<Record<string, string[]>>({});
+  const [municipalityStatus, setMunicipalityStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
 
   const copy = formCopy[offerType];
   const isPublicLead = mode === 'broker-link';
+  const compactLayout = isPublicLead;
+  const compactAuthenticatedSpacing = compactSpacing && !compactLayout;
   const brokerDisplayLabel = brokerName || 'corretor responsável';
-  const visibleChannelCards = isPublicLead ? publicChannelCards : channelCards;
   const shouldRegisterCommission = form.negotiationChannel === 'mesa' || isPublicLead;
   const showPhField = offerType === 'venda' && form.grain === 'Milho';
   const showProteinField = offerType === 'venda' && form.grain === 'Soja';
+  const showSoybeanOptions = form.grain === 'Soja';
+  const municipalities = municipalitiesByState[form.locationState] || [];
+  const selectedState = brazilStates.find((state) => state.code === form.locationState);
+  const resolvedLocation = useMemo(
+    () => buildLocationLabel(form.locationCity, form.locationState, form.locationComplement),
+    [form.locationCity, form.locationComplement, form.locationState],
+  );
+  const opportunitySummary = [
+    { label: 'Produto', value: form.grain },
+    { label: 'Praca', value: resolvedLocation || 'Selecione UF e municipio' },
+    { label: 'Volume', value: formatQuantityPreview(form.quantity, form.unit) },
+    { label: 'Preco', value: formatCurrencyPreview(form.price) },
+    { label: 'Safra', value: form.crop.trim() || 'Ainda nao informada' },
+    { label: 'Frete', value: form.shipping },
+  ];
 
   const updateField = <T extends keyof OfferFormState>(name: T, value: OfferFormState[T]) => {
     setForm((previous) => ({ ...previous, [name]: value }));
   };
+
+  useEffect(() => {
+    if (!form.locationState) {
+      setMunicipalityStatus('idle');
+      return;
+    }
+
+    if (municipalitiesByState[form.locationState]) {
+      setMunicipalityStatus('ready');
+      return;
+    }
+
+    const controller = new AbortController();
+    let cancelled = false;
+
+    const loadMunicipalities = async () => {
+      setMunicipalityStatus('loading');
+
+      try {
+        const response = await fetch(`${ibgeLocalitiesApiBaseUrl}/estados/${form.locationState}/municipios?orderBy=nome`, {
+          signal: controller.signal,
+        });
+        const data = (await response.json().catch(() => null)) as unknown;
+
+        if (!response.ok || !Array.isArray(data)) {
+          throw new Error('Nao foi possivel carregar os municipios.');
+        }
+
+        const nextMunicipalities = data
+          .filter(isIbgeMunicipality)
+          .map((municipality) => municipality.nome)
+          .filter(Boolean);
+
+        if (!cancelled) {
+          setMunicipalitiesByState((current) => ({ ...current, [form.locationState]: nextMunicipalities }));
+          setMunicipalityStatus('ready');
+        }
+      } catch (loadError) {
+        if (loadError instanceof DOMException && loadError.name === 'AbortError') {
+          return;
+        }
+
+        if (!cancelled) {
+          setMunicipalityStatus('error');
+        }
+      }
+    };
+
+    void loadMunicipalities();
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [form.locationState, municipalitiesByState]);
 
   const handleGrainChange = (grain: string) => {
     setForm((previous) => ({
@@ -220,6 +380,16 @@ export default function OfferForm({
       grain,
       ph: grain === 'Milho' ? previous.ph : '',
       protein: grain === 'Soja' ? previous.protein : '',
+      damagedSoybean: grain === 'Soja' ? previous.damagedSoybean : false,
+    }));
+  };
+
+  const handleLocationStateChange = (stateCode: string) => {
+    setForm((previous) => ({
+      ...previous,
+      locationState: stateCode,
+      locationCity: '',
+      locationComplement: '',
     }));
   };
 
@@ -248,6 +418,12 @@ export default function OfferForm({
       return;
     }
 
+    if (!resolvedLocation) {
+      setLoading(false);
+      setError('Selecione o estado e o municipio da praca antes de salvar.');
+      return;
+    }
+
     const endpoint = isPublicLead && brokerToken ? `/broker-links/${brokerToken}/offers` : '/offers';
     const quality = {
       moisture: offerType === 'venda' ? parseOptionalNumber(form.moisture) : undefined,
@@ -258,6 +434,7 @@ export default function OfferForm({
       protein: showProteinField ? parseOptionalNumber(form.protein) : undefined,
       standard: offerType === 'venda' && form.grainStandard ? grainStandardLabelMap[form.grainStandard] : undefined,
       nonGmo: form.nonGmo ? true : undefined,
+      damagedSoybean: showSoybeanOptions && form.damagedSoybean ? true : undefined,
       deliveryWindow: form.deliveryWindow,
       funrural: offerType === 'venda' ? form.funrural : undefined,
       notes: form.qualityNotes,
@@ -280,10 +457,10 @@ export default function OfferForm({
       quantity: Number(form.quantity),
       unit: form.unit,
       price: Number(form.price),
-      location: form.location,
+      location: resolvedLocation,
       crop: form.crop,
       shipping: form.shipping,
-      negotiationChannel: form.negotiationChannel,
+      negotiationChannel: isPublicLead ? 'mesa' : form.negotiationChannel,
       mesaCommission: shouldRegisterCommission ? Number(form.mesaCommission) : null,
       quality,
       paymentTerms: form.paymentTerms,
@@ -330,28 +507,62 @@ export default function OfferForm({
   };
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[1.24fr_0.76fr]">
+    <div
+      className={`${compactLayout ? 'broker-link-compact-form ' : ''}grid ${
+        compactLayout
+          ? 'gap-3 lg:grid-cols-[1.4fr_0.6fr]'
+          : compactAuthenticatedSpacing
+            ? 'gap-4 lg:grid-cols-[1.24fr_0.76fr]'
+            : 'gap-6 lg:grid-cols-[1.24fr_0.76fr]'
+      }`}
+    >
       <form
         onSubmit={handleSubmit}
-        className="rounded-[2rem] border border-white/80 bg-white/92 p-5 shadow-[0_45px_120px_-60px_rgba(15,23,42,0.55)] backdrop-blur sm:p-8"
+        className={`border border-white/80 bg-white/92 shadow-[0_45px_120px_-60px_rgba(15,23,42,0.55)] backdrop-blur ${
+          compactLayout
+            ? 'rounded-xl p-3 sm:p-4'
+            : compactAuthenticatedSpacing
+              ? 'rounded-[1.5rem] p-4 sm:rounded-[2rem] sm:p-6'
+              : 'rounded-[2rem] p-5 sm:p-8'
+        }`}
       >
         <div className="max-w-2xl">
           <p className="text-[11px] font-black uppercase tracking-[0.28em] text-emerald-700">
             {isPublicLead ? 'Canal do corretor' : copy.sectionLabel}
           </p>
-          <h1 className="mt-4 text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">{title}</h1>
-          <p className="mt-4 text-sm leading-7 text-slate-600 sm:text-base sm:leading-8">{subtitle}</p>
+          <h1
+            className={`${
+              compactLayout
+                ? 'mt-1.5 text-xl sm:text-2xl'
+                : compactAuthenticatedSpacing
+                  ? 'mt-2 text-2xl leading-7 sm:mt-2.5 sm:text-[1.55rem] sm:leading-8 lg:text-[1.7rem]'
+                  : 'mt-4 text-3xl sm:text-4xl'
+            } font-black tracking-tight text-slate-950`}
+          >
+            {title}
+          </h1>
+          <p
+            className={`${
+              compactLayout
+                ? 'mt-1.5 text-xs leading-5'
+                : compactAuthenticatedSpacing
+                  ? 'mt-2 text-sm leading-5 sm:mt-2.5 sm:text-sm sm:leading-6'
+                  : 'mt-4 text-sm leading-7 sm:text-base sm:leading-8'
+            } text-slate-600`}
+          >
+            {subtitle}
+          </p>
         </div>
 
         {isPublicLead && (
-          <div className="mt-8 rounded-[1.8rem] border border-sky-100 bg-sky-50/70 p-5">
-            <div className="flex items-start gap-3">
-              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white text-sky-700 shadow-sm">
-                <ShieldCheck className="h-5 w-5" />
+          <div className="mt-3 rounded-lg border border-sky-100 bg-sky-50/70 p-3">
+            <div className="flex items-start gap-2">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-white text-sky-700 shadow-sm">
+                <ShieldCheck className="h-3.5 w-3.5" />
               </div>
               <div>
-                <p className="text-sm font-black text-sky-950">Atendimento vinculado a {brokerDisplayLabel}</p>
-                <p className="mt-2 text-sm leading-7 text-sky-900/80">
+                <p className="text-xs font-black text-sky-950">Atendimento vinculado a {brokerDisplayLabel}</p>
+                <p className="mt-0.5 text-xs leading-4 text-sky-900/80">
                   Este envio entra direto na base privada do corretor. Você não precisa criar login agora para compartilhar a oportunidade.
                 </p>
               </div>
@@ -360,7 +571,7 @@ export default function OfferForm({
         )}
 
         {isPublicLead && (
-          <div className="mt-8 grid gap-4 md:grid-cols-2">
+          <div className="mt-3 grid gap-2 md:grid-cols-2">
             <label className="space-y-2">
               <span className="text-xs font-black uppercase tracking-[0.2em] text-slate-500">Seu nome</span>
               <input
@@ -406,75 +617,120 @@ export default function OfferForm({
           </div>
         )}
 
-        <div className="mt-8">
+        <div className={compactLayout ? 'mt-4' : compactAuthenticatedSpacing ? 'mt-5 sm:mt-6' : 'mt-8'}>
+          {!isPublicLead ? (
+            <>
           <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-500">
-            {isPublicLead ? 'Como deseja conduzir essa oportunidade' : 'Como deseja negociar'}
+            Como deseja negociar
           </p>
-          <div className="mt-3 grid gap-3 md:grid-cols-2">
-            {visibleChannelCards.map((item) => {
+          <div
+            className={`${
+              compactLayout || compactAuthenticatedSpacing ? 'mt-2' : 'mt-3'
+            } grid rounded-[1.35rem] border border-slate-200 bg-slate-100/80 p-1 shadow-inner shadow-slate-200/70 sm:grid-cols-2`}
+          >
+            {channelCards.map((item) => {
               const active = form.negotiationChannel === item.id;
+              const buttonLabel = item.id === 'mesa' ? 'Operar com a mesa' : 'Publicar direto';
               return (
                 <button
                   key={item.id}
                   type="button"
                   onClick={() => updateField('negotiationChannel', item.id as OfferChannel)}
-                  className={`rounded-[1.6rem] border p-4 text-left transition-colors ${
-                    active ? 'border-emerald-500 bg-emerald-50' : 'border-slate-200 bg-slate-50 hover:border-slate-300 hover:bg-white'
+                  aria-pressed={active}
+                  className={`inline-flex items-center justify-center gap-2 border text-center font-black transition-colors ${
+                    compactLayout ? 'min-h-10 rounded-lg px-3 py-2 text-xs sm:min-h-11 sm:px-3' : 'min-h-12 rounded-[1.05rem] px-3 py-2.5 text-sm sm:min-h-14 sm:px-4'
+                  } ${
+                    active
+                      ? 'border-white bg-white text-emerald-800 shadow-sm shadow-slate-300/70'
+                      : 'border-transparent text-slate-600 hover:bg-white/70 hover:text-slate-950'
                   }`}
                 >
-                  <p className="text-sm font-black text-slate-950">{item.title}</p>
-                  <p className="mt-2 text-sm leading-6 text-slate-600">{item.description}</p>
+                  <CheckCircle2 className={`h-4 w-4 shrink-0 ${active ? 'text-emerald-600 opacity-100' : 'text-slate-400 opacity-0'}`} />
+                  <span>{buttonLabel}</span>
                 </button>
               );
             })}
           </div>
 
           {form.negotiationChannel === 'mesa' ? (
-            <div className="mt-4 rounded-[1.6rem] border border-emerald-100 bg-emerald-50/70 p-4">
+            <div
+                  className={`border border-emerald-100 bg-emerald-50/70 ${
+                    compactLayout
+                      ? 'mt-3 rounded-[1.15rem] p-3'
+                      : compactAuthenticatedSpacing
+                        ? 'mt-3 rounded-[1.15rem] p-3 sm:mt-4 sm:rounded-[1.6rem] sm:p-4'
+                        : 'mt-4 rounded-[1.6rem] p-4'
+                  }`}
+                >
               <p className="text-sm font-black text-emerald-950">
                 {isPublicLead ? 'Atendimento com apoio da mesa Alytha.' : 'Operação com a mesa inclui comissão comercial.'}
               </p>
-              <p className="mt-2 text-sm leading-6 text-emerald-900/85">
+              <p className={`${compactLayout ? 'mt-1 text-sm leading-5' : compactAuthenticatedSpacing ? 'mt-1 text-sm leading-5 sm:mt-2 sm:leading-6' : 'mt-2 text-sm leading-6'} text-emerald-900/85`}>
                 {isPublicLead
                   ? 'Sua oportunidade será registrada para atendimento do corretor e seguirá com a política comercial da mesa Alytha.'
                   : 'A comissão por saca fica registrada no cadastro desta oportunidade e será usada no match quando a mesa conduzir a operação.'}
               </p>
             </div>
           ) : (
-            <div className="mt-4 rounded-[1.6rem] border border-amber-100 bg-amber-50/80 p-4">
+            <div
+                  className={`border border-amber-100 bg-amber-50/80 ${
+                    compactLayout
+                      ? 'mt-3 rounded-[1.15rem] p-3'
+                      : compactAuthenticatedSpacing
+                        ? 'mt-3 rounded-[1.15rem] p-3 sm:mt-4 sm:rounded-[1.6rem] sm:p-4'
+                        : 'mt-4 rounded-[1.6rem] p-4'
+                  }`}
+                >
               <p className="text-sm font-black text-amber-950">
                 {isPublicLead ? 'Publicação direta vinculada ao corretor.' : 'Publicação direta com política comercial da plataforma.'}
               </p>
-              <p className="mt-2 text-sm leading-6 text-amber-900/85">
+              <p className={`${compactLayout ? 'mt-1 text-sm leading-5' : compactAuthenticatedSpacing ? 'mt-1 text-sm leading-5 sm:mt-2 sm:leading-6' : 'mt-2 text-sm leading-6'} text-amber-900/85`}>
                 {isPublicLead
                   ? `O cadastro continua reservado para ${brokerDisplayLabel}. As 4 primeiras publicações diretas do mês ficam sem taxa; a partir da 5ª, o sistema gera PIX de ${formatCurrency(100)} para liberar a oportunidade.`
                   : `As 4 primeiras publicações diretas do mês ficam sem taxa. A partir da 5ª, o cadastro gera PIX de ${formatCurrency(100)} para liberação da oportunidade.`}
               </p>
             </div>
           )}
+            </>
+          ) : (
+            <div
+              className={`border border-emerald-100 bg-emerald-50/70 ${
+                compactLayout
+                  ? 'rounded-[1.15rem] p-3'
+                  : compactAuthenticatedSpacing
+                    ? 'rounded-[1.15rem] p-3 sm:rounded-[1.6rem] sm:p-4'
+                    : 'rounded-[1.6rem] p-4'
+              }`}
+            >
+              <p className="text-sm font-black text-emerald-950">Atendimento com apoio da mesa Alytha.</p>
+              <p className={`${compactLayout ? 'mt-1 text-sm leading-5' : compactAuthenticatedSpacing ? 'mt-1 text-sm leading-5 sm:mt-2 sm:leading-6' : 'mt-2 text-sm leading-6'} text-emerald-900/85`}>
+                Sua oportunidade será registrada para atendimento do corretor e seguirá com a política comercial da mesa Alytha.
+              </p>
+            </div>
+          )}
 
           {shouldRegisterCommission ? (
             <div
-              className={`mt-4 rounded-[1.6rem] p-4 ${
+              className={`${compactLayout ? 'mt-3 rounded-[1.15rem] p-3' : 'mt-4 rounded-[1.6rem] p-4'} ${
                 isPublicLead ? 'border border-sky-100 bg-sky-50/70' : 'border border-emerald-100 bg-emerald-50/70'
               }`}
             >
               <p className={`text-sm font-black ${isPublicLead ? 'text-sky-950' : 'text-emerald-950'}`}>
                 {isPublicLead ? 'Comissão registrada no cadastro.' : 'Comissão da mesa.'}
               </p>
-              <p className={`mt-2 text-sm leading-6 ${isPublicLead ? 'text-sky-900/85' : 'text-emerald-900/85'}`}>
+              <p className={`${compactLayout ? 'mt-1 text-sm leading-5' : 'mt-2 text-sm leading-6'} ${isPublicLead ? 'text-sky-900/85' : 'text-emerald-900/85'}`}>
                 {isPublicLead
                   ? 'Esse valor fica salvo no cadastro e será usado no match desta oportunidade por ter entrado por link exclusivo.'
                   : 'Selecione abaixo a comissão por saca que deve ficar vinculada ao cadastro desta oportunidade.'}
               </p>
-              <label className="mt-4 block space-y-2">
+              <label className={`${compactLayout ? 'mt-3' : 'mt-4'} block space-y-2`}>
                 <span className={`text-xs font-black uppercase tracking-[0.2em] ${isPublicLead ? 'text-sky-800' : 'text-emerald-800'}`}>
                   {isPublicLead ? 'Comissão do cadastro' : 'Comissão da mesa'}
                 </span>
                 <select
                   value={form.mesaCommission}
                   onChange={(event) => updateField('mesaCommission', event.target.value)}
-                  className={`w-full rounded-2xl bg-white px-4 py-3 outline-none ${
+                  className={`w-full rounded-2xl bg-white outline-none ${compactLayout ? 'px-3 py-2.5 text-sm' : 'px-4 py-3'} ${
                     isPublicLead ? 'border border-sky-200 focus:border-sky-500' : 'border border-emerald-200 focus:border-emerald-500'
                   }`}
                 >
@@ -489,30 +745,53 @@ export default function OfferForm({
           ) : null}
         </div>
 
-        <div className="mt-8 grid gap-4 md:grid-cols-2">
+        <div className={`grid md:grid-cols-2 ${compactLayout ? 'mt-4 gap-2.5' : 'mt-8 gap-4'}`}>
           <div className="space-y-2">
             <span className="text-xs font-black uppercase tracking-[0.2em] text-slate-500">Produto</span>
-            <select
-              value={form.grain}
-              onChange={(event) => handleGrainChange(event.target.value)}
-              className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none focus:border-emerald-500 focus:bg-white"
-            >
-              <option value="Soja">Soja</option>
-              <option value="Milho">Milho</option>
-                <option value="Sorgo">Sorgo</option>
-              </select>
-            <label className="flex cursor-pointer items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-800 hover:bg-slate-50">
-              <input
-                type="checkbox"
-                checked={form.nonGmo}
-                onChange={(event) => updateField('nonGmo', event.target.checked)}
-                className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
-              />
-              Non GMO
-            </label>
+            <div className="grid grid-cols-3 gap-2">
+              {grainOptions.map((grain) => {
+                const active = form.grain === grain;
+                return (
+                  <button
+                    key={grain}
+                    type="button"
+                    onClick={() => handleGrainChange(grain)}
+                    className={`rounded-2xl border px-3 text-sm font-black transition-colors ${compactLayout ? 'py-2.5' : 'py-3'} ${
+                      active ? 'border-emerald-500 bg-emerald-50 text-emerald-900' : 'border-slate-200 bg-slate-50 text-slate-700 hover:bg-white'
+                    }`}
+                    aria-pressed={active}
+                  >
+                    {grain}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="grid gap-2">
+              <label className={`flex cursor-pointer items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-800 hover:bg-slate-50 ${compactLayout ? 'py-2.5' : 'py-3'}`}>
+                <input
+                  type="checkbox"
+                  checked={form.nonGmo}
+                  onChange={(event) => updateField('nonGmo', event.target.checked)}
+                  className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                />
+                Non GMO
+              </label>
+
+              {showSoybeanOptions ? (
+                <label className={`flex cursor-pointer items-center gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 text-sm font-bold text-amber-950 hover:bg-amber-100 ${compactLayout ? 'py-2.5' : 'py-3'}`}>
+                  <input
+                    type="checkbox"
+                    checked={form.damagedSoybean}
+                    onChange={(event) => updateField('damagedSoybean', event.target.checked)}
+                    className="h-4 w-4 rounded border-amber-300 text-amber-600 focus:ring-amber-500"
+                  />
+                  Soja avariada
+                </label>
+              ) : null}
+            </div>
           </div>
 
-          <label className="space-y-2">
+          <div className="space-y-2">
             <span className="text-xs font-black uppercase tracking-[0.2em] text-slate-500">Safra</span>
             <input
               required
@@ -521,7 +800,21 @@ export default function OfferForm({
               placeholder="Ex.: 2024/25"
               className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none focus:border-emerald-500 focus:bg-white"
             />
-          </label>
+            <div className="flex flex-wrap gap-2">
+              {cropSuggestions.map((crop) => (
+                <button
+                  key={crop}
+                  type="button"
+                  onClick={() => updateField('crop', crop)}
+                  className={`rounded-full border px-3 py-1.5 text-xs font-bold transition-colors ${
+                    form.crop === crop ? 'border-emerald-500 bg-emerald-50 text-emerald-800' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+                  }`}
+                >
+                  {crop}
+                </button>
+              ))}
+            </div>
+          </div>
 
           <label className="space-y-2">
             <span className="text-xs font-black uppercase tracking-[0.2em] text-slate-500">Quantidade</span>
@@ -563,28 +856,115 @@ export default function OfferForm({
             />
           </label>
 
-          <label className="space-y-2">
-            <span className="text-xs font-black uppercase tracking-[0.2em] text-slate-500">{copy.locationLabel}</span>
-            <input
-              required
-              value={form.location}
-              onChange={(event) => updateField('location', event.target.value)}
-              placeholder="Ex.: Rondonópolis - MT"
-              className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none focus:border-emerald-500 focus:bg-white"
-            />
-          </label>
+          <div className={`border border-slate-200 bg-slate-50/80 md:col-span-2 ${compactLayout ? 'rounded-[1.25rem] p-3' : 'rounded-[1.8rem] p-4'}`}>
+            <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-500">{copy.locationLabel}</p>
+                <p className="mt-1 text-sm leading-6 text-slate-600">Escolha UF e município para padronizar a praça no marketplace e no mapa.</p>
+              </div>
+              <span className="rounded-full border border-emerald-100 bg-white px-3 py-1.5 text-xs font-black text-emerald-800">
+                {resolvedLocation || 'Praça pendente'}
+              </span>
+            </div>
 
-          <label className="space-y-2">
-            <span className="text-xs font-black uppercase tracking-[0.2em] text-slate-500">Condição FOB / CIF</span>
-            <select
-              value={form.shipping}
-              onChange={(event) => updateField('shipping', event.target.value as 'FOB' | 'CIF')}
-              className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none focus:border-emerald-500 focus:bg-white"
-            >
-              <option value="FOB">FOB</option>
-              <option value="CIF">CIF</option>
-            </select>
-          </label>
+            <div className={`${compactLayout ? 'mt-3 gap-2' : 'mt-4 gap-3'} grid md:grid-cols-[0.48fr_1fr]`}>
+              <label className="space-y-2">
+                <span className="text-xs font-black uppercase tracking-[0.18em] text-slate-500">Estado</span>
+                <select
+                  required
+                  value={form.locationState}
+                  onChange={(event) => handleLocationStateChange(event.target.value)}
+                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 outline-none focus:border-emerald-500"
+                >
+                  <option value="">Selecione a UF</option>
+                  {brazilStates.map((state) => (
+                    <option key={state.code} value={state.code}>
+                      {state.code} - {state.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="space-y-2">
+                <span className="text-xs font-black uppercase tracking-[0.18em] text-slate-500">Município</span>
+                {municipalityStatus === 'error' ? (
+                  <input
+                    required
+                    value={form.locationCity}
+                    onChange={(event) => updateField('locationCity', event.target.value)}
+                    placeholder="Digite o município"
+                    className="w-full rounded-2xl border border-amber-200 bg-white px-4 py-3 outline-none focus:border-amber-500"
+                  />
+                ) : (
+                  <select
+                    required
+                    value={form.locationCity}
+                    onChange={(event) => updateField('locationCity', event.target.value)}
+                    disabled={!form.locationState || municipalityStatus === 'loading'}
+                    className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 outline-none focus:border-emerald-500 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+                  >
+                    <option value="">
+                      {!form.locationState
+                        ? 'Selecione o estado primeiro'
+                        : municipalityStatus === 'loading'
+                          ? 'Carregando municípios...'
+                          : 'Selecione o município'}
+                    </option>
+                    {municipalities.map((municipality) => (
+                      <option key={municipality} value={municipality}>
+                        {municipality}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </label>
+
+              <label className="space-y-2 md:col-span-2">
+                <span className="text-xs font-black uppercase tracking-[0.18em] text-slate-500">Complemento da praça</span>
+                <input
+                  value={form.locationComplement}
+                  onChange={(event) => updateField('locationComplement', event.target.value)}
+                  placeholder="Opcional: armazém, fazenda, porto, região ou ponto de retirada"
+                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 outline-none focus:border-emerald-500"
+                />
+              </label>
+            </div>
+
+            {municipalityStatus === 'loading' ? (
+              <p className="mt-3 inline-flex items-center gap-2 text-xs font-bold text-slate-500">
+                <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
+                Buscando municípios do {selectedState?.name || form.locationState}...
+              </p>
+            ) : null}
+            {municipalityStatus === 'error' ? (
+              <p className="mt-3 text-xs font-bold text-amber-800">
+                Não foi possível carregar a lista agora. Digite o município manualmente para continuar.
+              </p>
+            ) : null}
+          </div>
+
+          <fieldset className="space-y-2 md:col-span-2">
+            <legend className="text-xs font-black uppercase tracking-[0.2em] text-slate-500">Condição FOB / CIF</legend>
+            <div className={`grid sm:grid-cols-2 ${compactLayout ? 'gap-2' : 'gap-3'}`}>
+              {shippingOptions.map((option) => {
+                const active = form.shipping === option.value;
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => updateField('shipping', option.value)}
+                    className={`border text-left transition-colors ${compactLayout ? 'rounded-[1.15rem] p-3' : 'rounded-[1.4rem] p-4'} ${
+                      active ? 'border-emerald-500 bg-emerald-50' : 'border-slate-200 bg-slate-50 hover:bg-white'
+                    }`}
+                    aria-pressed={active}
+                  >
+                    <span className="text-sm font-black text-slate-950">{option.title}</span>
+                    <span className={`${compactLayout ? 'mt-0.5 leading-5' : 'mt-1 leading-6'} block text-sm text-slate-600`}>{option.description}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </fieldset>
 
           <label className="space-y-2">
             <span className="text-xs font-black uppercase tracking-[0.2em] text-slate-500">{copy.windowLabel}</span>
@@ -597,11 +977,11 @@ export default function OfferForm({
           </label>
         </div>
 
-        <div className="mt-4 grid gap-4">
+        <div className={`grid ${compactLayout ? 'mt-3 gap-3' : 'mt-4 gap-4'}`}>
           {offerType === 'venda' ? (
-            <div className="rounded-[1.8rem] border border-slate-200 bg-slate-50/80 p-5">
+            <div className={`border border-slate-200 bg-slate-50/80 ${compactLayout ? 'rounded-[1.25rem] p-4' : 'rounded-[1.8rem] p-5'}`}>
               <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-500">Qualidade do grão</p>
-              <div className="mt-4 grid gap-4 md:grid-cols-2">
+              <div className={`grid md:grid-cols-2 ${compactLayout ? 'mt-3 gap-3' : 'mt-4 gap-4'}`}>
                 <label className="space-y-2">
                   <span className="text-xs font-black uppercase tracking-[0.2em] text-slate-500">Umidade (%)</span>
                   <input
@@ -685,15 +1065,15 @@ export default function OfferForm({
                 ) : null}
               </div>
 
-              <fieldset className="mt-5">
+              <fieldset className={compactLayout ? 'mt-4' : 'mt-5'}>
                 <legend className="text-xs font-black uppercase tracking-[0.2em] text-slate-500">Padrão</legend>
-                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                <div className={`mt-3 grid sm:grid-cols-2 ${compactLayout ? 'gap-2' : 'gap-3'}`}>
                   {grainStandardOptions.map((option) => {
                     const active = form.grainStandard === option.value;
                     return (
                       <label
                         key={option.value}
-                        className={`flex cursor-pointer items-center gap-3 rounded-2xl border px-4 py-3 transition-colors ${
+                        className={`flex cursor-pointer items-center gap-3 rounded-2xl border px-4 transition-colors ${compactLayout ? 'py-2.5' : 'py-3'} ${
                           active ? 'border-emerald-500 bg-white' : 'border-slate-200 bg-white/80 hover:border-slate-300'
                         }`}
                       >
@@ -737,20 +1117,36 @@ export default function OfferForm({
               value={form.qualityNotes}
               onChange={(event) => updateField('qualityNotes', event.target.value)}
               placeholder={copy.qualityPlaceholder}
-              className="min-h-28 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none focus:border-emerald-500 focus:bg-white"
+              className={`w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none focus:border-emerald-500 focus:bg-white ${compactLayout ? 'min-h-24' : 'min-h-28'}`}
             />
           </label>
 
-          <label className="space-y-2">
+          <div className="space-y-2">
             <span className="text-xs font-black uppercase tracking-[0.2em] text-slate-500">{copy.paymentLabel}</span>
+            <div className="flex flex-wrap gap-2">
+              {paymentTermSuggestions.map((paymentTerm) => (
+                <button
+                  key={paymentTerm}
+                  type="button"
+                  onClick={() => updateField('paymentTerms', paymentTerm)}
+                  className={`rounded-full border px-3 py-1.5 text-xs font-bold transition-colors ${
+                    form.paymentTerms === paymentTerm
+                      ? 'border-emerald-500 bg-emerald-50 text-emerald-800'
+                      : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+                  }`}
+                >
+                  {paymentTerm}
+                </button>
+              ))}
+            </div>
             <textarea
               required
               value={form.paymentTerms}
               onChange={(event) => updateField('paymentTerms', event.target.value)}
               placeholder={copy.paymentPlaceholder}
-              className="min-h-24 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none focus:border-emerald-500 focus:bg-white"
+              className={`w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none focus:border-emerald-500 focus:bg-white ${compactLayout ? 'min-h-20' : 'min-h-24'}`}
             />
-          </label>
+          </div>
 
           <label className="space-y-2">
             <span className="text-xs font-black uppercase tracking-[0.2em] text-slate-500">{copy.observationsLabel}</span>
@@ -758,27 +1154,27 @@ export default function OfferForm({
               value={form.observations}
               onChange={(event) => updateField('observations', event.target.value)}
               placeholder={copy.observationsPlaceholder}
-              className="min-h-24 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none focus:border-emerald-500 focus:bg-white"
+              className={`w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none focus:border-emerald-500 focus:bg-white ${compactLayout ? 'min-h-20' : 'min-h-24'}`}
             />
           </label>
         </div>
 
         {message && (
-          <div className="mt-6 flex items-start gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+          <div className={`${compactLayout ? 'mt-4' : 'mt-6'} flex items-start gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800`}>
             <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0" />
             <span>{message}</span>
           </div>
         )}
 
         {error && (
-          <div className="mt-6 flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <div className={`${compactLayout ? 'mt-4' : 'mt-6'} flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700`}>
             <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" />
             <span>{error}</span>
           </div>
         )}
 
         {pixData && (
-          <div className="mt-6 rounded-[1.8rem] border border-amber-200 bg-amber-50 p-5 shadow-sm">
+          <div className={`${compactLayout ? 'mt-4 rounded-[1.25rem] p-4' : 'mt-6 rounded-[1.8rem] p-5'} border border-amber-200 bg-amber-50 shadow-sm`}>
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
                 <p className="text-[11px] font-black uppercase tracking-[0.2em] text-amber-700">PIX para liberar o cadastro</p>
@@ -816,31 +1212,32 @@ export default function OfferForm({
         )}
 
         {copyFeedback && (
-          <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">{copyFeedback}</div>
+          <div className={`${compactLayout ? 'mt-4' : 'mt-6'} rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700`}>{copyFeedback}</div>
         )}
 
-        {isPublicLead ? <LegalAgreementCheckbox checked={legalAccepted} onChange={setLegalAccepted} className="mt-6" /> : null}
+        {isPublicLead ? <LegalAgreementCheckbox checked={legalAccepted} onChange={setLegalAccepted} className={compactLayout ? 'mt-4' : 'mt-6'} /> : null}
 
         <button
           type="submit"
           disabled={loading}
-          className="mt-8 inline-flex w-full items-center justify-center gap-3 rounded-full bg-emerald-600 px-6 py-4 text-sm font-black uppercase tracking-[0.22em] text-white shadow-lg shadow-emerald-600/25 hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-70 sm:w-auto"
+          className={`${compactLayout ? 'mt-5 py-3' : 'mt-8 py-4'} inline-flex w-full items-center justify-center gap-3 rounded-full bg-emerald-600 px-6 text-sm font-black uppercase tracking-[0.22em] text-white shadow-lg shadow-emerald-600/25 hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-70 sm:w-auto`}
         >
           {loading && <LoaderCircle className="h-4 w-4 animate-spin" />}
           {isPublicLead ? copy.publicSubmitLabel : copy.submitLabel}
         </button>
       </form>
 
-      <aside className="space-y-6">
-        <div className="rounded-[2rem] border border-emerald-100 bg-[linear-gradient(180deg,#052e2b_0%,#0f5f54_100%)] p-5 text-white shadow-[0_45px_120px_-60px_rgba(5,46,43,0.8)] sm:p-8">
+      <aside className={compactLayout ? 'space-y-3' : 'space-y-6'}>
+        <div className={`border border-emerald-100 bg-[linear-gradient(180deg,#052e2b_0%,#0f5f54_100%)] text-white shadow-[0_45px_120px_-60px_rgba(5,46,43,0.8)] ${
+          compactLayout ? 'rounded-xl p-3 sm:p-4' : 'rounded-[2rem] p-5 sm:p-8'
+        }`}>
           <p className="text-[11px] font-black uppercase tracking-[0.28em] text-emerald-200">Regras do cadastro</p>
-          <div className="mt-5 space-y-3 text-sm leading-7 text-emerald-50">
+          <div className={`${compactLayout ? 'mt-2 space-y-1.5 text-xs leading-5' : 'mt-5 space-y-3 text-sm leading-7'} text-emerald-50`}>
             {isPublicLead ? (
               <>
                 <p>O envio feito por este link fica reservado para o atendimento de {brokerDisplayLabel} dentro da Alytha.</p>
+                <p>A oportunidade segue com apoio comercial da mesa Alytha, sem opção de publicação avulsa por este canal.</p>
                 <p>A comissão por saca também fica registrada neste cadastro e, no match, segue o valor definido aqui para o corretor.</p>
-                <p>Se você optar pela publicação direta, as 4 primeiras do mês não geram taxa. A partir da 5ª, o sistema apresenta a cobrança de {formatCurrency(100)}.</p>
-                <p>Quando houver cobrança, os dados do PIX aparecem logo após o envio do cadastro.</p>
               </>
             ) : (
               <>
@@ -853,9 +1250,11 @@ export default function OfferForm({
           </div>
         </div>
 
-        <div className="rounded-[2rem] border border-slate-200 bg-white/90 p-5 shadow-[0_35px_100px_-70px_rgba(15,23,42,0.55)] sm:p-8">
+        <div className={`border border-slate-200 bg-white/90 shadow-[0_35px_100px_-70px_rgba(15,23,42,0.55)] ${
+          compactLayout ? 'rounded-xl p-3 sm:p-4' : 'rounded-[2rem] p-5 sm:p-8'
+        }`}>
           <p className="text-[11px] font-black uppercase tracking-[0.28em] text-amber-700">Orientações</p>
-          <div className="mt-4 space-y-4 text-sm leading-7 text-slate-600">
+          <div className={`${compactLayout ? 'mt-2 space-y-1.5 text-xs leading-5' : 'mt-4 space-y-4 text-sm leading-7'} text-slate-600`}>
             {isPublicLead ? (
               <>
                 <p>Preencha produto, praça, volume, safra e condições comerciais com clareza para facilitar a avaliação do corretor.</p>
@@ -890,6 +1289,23 @@ export default function OfferForm({
               </p>
             </div>
           ) : null}
+        </div>
+
+        <div className={`border border-slate-200 bg-white/92 shadow-[0_35px_100px_-70px_rgba(15,23,42,0.55)] ${
+          compactLayout ? 'rounded-xl p-3 sm:p-4' : 'rounded-[2rem] p-5 sm:p-6'
+        }`}>
+          <p className="text-[11px] font-black uppercase tracking-[0.28em] text-emerald-700">Resumo em tempo real</p>
+          <div className={`${compactLayout ? 'mt-2 gap-1.5' : 'mt-4 gap-3'} grid`}>
+            {opportunitySummary.map((item) => (
+              <div key={item.label} className={`flex items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50 px-4 ${compactLayout ? 'py-2' : 'py-3'}`}>
+                <span className="text-xs font-black uppercase tracking-[0.16em] text-slate-500">{item.label}</span>
+                <span className="text-right text-sm font-black text-slate-950">{item.value}</span>
+              </div>
+            ))}
+          </div>
+          <p className={`${compactLayout ? 'mt-2 text-xs leading-5' : 'mt-4 text-sm leading-6'} text-slate-600`}>
+            A praça será salva como <span className="font-bold text-slate-950">{resolvedLocation || 'Cidade - UF'}</span>, mantendo o mapa e os filtros consistentes.
+          </p>
         </div>
       </aside>
     </div>

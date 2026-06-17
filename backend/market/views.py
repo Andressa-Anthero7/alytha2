@@ -1,11 +1,15 @@
 import json
+import logging
 from datetime import timedelta
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
+from pathlib import Path
+from urllib.parse import parse_qs
 
 from django.conf import settings
 from django.contrib.auth import authenticate, get_user_model
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django.core.mail import send_mail
 from django.db import IntegrityError, transaction
 from django.db.models import Q, TextField
 from django.db.models.functions import Cast
@@ -15,15 +19,25 @@ from django.utils import timezone
 from django.utils.html import escape
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
-from rest_framework.exceptions import PermissionDenied, ValidationError as DRFValidationError
+from rest_framework.exceptions import AuthenticationFailed, PermissionDenied, ValidationError as DRFValidationError
 from rest_framework.permissions import BasePermission, IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
+from rest_framework_simplejwt.authentication import JWTAuthentication
 
-from .models import Negotiation, Offer, PasswordResetToken, User
+from .models import Negotiation, NegotiationMessage, Offer, PasswordResetToken, User
+from .services.whatsapp import (
+    normalize_whatsapp_phone,
+    send_negotiation_whatsapp_message,
+    verify_twilio_signature,
+    verify_whatsapp_signature,
+)
 from .serializers import (
     BrokerLinkOfferSubmissionSerializer,
+    BrokerUserSummarySerializer,
     MarketplaceOfferSerializer,
+    NegotiationMessageSerializer,
     NegotiationSerializer,
     OfferSerializer,
     PasswordResetConfirmSerializer,
@@ -35,6 +49,7 @@ from .serializers import (
 )
 
 AuthUser = get_user_model()
+logger = logging.getLogger(__name__)
 
 DIRECT_FREE_OFFERS_PER_MONTH = 4
 DIRECT_OFFER_FEE = Decimal('100.00')
@@ -88,6 +103,14 @@ def apply_legal_acceptance_fields(target, *, accept_terms, accept_privacy, legal
         updated_fields.extend(['legal_version', 'legal_acceptance_ip'])
 
     return updated_fields
+
+
+def enforce_legal_acceptance(*, accept_terms, accept_privacy):
+    if accept_terms and accept_privacy:
+        return
+    raise DRFValidationError({
+        'detail': 'Para continuar, confirme a leitura e aceite do contrato Alytha e da politica de LGPD.'
+    })
 
 
 CLIENT_OFFER_TYPE_BY_ROLE = {
@@ -334,7 +357,7 @@ class BrokerReadOnlyOrBackoffice(BasePermission):
         if getattr(request.user, 'is_staff', False):
             return True
 
-        market_user = User.objects.filter(email=request.user.email).first()
+        market_user = get_market_user_for_auth_user(request.user)
         if not market_user:
             return False
 
@@ -344,20 +367,73 @@ class BrokerReadOnlyOrBackoffice(BasePermission):
         return market_user.type == 'backoffice'
 
 
+class OptionalJWTAuthentication(JWTAuthentication):
+    def authenticate(self, request):
+        try:
+            return super().authenticate(request)
+        except AuthenticationFailed:
+            return None
+
+
 def get_market_user(request):
     if not request.user or not request.user.is_authenticated:
         return None
-    return User.objects.filter(email=request.user.email).first()
+    return get_market_user_for_auth_user(request.user)
+
+
+def normalize_identity(value):
+    return str(value or '').strip().lower()
+
+
+def build_identity_query(*values):
+    query = Q()
+    for value in values:
+        normalized_value = normalize_identity(value)
+        if normalized_value:
+            query |= Q(email__iexact=normalized_value)
+    return query
+
+
+def get_market_user_for_auth_user(auth_user):
+    if not auth_user or not getattr(auth_user, 'is_authenticated', False):
+        return None
+
+    query = build_identity_query(
+        getattr(auth_user, 'email', ''),
+        getattr(auth_user, 'username', ''),
+    )
+    if not query:
+        return None
+
+    return User.objects.filter(query).first()
+
+
+def get_auth_user_by_identity(identity):
+    normalized_identity = normalize_identity(identity)
+    if not normalized_identity:
+        return None
+
+    return AuthUser.objects.filter(Q(username__iexact=normalized_identity) | Q(email__iexact=normalized_identity)).first()
 
 
 def get_or_create_auth_user(*, email: str, name: str):
-    auth_user, created = AuthUser.objects.get_or_create(
-        username=email,
-        defaults={'email': email, 'first_name': name},
-    )
+    email = normalize_identity(email)
+    auth_user = AuthUser.objects.filter(Q(username__iexact=email) | Q(email__iexact=email)).first()
+    created = False
+
+    if not auth_user:
+        auth_user = AuthUser.objects.create_user(
+            username=email,
+            email=email,
+            first_name=name,
+        )
+        created = True
 
     if not created:
         updated_fields = []
+        if auth_user.username != email:
+            auth_user.username = email
+            updated_fields.append('username')
         if auth_user.email != email:
             auth_user.email = email
             updated_fields.append('email')
@@ -371,18 +447,21 @@ def get_or_create_auth_user(*, email: str, name: str):
 
 
 def sync_auth_user_for_market_user(*, market_user: User, previous_email: str | None = None, password: str | None = None):
-    reference_email = previous_email or market_user.email
-    auth_user = AuthUser.objects.filter(username=reference_email).first() or AuthUser.objects.filter(username=market_user.email).first()
+    reference_email = normalize_identity(previous_email or market_user.email)
+    market_email = normalize_identity(market_user.email)
+    auth_user = AuthUser.objects.filter(Q(username__iexact=reference_email) | Q(email__iexact=reference_email)).first()
+    if not auth_user:
+        auth_user = AuthUser.objects.filter(Q(username__iexact=market_email) | Q(email__iexact=market_email)).first()
 
     if not auth_user:
-        auth_user = get_or_create_auth_user(email=market_user.email, name=market_user.name)
+        auth_user = get_or_create_auth_user(email=market_email, name=market_user.name)
     else:
         updated_fields = []
-        if auth_user.username != market_user.email:
-            auth_user.username = market_user.email
+        if auth_user.username != market_email:
+            auth_user.username = market_email
             updated_fields.append('username')
-        if auth_user.email != market_user.email:
-            auth_user.email = market_user.email
+        if auth_user.email != market_email:
+            auth_user.email = market_email
             updated_fields.append('email')
         if market_user.name and auth_user.first_name != market_user.name:
             auth_user.first_name = market_user.name
@@ -424,10 +503,34 @@ def build_password_reset_path(token: str):
 
 def build_password_reset_response_payload(reset_token: PasswordResetToken | None = None):
     payload = {'detail': 'Se o e-mail estiver cadastrado, você receberá as instruções para redefinir a senha.'}
-    if reset_token is not None:
+    if reset_token is not None and getattr(settings, 'ALYTHA_EXPOSE_PASSWORD_RESET_TOKEN', False):
         payload['resetPath'] = build_password_reset_path(str(reset_token.token))
         payload['token'] = str(reset_token.token)
     return payload
+
+
+def build_password_reset_url(token: str):
+    base_url = getattr(settings, 'ALYTHA_PUBLIC_SITE_URL', '').rstrip('/')
+    path = build_password_reset_path(token)
+    return f'{base_url}{path}' if base_url else path
+
+
+def send_password_reset_email(market_user: User, reset_token: PasswordResetToken):
+    reset_url = build_password_reset_url(str(reset_token.token))
+    subject = 'Redefinicao de senha | Alytha'
+    message = (
+        f'Ola, {market_user.name or "cliente"}.\n\n'
+        'Recebemos uma solicitacao para redefinir a senha da sua conta Alytha.\n'
+        f'Acesse o link abaixo em ate 1 hora:\n\n{reset_url}\n\n'
+        'Se voce nao solicitou essa alteracao, ignore esta mensagem.'
+    )
+    send_mail(
+        subject,
+        message,
+        settings.DEFAULT_FROM_EMAIL,
+        [market_user.email],
+        fail_silently=False,
+    )
 
 
 def is_half_step_commission(value: Decimal) -> bool:
@@ -567,21 +670,11 @@ def create_offer_with_rules(*, validated_data, target_user: User, exclusive_brok
 
 
 def get_public_marketplace_queryset(request=None):
-    queryset = (
+    return (
         Offer.objects.select_related('user', 'exclusive_broker')
-        .filter(status='ativa', exclusive_broker__isnull=True)
+        .filter(status='ativa')
         .order_by('-created_at')
     )
-
-    market_user = get_market_user(request) if request else None
-    user_role = getattr(market_user, 'type', None)
-    if market_user and not getattr(request.user, 'is_staff', False) and user_role != 'backoffice':
-        allowed_offer_type = CLIENT_OFFER_TYPE_BY_ROLE.get(user_role)
-        if not allowed_offer_type:
-            return queryset.none()
-        return queryset.filter(offer_type=allowed_offer_type)
-
-    return queryset
 
 
 def _parse_decimal_query_value(value):
@@ -707,6 +800,41 @@ def build_share_image_url(request):
     return build_public_site_url(request, '/logo.png')
 
 
+def build_public_canonical_url(request, path):
+    return build_public_site_url(request, path)
+
+
+def get_frontend_dist_dir():
+    configured_dir = getattr(settings, 'ALYTHA_FRONTEND_DIST_DIR', '')
+    if configured_dir:
+        return Path(configured_dir)
+    return settings.BASE_DIR.parent / 'frontend' / 'dist'
+
+
+def get_frontend_entry_assets():
+    dist_dir = get_frontend_dist_dir()
+    manifest_path = dist_dir / '.vite' / 'manifest.json'
+
+    if manifest_path.exists():
+        try:
+            manifest = json.loads(manifest_path.read_text(encoding='utf-8'))
+            entry = manifest.get('src/main.tsx') or next((item for item in manifest.values() if item.get('isEntry')), None)
+            if entry and entry.get('file'):
+                return {
+                    'script': f"/{entry['file'].lstrip('/')}",
+                    'stylesheets': [f"/{stylesheet.lstrip('/')}" for stylesheet in entry.get('css', [])],
+                }
+        except (OSError, json.JSONDecodeError, StopIteration):
+            logger.warning('Nao foi possivel ler o manifest do frontend para SEO.', exc_info=True)
+
+    scripts = sorted((dist_dir / 'assets').glob('index-*.js'))
+    stylesheets = sorted((dist_dir / 'assets').glob('index-*.css'))
+    return {
+        'script': f"/assets/{scripts[-1].name}" if scripts else '',
+        'stylesheets': [f"/assets/{stylesheet.name}" for stylesheet in stylesheets[-1:]],
+    }
+
+
 def build_offer_share_metadata(request, offer):
     offer_type_label = 'Oferta de venda' if offer.offer_type == 'venda' else 'Demanda de compra'
     title = f'{offer_type_label} de {offer.grain} | Alytha'
@@ -725,6 +853,239 @@ def build_offer_share_metadata(request, offer):
         'share_url': share_url,
         'image_url': image_url,
     }
+
+
+def build_offer_structured_data(metadata, offer):
+    type_label = 'Oferta de venda' if offer.offer_type == 'venda' else 'Demanda de compra'
+    return {
+        '@context': 'https://schema.org',
+        '@graph': [
+            {
+                '@type': 'Organization',
+                '@id': f"{metadata['site_url']}/#organization",
+                'name': 'Alytha',
+                'url': f"{metadata['site_url']}/",
+                'logo': metadata['image_url'],
+            },
+            {
+                '@type': 'WebSite',
+                '@id': f"{metadata['site_url']}/#website",
+                'url': f"{metadata['site_url']}/",
+                'name': 'Alytha',
+                'publisher': {'@id': f"{metadata['site_url']}/#organization"},
+                'inLanguage': 'pt-BR',
+            },
+            {
+                '@type': 'WebPage',
+                '@id': f"{metadata['frontend_url']}#webpage",
+                'url': metadata['frontend_url'],
+                'name': metadata['title'],
+                'description': metadata['description'],
+                'isPartOf': {'@id': f"{metadata['site_url']}/#website"},
+                'inLanguage': 'pt-BR',
+                'mainEntity': {
+                    '@type': 'Offer',
+                    'name': metadata['title'],
+                    'description': metadata['description'],
+                    'url': metadata['frontend_url'],
+                    'price': str(offer.price),
+                    'priceCurrency': 'BRL',
+                    'availability': 'https://schema.org/InStock',
+                    'areaServed': offer.location,
+                    'itemOffered': {
+                        '@type': 'Product',
+                        'name': offer.grain,
+                        'category': 'Grãos',
+                    },
+                },
+            },
+            {
+                '@type': 'BreadcrumbList',
+                '@id': f"{metadata['frontend_url']}#breadcrumb",
+                'itemListElement': [
+                    {
+                        '@type': 'ListItem',
+                        'position': 1,
+                        'name': 'Marketplace de grãos',
+                        'item': f"{metadata['site_url']}/",
+                    },
+                    {
+                        '@type': 'ListItem',
+                        'position': 2,
+                        'name': type_label,
+                        'item': metadata['frontend_url'],
+                    },
+                ],
+            },
+        ],
+    }
+
+
+def render_offer_seo_html(request, offer):
+    metadata = build_offer_share_metadata(request, offer)
+    metadata['site_url'] = getattr(settings, 'ALYTHA_PUBLIC_SITE_URL', '').rstrip('/') or request.build_absolute_uri('/').rstrip('/')
+    assets = get_frontend_entry_assets()
+
+    title = escape(metadata['title'])
+    description = escape(metadata['description'])
+    frontend_url = escape(metadata['frontend_url'])
+    image_url = escape(metadata['image_url'])
+    type_label = 'Oferta de venda' if offer.offer_type == 'venda' else 'Demanda de compra'
+    channel_label = 'Operando com a mesa' if offer.negotiation_channel == 'mesa' else 'Oferta direta'
+    quantity_label = format_quantity_pt_br(offer.quantity, offer.unit)
+    price_label = format_currency_pt_br(offer.price)
+    created_label = timezone.localtime(offer.created_at).strftime('%d/%m/%Y')
+    h1 = f'{type_label} de {offer.grain} em {offer.location}'
+    grain_key = str(offer.grain or '').strip().lower()
+    grain_slug = 'soja' if 'soja' in grain_key else 'milho' if 'milho' in grain_key else 'sorgo' if 'sorgo' in grain_key else 'graos'
+    intent_path = f"/{'vender' if offer.offer_type == 'venda' else 'comprar'}-{grain_slug}" if grain_slug != 'graos' else '/'
+    intent_label = f"{'Vender' if offer.offer_type == 'venda' else 'Comprar'} {offer.grain}"
+    opposite_path = f"/{'comprar' if offer.offer_type == 'venda' else 'vender'}-{grain_slug}" if grain_slug != 'graos' else '/'
+    opposite_label = f"{'Comprar' if offer.offer_type == 'venda' else 'Vender'} {offer.grain}"
+    quality_items = []
+    for key, value in (offer.quality or {}).items():
+        if value is None or str(value).strip() == '':
+            continue
+        quality_items.append(f'<li><strong>{escape(str(key))}:</strong> {escape(str(value))}</li>')
+    quality_html = (
+        '<section><h2>Informações de qualidade</h2><ul>' + ''.join(quality_items[:8]) + '</ul></section>'
+        if quality_items
+        else ''
+    )
+    stylesheet_tags = '\n    '.join(
+        f'<link rel="stylesheet" crossorigin href="{escape(stylesheet)}">' for stylesheet in assets['stylesheets']
+    )
+    script_tag = f'<script type="module" crossorigin src="{escape(assets["script"])}"></script>' if assets['script'] else ''
+    structured_data = json.dumps(build_offer_structured_data(metadata, offer), ensure_ascii=False).replace('</', '<\\/')
+
+    root_content = f"""
+      <main class="mx-auto max-w-5xl px-6 py-8 text-slate-900">
+        <p>{escape(type_label)} no marketplace Alytha</p>
+        <h1>{escape(h1)}</h1>
+        <p>{description}</p>
+        <p>
+          Esta página reúne os dados comerciais da oportunidade para apoiar a análise de compradores, vendedores e corretores de grãos.
+          A negociação considera produto, praça, volume, safra, frete, pagamento e modalidade de atendimento.
+        </p>
+        <dl>
+          <div><dt>Localidade</dt><dd>{escape(offer.location)}</dd></div>
+          <div><dt>Quantidade</dt><dd>{escape(quantity_label)}</dd></div>
+          <div><dt>Valor</dt><dd>{escape(price_label)}</dd></div>
+          <div><dt>Safra</dt><dd>{escape(offer.crop)}</dd></div>
+          <div><dt>Frete</dt><dd>{escape(offer.shipping)}</dd></div>
+          <div><dt>Pagamento</dt><dd>{escape(offer.payment_terms)}</dd></div>
+          <div><dt>Modalidade</dt><dd>{escape(channel_label)}</dd></div>
+          <div><dt>Publicada em</dt><dd>{escape(created_label)}</dd></div>
+        </dl>
+        <section>
+          <h2>Resumo da oportunidade</h2>
+          <p>
+            {escape(type_label)} de {escape(offer.grain)} em {escape(offer.location)}, com volume de {escape(quantity_label)},
+            valor de referência de {escape(price_label)}, safra {escape(offer.crop)} e frete {escape(offer.shipping)}.
+            As condições de pagamento informadas são: {escape(offer.payment_terms)}.
+          </p>
+          <p>
+            A Alytha organiza oportunidades de soja, milho e sorgo para facilitar a leitura comercial e aproximar pontas com interesse real
+            no mercado físico de grãos.
+          </p>
+        </section>
+        <section>
+          <h2>Como negociar esta oportunidade</h2>
+          <p>
+            Para avançar, acesse a plataforma, avalie os dados da oferta ou demanda e siga o fluxo comercial indicado. As informações de contato
+            podem exigir cadastro autenticado para preservar a segurança dos usuários.
+          </p>
+        </section>
+        {quality_html}
+        <nav aria-label="Links relacionados">
+          <a href="/">Ver marketplace Alytha</a>
+          <a href="{escape(intent_path)}">{escape(intent_label)}</a>
+          <a href="{escape(opposite_path)}">{escape(opposite_label)}</a>
+        </nav>
+      </main>"""
+
+    return f"""<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{title}</title>
+    <meta name="description" content="{description}">
+    <meta name="robots" content="index, follow">
+    <meta name="theme-color" content="#059669">
+    <meta property="og:locale" content="pt_BR">
+    <meta property="og:site_name" content="Alytha">
+    <meta property="og:type" content="article">
+    <meta property="og:title" content="{title}">
+    <meta property="og:description" content="{description}">
+    <meta property="og:url" content="{frontend_url}">
+    <meta property="og:image" content="{image_url}">
+    <meta property="og:image:alt" content="{title}">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="{title}">
+    <meta name="twitter:description" content="{description}">
+    <meta name="twitter:image" content="{image_url}">
+    <link rel="canonical" href="{frontend_url}">
+    {stylesheet_tags}
+    <script type="application/ld+json">{structured_data}</script>
+  </head>
+  <body>
+    <div id="root">{root_content}
+    </div>
+    {script_tag}
+  </body>
+</html>"""
+
+
+PUBLIC_SITEMAP_ROUTES = [
+    ('/', 'daily', '1.0'),
+    ('/vendedorgraos', 'weekly', '0.8'),
+    ('/compradorgraos', 'weekly', '0.8'),
+    ('/vender-soja', 'weekly', '0.85'),
+    ('/comprar-soja', 'weekly', '0.85'),
+    ('/vender-milho', 'weekly', '0.8'),
+    ('/comprar-milho', 'weekly', '0.8'),
+    ('/vender-sorgo', 'weekly', '0.75'),
+    ('/comprar-sorgo', 'weekly', '0.75'),
+    ('/marketplace-de-graos', 'weekly', '0.85'),
+    ('/corretora-de-graos', 'weekly', '0.8'),
+    ('/corretores', 'weekly', '0.8'),
+    ('/quemsomos', 'monthly', '0.6'),
+    ('/lgpd', 'monthly', '0.3'),
+    ('/termos-de-servico', 'monthly', '0.3'),
+]
+
+
+def render_public_sitemap_xml(request):
+    lines = ['<?xml version="1.0" encoding="UTF-8"?>', '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">']
+
+    for path, changefreq, priority in PUBLIC_SITEMAP_ROUTES:
+        lines.extend(
+            [
+                '  <url>',
+                f'    <loc>{escape(build_public_canonical_url(request, path))}</loc>',
+                f'    <changefreq>{changefreq}</changefreq>',
+                f'    <priority>{priority}</priority>',
+                '  </url>',
+            ]
+        )
+
+    for offer in get_public_marketplace_queryset().values('id', 'created_at'):
+        offer_path = f'/oportunidades/{offer["id"]}'
+        offer_lastmod = offer['created_at'].date().isoformat()
+        lines.extend(
+            [
+                '  <url>',
+                f'    <loc>{escape(build_public_canonical_url(request, offer_path))}</loc>',
+                f'    <lastmod>{offer_lastmod}</lastmod>',
+                '    <changefreq>daily</changefreq>',
+                '    <priority>0.7</priority>',
+                '  </url>',
+            ]
+        )
+
+    lines.append('</urlset>')
+    return '\n'.join(lines)
 
 
 def render_offer_share_html(metadata):
@@ -913,11 +1274,28 @@ class UserViewSet(viewsets.ModelViewSet):
     http_method_names = ['get', 'post', 'patch', 'delete', 'head', 'options']
     permission_classes = [IsAuthenticated, BrokerReadOnlyOrBackoffice]
 
+    def get_queryset(self):
+        queryset = User.objects.all().order_by('id')
+        market_user = get_market_user(self.request)
+        user_role = getattr(market_user, 'type', None)
+
+        if getattr(self.request.user, 'is_staff', False) or user_role == 'backoffice':
+            return queryset
+        if self.request.method in ('GET', 'HEAD', 'OPTIONS') and user_role == 'corretor':
+            return queryset.only('id', 'name', 'email', 'type', 'is_validated', 'phone', 'company')
+        return User.objects.none()
+
+    def get_serializer_class(self):
+        market_user = get_market_user(self.request)
+        if self.request.method in ('GET', 'HEAD', 'OPTIONS') and getattr(market_user, 'type', None) == 'corretor':
+            return BrokerUserSummarySerializer
+        return UserSerializer
+
     def create(self, request, *args, **kwargs):
         data = request.data.copy()
         data.pop('password', None)
         if 'email' in data:
-            data['email'] = str(data.get('email') or '').strip()
+            data['email'] = normalize_identity(data.get('email'))
 
         serializer = self.get_serializer(data=data)
         serializer.is_valid(raise_exception=True)
@@ -928,7 +1306,7 @@ class UserViewSet(viewsets.ModelViewSet):
                 user = serializer.save()
                 sync_auth_user_for_market_user(market_user=user, password=password)
         except IntegrityError:
-            return Response({'detail': 'e-mail jÃ¡ cadastrado'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'detail': 'e-mail já cadastrado'}, status=status.HTTP_400_BAD_REQUEST)
 
         headers = self.get_success_headers(serializer.data)
         return Response(self.get_serializer(user).data, status=status.HTTP_201_CREATED, headers=headers)
@@ -939,7 +1317,7 @@ class UserViewSet(viewsets.ModelViewSet):
         data = request.data.copy()
         data.pop('password', None)
         if 'email' in data:
-            data['email'] = str(data.get('email') or '').strip()
+            data['email'] = normalize_identity(data.get('email'))
 
         serializer = self.get_serializer(instance, data=data, partial=True)
         serializer.is_valid(raise_exception=True)
@@ -954,13 +1332,13 @@ class UserViewSet(viewsets.ModelViewSet):
                     password=password or None,
                 )
         except IntegrityError:
-            return Response({'detail': 'e-mail jÃ¡ cadastrado'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'detail': 'e-mail já cadastrado'}, status=status.HTTP_400_BAD_REQUEST)
 
         return Response(self.get_serializer(user).data)
 
     def destroy(self, request, *args, **kwargs):
         instance = self.get_object()
-        auth_user = AuthUser.objects.filter(username=instance.email).first()
+        auth_user = get_auth_user_by_identity(instance.email)
 
         with transaction.atomic():
             response = super().destroy(request, *args, **kwargs)
@@ -1036,6 +1414,7 @@ class PublicBrokerLinkView(APIView):
 
 class PublicMarketplaceView(APIView):
     permission_classes = []
+    authentication_classes = [OptionalJWTAuthentication]
 
     def get(self, request):
         return Response(build_public_marketplace_payload(get_public_marketplace_queryset(request)))
@@ -1043,6 +1422,7 @@ class PublicMarketplaceView(APIView):
 
 class PublicMarketplaceOfferListView(APIView):
     permission_classes = []
+    authentication_classes = [OptionalJWTAuthentication]
 
     @staticmethod
     def _parse_int(value, default):
@@ -1092,10 +1472,28 @@ class PublicMarketplaceOfferListView(APIView):
 
 class PublicMarketplaceOfferDetailView(APIView):
     permission_classes = []
+    authentication_classes = [OptionalJWTAuthentication]
 
     def get(self, request, offer_id):
         offer = get_object_or_404(get_public_marketplace_queryset(request), id=offer_id)
         return Response(PublicMarketplaceOfferDetailSerializer(offer, context={'request': request}).data)
+
+
+class PublicSitemapView(APIView):
+    permission_classes = []
+    authentication_classes = []
+
+    def get(self, request):
+        return HttpResponse(render_public_sitemap_xml(request), content_type='application/xml; charset=utf-8')
+
+
+class PublicMarketplaceOfferSeoView(APIView):
+    permission_classes = []
+    authentication_classes = []
+
+    def get(self, request, offer_id):
+        offer = get_object_or_404(get_public_marketplace_queryset(), id=offer_id)
+        return HttpResponse(render_offer_seo_html(request, offer), content_type='text/html; charset=utf-8')
 
 
 class PublicMarketplaceOfferShareView(APIView):
@@ -1191,6 +1589,8 @@ class OfferViewSet(viewsets.ModelViewSet):
 
 class PublicBrokerOfferCreateView(APIView):
     permission_classes = []
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'public_broker_offer'
 
     def post(self, request, token):
         broker = get_object_or_404(User, broker_link_token=token, type='corretor')
@@ -1198,16 +1598,17 @@ class PublicBrokerOfferCreateView(APIView):
         serializer.is_valid(raise_exception=True)
 
         validated_data = dict(serializer.validated_data)
-        email = validated_data.pop('email')
+        email = normalize_identity(validated_data.pop('email'))
         name = validated_data.pop('name')
         phone = validated_data.pop('phone', '')
         company = validated_data.pop('company', '')
         accept_terms = validated_data.pop('accept_terms', False)
         accept_privacy = validated_data.pop('accept_privacy', False)
         legal_version = validated_data.pop('legal_version', LEGAL_DOCUMENT_VERSION)
+        enforce_legal_acceptance(accept_terms=accept_terms, accept_privacy=accept_privacy)
         target_type = 'comprador' if validated_data['offer_type'] == 'compra' else 'vendedor'
 
-        existing_user = User.objects.filter(email=email).first()
+        existing_user = User.objects.filter(email__iexact=email).first()
         if existing_user and existing_user.type != target_type:
             return Response(
                 {'detail': 'Este e-mail já está vinculado a um perfil diferente na Alytha.'},
@@ -1255,13 +1656,7 @@ class PublicBrokerOfferCreateView(APIView):
             if legal_updated_fields:
                 target_user.save(update_fields=legal_updated_fields)
 
-        auth_user, created = AuthUser.objects.get_or_create(
-            username=email,
-            defaults={'email': email, 'first_name': target_user.name},
-        )
-        if created:
-            auth_user.set_unusable_password()
-            auth_user.save()
+        get_or_create_auth_user(email=email, name=target_user.name)
 
         offer, registration_meta = create_offer_with_rules(
             validated_data=validated_data,
@@ -1299,6 +1694,77 @@ class NegotiationViewSet(viewsets.ModelViewSet):
         if user_role == 'corretor':
             return queryset.filter(broker=market_user)
         return queryset.filter(Q(buyer=market_user) | Q(seller=market_user) | Q(broker=market_user))
+
+    def get_message_audiences(self, negotiation, market_user):
+        user_role = getattr(market_user, 'type', None)
+        if self.request.user.is_staff or user_role == 'backoffice' or negotiation.broker_id == getattr(market_user, 'id', None):
+            return {'buyer', 'seller'}
+
+        audiences = set()
+        if negotiation.buyer_id == getattr(market_user, 'id', None):
+            audiences.add('buyer')
+        if negotiation.seller_id == getattr(market_user, 'id', None):
+            audiences.add('seller')
+        return audiences
+
+    @action(detail=True, methods=['get', 'post'], url_path='messages')
+    def messages(self, request, pk=None):
+        negotiation = self.get_object()
+        market_user = get_market_user(request)
+        if not market_user and not request.user.is_staff:
+            raise PermissionDenied('UsuÃ¡rio nÃ£o localizado.')
+
+        allowed_audiences = self.get_message_audiences(negotiation, market_user)
+        if not allowed_audiences:
+            raise PermissionDenied('Sem permissÃ£o para acessar as mensagens desta negociaÃ§Ã£o.')
+
+        if request.method == 'GET':
+            requested_audience = str(request.query_params.get('audience') or '').strip()
+            if requested_audience and requested_audience not in allowed_audiences:
+                raise PermissionDenied('Sem permissÃ£o para acessar esta sala.')
+
+            queryset = negotiation.messages.select_related('sender').filter(audience__in=allowed_audiences)
+            if requested_audience:
+                queryset = queryset.filter(audience=requested_audience)
+
+            serializer = NegotiationMessageSerializer(queryset, many=True)
+            return Response(serializer.data)
+
+        data = request.data.copy()
+        requested_audience = str(data.get('audience') or '').strip()
+        if not requested_audience and len(allowed_audiences) == 1:
+            requested_audience = next(iter(allowed_audiences))
+            data['audience'] = requested_audience
+
+        if requested_audience not in {'buyer', 'seller'}:
+            return Response({'detail': 'Informe a sala do comprador ou vendedor.'}, status=status.HTTP_400_BAD_REQUEST)
+        if requested_audience not in allowed_audiences:
+            raise PermissionDenied('Sem permissÃ£o para enviar mensagem nesta sala.')
+
+        serializer = NegotiationMessageSerializer(data=data)
+        serializer.is_valid(raise_exception=True)
+        message = serializer.save(negotiation=negotiation, sender=market_user)
+        can_forward_to_whatsapp = (
+            request.user.is_staff
+            or getattr(market_user, 'type', None) == 'backoffice'
+            or negotiation.broker_id == getattr(market_user, 'id', None)
+        )
+
+        if can_forward_to_whatsapp:
+            recipient = negotiation.buyer if requested_audience == 'buyer' else negotiation.seller
+            sender_name = market_user.name if market_user else (request.user.get_username() or 'Alytha')
+            result = send_negotiation_whatsapp_message(
+                negotiation=negotiation,
+                recipient=recipient,
+                sender_name=sender_name,
+                body=message.body,
+            )
+            message.delivery_channel = 'whatsapp' if result.sent else 'app'
+            message.delivery_status = result.status
+            message.external_id = result.message_id
+            message.save(update_fields=['delivery_channel', 'delivery_status', 'external_id'])
+
+        return Response(NegotiationMessageSerializer(message).data, status=status.HTTP_201_CREATED)
 
     @action(detail=False, methods=['post'], url_path='match')
     def match(self, request):
@@ -1345,6 +1811,32 @@ class NegotiationViewSet(viewsets.ModelViewSet):
         operation_total = Decimal(proposed_price) * Decimal(proposed_quantity)
 
         registration_commission = resolve_match_registration_commission(sell_offer, buy_offer)
+        if user_role == 'corretor':
+            brokerage_mode = 'per_sack'
+            brokerage_percentage = None
+            brokerage_value = registration_commission if registration_commission is not None else validate_match_per_sack_commission(None)
+            brokerage_payer = 'seller'
+            brokerage_fee = (Decimal(proposed_quantity) * brokerage_value).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+
+            negotiation = Negotiation.objects.create(
+                offer=sell_offer,
+                buy_offer=buy_offer,
+                buyer=buy_offer.user,
+                seller=sell_offer.user,
+                broker=market_user,
+                proposed_price=proposed_price,
+                proposed_quantity=proposed_quantity,
+                brokerage_mode=brokerage_mode,
+                brokerage_percentage=brokerage_percentage,
+                brokerage_value_per_sack=brokerage_value,
+                brokerage_payer=brokerage_payer,
+                brokerage_fee=brokerage_fee,
+                status='pendente',
+            )
+
+            serializer = self.get_serializer(negotiation)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+
         brokerage_mode = 'per_sack' if registration_commission is not None else request.data.get('brokerageMode') or 'percentage'
         if brokerage_mode not in ('percentage', 'fixed', 'per_sack', 'spread'):
             return Response({'detail': 'brokerageMode inválido'}, status=status.HTTP_400_BAD_REQUEST)
@@ -1449,9 +1941,174 @@ class NegotiationViewSet(viewsets.ModelViewSet):
         return super().destroy(request, *args, **kwargs)
 
 
+def find_user_by_whatsapp_phone(phone):
+    target = normalize_whatsapp_phone(phone)
+    if not target:
+        return None
+
+    for user in User.objects.exclude(phone='').only('id', 'name', 'phone', 'type'):
+        if normalize_whatsapp_phone(user.phone) == target:
+            return user
+
+    return None
+
+
+def resolve_whatsapp_message_target(from_phone, context_message_id=''):
+    reference = None
+    if context_message_id:
+        reference = (
+            NegotiationMessage.objects.select_related('negotiation', 'negotiation__buyer', 'negotiation__seller')
+            .filter(external_id=context_message_id)
+            .order_by('-created_at')
+            .first()
+        )
+    user = find_user_by_whatsapp_phone(from_phone)
+
+    if reference:
+        negotiation = reference.negotiation
+        sender = user or (negotiation.buyer if reference.audience == 'buyer' else negotiation.seller)
+        return negotiation, reference.audience, sender
+
+    if not user:
+        return None, '', None
+
+    if user.type == 'comprador':
+        audience = 'buyer'
+        queryset = Negotiation.objects.filter(buyer=user)
+    elif user.type == 'vendedor':
+        audience = 'seller'
+        queryset = Negotiation.objects.filter(seller=user)
+    else:
+        return None, '', user
+
+    negotiation = queryset.filter(status='pendente').order_by('-updated_at', '-created_at').first()
+    if not negotiation:
+        negotiation = queryset.order_by('-updated_at', '-created_at').first()
+
+    return negotiation, audience, user
+
+
+class WhatsAppWebhookView(APIView):
+    permission_classes = []
+    authentication_classes = []
+
+    def get(self, request):
+        mode = request.query_params.get('hub.mode')
+        token = request.query_params.get('hub.verify_token')
+        challenge = request.query_params.get('hub.challenge', '')
+
+        if mode == 'subscribe' and token and token == settings.ALYTHA_WHATSAPP_VERIFY_TOKEN:
+            return HttpResponse(challenge, content_type='text/plain')
+
+        return HttpResponse('Forbidden', status=403, content_type='text/plain')
+
+    def post_twilio(self, request):
+        raw_params = parse_qs(request.body.decode('utf-8'), keep_blank_values=True)
+        params = {key: values[-1] if values else '' for key, values in raw_params.items()}
+
+        if not verify_twilio_signature(request.build_absolute_uri(), params, request.META.get('HTTP_X_TWILIO_SIGNATURE', '')):
+            return HttpResponse('Forbidden', status=403, content_type='text/plain')
+
+        message_id = str(params.get('MessageSid') or params.get('SmsMessageSid') or params.get('SmsSid') or '')
+        delivery_status = str(params.get('MessageStatus') or params.get('SmsStatus') or '').strip()
+        body = str(params.get('Body') or '').strip()
+        from_phone = params.get('From')
+
+        processed_messages = 0
+        processed_statuses = 0
+
+        if message_id and delivery_status:
+            processed_statuses = NegotiationMessage.objects.filter(external_id=message_id).update(
+                delivery_status=delivery_status,
+            )
+
+        if body and from_phone and (not message_id or not NegotiationMessage.objects.filter(external_id=message_id).exists()):
+            context_message_id = str(params.get('OriginalRepliedMessageSid') or params.get('ContextMessageSid') or '').strip()
+            negotiation, audience, sender = resolve_whatsapp_message_target(from_phone, context_message_id)
+
+            if negotiation and audience in {'buyer', 'seller'}:
+                NegotiationMessage.objects.create(
+                    negotiation=negotiation,
+                    sender=sender,
+                    audience=audience,
+                    body=body,
+                    delivery_channel='whatsapp',
+                    delivery_status='received',
+                    external_id=message_id,
+                )
+                processed_messages = 1
+            else:
+                logger.info('Twilio WhatsApp webhook ignored: negotiation not found for phone %s.', from_phone)
+
+        logger.info('Twilio WhatsApp webhook processed messages=%s statuses=%s.', processed_messages, processed_statuses)
+        return HttpResponse('<Response></Response>', content_type='text/xml')
+
+    def post(self, request):
+        content_type = request.META.get('CONTENT_TYPE', '')
+        if settings.ALYTHA_WHATSAPP_PROVIDER == 'twilio' or 'application/x-www-form-urlencoded' in content_type:
+            return self.post_twilio(request)
+
+        if not verify_whatsapp_signature(request.body, request.META.get('HTTP_X_HUB_SIGNATURE_256', '')):
+            return Response({'detail': 'Assinatura invalida.'}, status=status.HTTP_403_FORBIDDEN)
+
+        try:
+            payload = json.loads(request.body.decode('utf-8') or '{}')
+        except json.JSONDecodeError:
+            return Response({'detail': 'Payload invalido.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        processed_messages = 0
+        processed_statuses = 0
+
+        for entry in payload.get('entry', []):
+            for change in entry.get('changes', []):
+                value = change.get('value') or {}
+
+                for status_payload in value.get('statuses', []):
+                    message_id = str(status_payload.get('id') or '')
+                    delivery_status = str(status_payload.get('status') or '')
+                    if message_id and delivery_status:
+                        processed_statuses += NegotiationMessage.objects.filter(external_id=message_id).update(
+                            delivery_status=delivery_status,
+                        )
+
+                for incoming in value.get('messages', []):
+                    external_id = str(incoming.get('id') or '')
+                    if external_id and NegotiationMessage.objects.filter(external_id=external_id).exists():
+                        continue
+
+                    from_phone = incoming.get('from')
+                    context_message_id = str((incoming.get('context') or {}).get('id') or '')
+                    negotiation, audience, sender = resolve_whatsapp_message_target(from_phone, context_message_id)
+                    if not negotiation or audience not in {'buyer', 'seller'}:
+                        logger.info('WhatsApp webhook ignored: negotiation not found for phone %s.', from_phone)
+                        continue
+
+                    message_type = incoming.get('type')
+                    if message_type == 'text':
+                        body = str((incoming.get('text') or {}).get('body') or '').strip()
+                    else:
+                        body = f'Mensagem recebida pelo WhatsApp ({message_type or "tipo nao informado"}).'
+
+                    if not body:
+                        continue
+
+                    NegotiationMessage.objects.create(
+                        negotiation=negotiation,
+                        sender=sender,
+                        audience=audience,
+                        body=body,
+                        delivery_channel='whatsapp',
+                        delivery_status='received',
+                        external_id=external_id,
+                    )
+                    processed_messages += 1
+
+        return Response({'processedMessages': processed_messages, 'processedStatuses': processed_statuses})
+
+
 class RegisterView(APIView):
     """
-    Registra usuários por tipo: comprador, vendedor, corretor, transportador (corretor), armazenagem (backoffice).
+    Registra usuários públicos por tipo: comprador, vendedor, corretor e transportador (corretor).
     """
 
     ROLE_MAP = {
@@ -1460,13 +2117,19 @@ class RegisterView(APIView):
         'cliente': 'vendedor',
         'corretor': 'corretor',
         'transportador': 'corretor',
-        'armazenagem': 'backoffice',
-        'backoffice': 'backoffice',
     }
+    BLOCKED_PUBLIC_ROLE_SLUGS = {'armazenagem', 'backoffice'}
 
     permission_classes = []
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'auth_register'
 
     def post(self, request, role_slug):
+        if role_slug in self.BLOCKED_PUBLIC_ROLE_SLUGS:
+            return Response(
+                {'detail': 'Cadastro de backoffice deve ser criado por um administrador.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         role = self.ROLE_MAP.get(role_slug)
         if not role:
             return Response({'detail': 'tipo inválido'}, status=status.HTTP_400_BAD_REQUEST)
@@ -1474,13 +2137,14 @@ class RegisterView(APIView):
         accept_terms = parse_request_bool(data.pop('accept_terms', False))
         accept_privacy = parse_request_bool(data.pop('accept_privacy', False))
         legal_version = data.pop('legal_version', LEGAL_DOCUMENT_VERSION)
+        enforce_legal_acceptance(accept_terms=accept_terms, accept_privacy=accept_privacy)
         if isinstance(legal_version, (list, tuple)):
             legal_version = legal_version[0] if legal_version else LEGAL_DOCUMENT_VERSION
         data['type'] = role
         if requires_backoffice_validation(role):
             data['is_validated'] = False
         password = data.get('password') or AuthUser.objects.make_random_password()
-        email = str(data.get('email') or '').strip()
+        email = normalize_identity(data.get('email'))
         data['email'] = email
         name = data.get('name') or data.get('username') or ''
         if not email:
@@ -1510,13 +2174,15 @@ class RegisterView(APIView):
 
 class ForgotPasswordRequestView(APIView):
     permission_classes = []
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'password_reset'
 
     def post(self, request):
         serializer = PasswordResetRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        email = serializer.validated_data['email'].strip()
-        market_user = User.objects.filter(email=email).first()
+        email = normalize_identity(serializer.validated_data['email'])
+        market_user = User.objects.filter(email__iexact=email).first()
         reset_token = None
 
         if market_user:
@@ -1525,12 +2191,22 @@ class ForgotPasswordRequestView(APIView):
                 user=market_user,
                 expires_at=timezone.now() + PASSWORD_RESET_TOKEN_TTL,
             )
+            try:
+                send_password_reset_email(market_user, reset_token)
+            except Exception:
+                logger.exception('Falha ao enviar e-mail de redefinicao de senha para usuario %s.', market_user.id)
+                reset_token.delete()
+                if getattr(settings, 'DEBUG', False):
+                    raise
+                reset_token = None
 
         return Response(build_password_reset_response_payload(reset_token), status=status.HTTP_200_OK)
 
 
 class ForgotPasswordConfirmView(APIView):
     permission_classes = []
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'password_reset_confirm'
 
     def post(self, request):
         serializer = PasswordResetConfirmSerializer(data=request.data)
@@ -1543,7 +2219,7 @@ class ForgotPasswordConfirmView(APIView):
         if not reset_token or not reset_token.is_active:
             return Response({'detail': 'O link para redefinir senha expirou ou é inválido.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        auth_user = AuthUser.objects.filter(username=reset_token.user.email).first()
+        auth_user = get_auth_user_by_identity(reset_token.user.email)
         if not auth_user:
             return Response({'detail': 'Conta não localizada para redefinir a senha.'}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -1568,16 +2244,24 @@ class LoginView(APIView):
     """
 
     permission_classes = []
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'auth_login'
 
     def post(self, request):
-        email = str(request.data.get('email') or '').strip()
+        email = normalize_identity(request.data.get('email'))
         password = request.data.get('password')
         if not email or not password:
             return Response({'detail': 'e-mail e senha obrigatórios'}, status=status.HTTP_400_BAD_REQUEST)
         auth_user = authenticate(username=email, password=password)
         if not auth_user:
+            auth_candidate = get_auth_user_by_identity(email)
+            if auth_candidate:
+                auth_user = authenticate(username=auth_candidate.get_username(), password=password)
+        if not auth_user:
             return Response({'detail': 'credenciais inválidas'}, status=status.HTTP_401_UNAUTHORIZED)
-        market_user = User.objects.filter(email=email).first()
+        market_user = get_market_user_for_auth_user(auth_user) or User.objects.filter(email__iexact=email).first()
+        if not market_user:
+            return Response({'detail': 'Usuário não localizado.'}, status=status.HTTP_403_FORBIDDEN)
         if user_is_pending_validation(market_user):
             return Response(
                 {'detail': 'Seu cadastro ainda aguarda validacao do backoffice antes do primeiro login.'},
@@ -1590,7 +2274,7 @@ class LoginView(APIView):
             {
                 'access': str(refresh.access_token),
                 'refresh': str(refresh),
-                'user': UserSerializer(market_user).data if market_user else None,
+                'user': UserSerializer(market_user).data,
             }
         )
 

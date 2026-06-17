@@ -12,21 +12,94 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 
 import os
 from pathlib import Path
+from urllib.parse import parse_qsl, unquote, urlparse
+
+from django.core.exceptions import ImproperlyConfigured
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
-# Quick-start development settings - unsuitable for production
-# See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
+def load_local_env(path: Path):
+    if not path.exists():
+        return
 
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-0tt#h2lf#(hkko-cf$lp$it74_6*+j^d!8d=pzwmas0lpchkh&'
+    for raw_line in path.read_text(encoding='utf-8').splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith('#') or '=' not in line:
+            continue
+        key, value = line.split('=', 1)
+        key = key.strip()
+        value = value.strip().strip('"').strip("'")
+        os.environ.setdefault(key, value)
 
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
 
-ALLOWED_HOSTS = ["*"]
+load_local_env(BASE_DIR / '.env')
+
+
+def env_bool(name: str, default: bool = False) -> bool:
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {'1', 'true', 'yes', 'on'}
+
+
+def env_int(name: str, default: int) -> int:
+    value = os.environ.get(name)
+    if value is None or value == '':
+        return default
+    return int(value)
+
+
+def env_list(name: str, default: list[str]) -> list[str]:
+    value = os.environ.get(name)
+    if not value:
+        return default
+    return [item.strip() for item in value.split(',') if item.strip()]
+
+
+def database_from_url(database_url: str):
+    parsed = urlparse(database_url)
+    scheme = parsed.scheme.lower()
+
+    if scheme in {'postgres', 'postgresql'}:
+        config = {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': unquote(parsed.path.lstrip('/')),
+            'USER': unquote(parsed.username or ''),
+            'PASSWORD': unquote(parsed.password or ''),
+            'HOST': parsed.hostname or '',
+            'PORT': str(parsed.port or ''),
+        }
+        options = dict(parse_qsl(parsed.query))
+        options.setdefault('connect_timeout', os.environ.get('DJANGO_DB_CONNECT_TIMEOUT', '5'))
+        config['OPTIONS'] = options
+        return config
+
+    if scheme == 'sqlite':
+        return {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': unquote(parsed.path) or BASE_DIR / 'db.sqlite3',
+        }
+
+    raise ImproperlyConfigured('DATABASE_URL deve usar postgres://, postgresql:// ou sqlite:///')
+
+
+DJANGO_ENV = os.environ.get('DJANGO_ENV', 'development').strip().lower()
+IS_PRODUCTION = DJANGO_ENV == 'production'
+
+DEBUG = env_bool('DJANGO_DEBUG', default=not IS_PRODUCTION)
+
+SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY') or os.environ.get('SECRET_KEY')
+if not SECRET_KEY:
+    if IS_PRODUCTION or not DEBUG:
+        raise ImproperlyConfigured('Defina DJANGO_SECRET_KEY no ambiente de producao.')
+    SECRET_KEY = 'alytha-local-development-secret-key-change-before-production-2026'
+
+ALLOWED_HOSTS = env_list(
+    'DJANGO_ALLOWED_HOSTS',
+    ['plataforma.alytha.agr.br'] if IS_PRODUCTION else ['localhost', '127.0.0.1', 'plataforma.alytha.agr.br'],
+)
 
 
 # Application definition
@@ -78,12 +151,19 @@ WSGI_APPLICATION = 'alytha_backend.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
-DATABASES = {
-    'default': {
+DATABASE_URL = os.environ.get('DATABASE_URL')
+if DATABASE_URL:
+    default_database = database_from_url(DATABASE_URL)
+elif IS_PRODUCTION:
+    raise ImproperlyConfigured('Defina DATABASE_URL no ambiente de producao.')
+else:
+    default_database = {
         'ENGINE': 'django.db.backends.sqlite3',
         'NAME': BASE_DIR / 'db.sqlite3',
     }
-}
+
+DATABASES = {'default': default_database}
+DATABASES['default']['CONN_MAX_AGE'] = env_int('DJANGO_DB_CONN_MAX_AGE', 60 if IS_PRODUCTION else 0)
 
 
 # Password validation
@@ -120,7 +200,8 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
-STATIC_URL = 'static/'
+STATIC_URL = os.environ.get('DJANGO_STATIC_URL', 'static/')
+STATIC_ROOT = os.environ.get('DJANGO_STATIC_ROOT', str(BASE_DIR / 'staticfiles'))
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
@@ -141,18 +222,68 @@ REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',
     ),
+    'DEFAULT_THROTTLE_RATES': {
+        'auth_login': os.environ.get('DJANGO_THROTTLE_AUTH_LOGIN', '20/min'),
+        'auth_register': os.environ.get('DJANGO_THROTTLE_AUTH_REGISTER', '30/hour'),
+        'password_reset': os.environ.get('DJANGO_THROTTLE_PASSWORD_RESET', '5/hour'),
+        'password_reset_confirm': os.environ.get('DJANGO_THROTTLE_PASSWORD_RESET_CONFIRM', '20/hour'),
+        'public_broker_offer': os.environ.get('DJANGO_THROTTLE_PUBLIC_BROKER_OFFER', '30/hour'),
+    },
 }
 
-CORS_ALLOWED_ORIGINS = [
+DEVELOPMENT_ORIGINS = [
     'http://localhost:5173',
     'http://127.0.0.1:5173',
     'http://localhost:4173',
     'http://127.0.0.1:4173',
     'http://localhost:5174',
 ]
+PRODUCTION_ORIGINS = ['https://plataforma.alytha.agr.br']
+CORS_ALLOWED_ORIGINS = env_list(
+    'DJANGO_CORS_ALLOWED_ORIGINS',
+    PRODUCTION_ORIGINS if IS_PRODUCTION else [*DEVELOPMENT_ORIGINS, *PRODUCTION_ORIGINS],
+)
+CSRF_TRUSTED_ORIGINS = env_list('DJANGO_CSRF_TRUSTED_ORIGINS', PRODUCTION_ORIGINS)
 
 APPEND_SLASH = False
 
 # Public frontend URL used by share-preview HTML pages.
 ALYTHA_PUBLIC_SITE_URL = os.environ.get('ALYTHA_PUBLIC_SITE_URL', 'https://plataforma.alytha.agr.br').rstrip('/')
 ALYTHA_SHARE_IMAGE_URL = os.environ.get('ALYTHA_SHARE_IMAGE_URL', f'{ALYTHA_PUBLIC_SITE_URL}/logo.png').rstrip('/')
+ALYTHA_FRONTEND_DIST_DIR = os.environ.get('ALYTHA_FRONTEND_DIST_DIR', str(BASE_DIR.parent / 'frontend' / 'dist')).rstrip('/')
+ALYTHA_EXPOSE_PASSWORD_RESET_TOKEN = env_bool('ALYTHA_EXPOSE_PASSWORD_RESET_TOKEN', default=DEBUG)
+ALYTHA_WHATSAPP_ENABLED = env_bool('ALYTHA_WHATSAPP_ENABLED', default=False)
+ALYTHA_WHATSAPP_PROVIDER = os.environ.get('ALYTHA_WHATSAPP_PROVIDER', 'meta').strip().lower()
+ALYTHA_WHATSAPP_ACCESS_TOKEN = os.environ.get('ALYTHA_WHATSAPP_ACCESS_TOKEN', '')
+ALYTHA_WHATSAPP_PHONE_NUMBER_ID = os.environ.get('ALYTHA_WHATSAPP_PHONE_NUMBER_ID', '')
+ALYTHA_WHATSAPP_VERIFY_TOKEN = os.environ.get('ALYTHA_WHATSAPP_VERIFY_TOKEN', '')
+ALYTHA_WHATSAPP_APP_SECRET = os.environ.get('ALYTHA_WHATSAPP_APP_SECRET', '')
+ALYTHA_WHATSAPP_GRAPH_API_VERSION = os.environ.get('ALYTHA_WHATSAPP_GRAPH_API_VERSION', 'v23.0')
+ALYTHA_WHATSAPP_DEFAULT_COUNTRY_CODE = os.environ.get('ALYTHA_WHATSAPP_DEFAULT_COUNTRY_CODE', '55')
+ALYTHA_WHATSAPP_TIMEOUT_SECONDS = env_int('ALYTHA_WHATSAPP_TIMEOUT_SECONDS', 10)
+ALYTHA_TWILIO_ACCOUNT_SID = os.environ.get('ALYTHA_TWILIO_ACCOUNT_SID', '')
+ALYTHA_TWILIO_AUTH_TOKEN = os.environ.get('ALYTHA_TWILIO_AUTH_TOKEN', '')
+ALYTHA_TWILIO_WHATSAPP_FROM = os.environ.get('ALYTHA_TWILIO_WHATSAPP_FROM', 'whatsapp:+14155238886')
+ALYTHA_TWILIO_STATUS_CALLBACK_URL = os.environ.get('ALYTHA_TWILIO_STATUS_CALLBACK_URL', '')
+ALYTHA_TWILIO_VALIDATE_SIGNATURE = env_bool('ALYTHA_TWILIO_VALIDATE_SIGNATURE', default=False)
+
+EMAIL_BACKEND = os.environ.get(
+    'DJANGO_EMAIL_BACKEND',
+    'django.core.mail.backends.smtp.EmailBackend' if IS_PRODUCTION else 'django.core.mail.backends.console.EmailBackend',
+)
+EMAIL_HOST = os.environ.get('DJANGO_EMAIL_HOST', '')
+EMAIL_PORT = env_int('DJANGO_EMAIL_PORT', 587)
+EMAIL_HOST_USER = os.environ.get('DJANGO_EMAIL_HOST_USER', '')
+EMAIL_HOST_PASSWORD = os.environ.get('DJANGO_EMAIL_HOST_PASSWORD', '')
+EMAIL_USE_TLS = env_bool('DJANGO_EMAIL_USE_TLS', default=True)
+EMAIL_USE_SSL = env_bool('DJANGO_EMAIL_USE_SSL', default=False)
+DEFAULT_FROM_EMAIL = os.environ.get('DJANGO_DEFAULT_FROM_EMAIL', 'Alytha <nao-responda@alytha.agr.br>')
+SERVER_EMAIL = DEFAULT_FROM_EMAIL
+
+SECURE_SSL_REDIRECT = env_bool('DJANGO_SECURE_SSL_REDIRECT', default=IS_PRODUCTION)
+SESSION_COOKIE_SECURE = env_bool('DJANGO_SESSION_COOKIE_SECURE', default=IS_PRODUCTION)
+CSRF_COOKIE_SECURE = env_bool('DJANGO_CSRF_COOKIE_SECURE', default=IS_PRODUCTION)
+SECURE_HSTS_SECONDS = env_int('DJANGO_SECURE_HSTS_SECONDS', 31536000 if IS_PRODUCTION else 0)
+SECURE_HSTS_INCLUDE_SUBDOMAINS = env_bool('DJANGO_SECURE_HSTS_INCLUDE_SUBDOMAINS', default=IS_PRODUCTION)
+SECURE_HSTS_PRELOAD = env_bool('DJANGO_SECURE_HSTS_PRELOAD', default=False)
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https') if env_bool('DJANGO_SECURE_PROXY_SSL_HEADER', default=IS_PRODUCTION) else None

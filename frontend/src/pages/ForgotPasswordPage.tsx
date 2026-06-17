@@ -7,7 +7,6 @@ import { apiFetch } from '../lib/api';
 type ForgotPasswordResponse = {
   detail: string;
   resetPath?: string;
-  token?: string;
 };
 
 export default function ForgotPasswordPage() {
@@ -64,7 +63,7 @@ export default function ForgotPasswordPage() {
             <p className="text-[11px] font-black uppercase tracking-[0.3em] text-sky-200">Recuperação de senha</p>
             <h1 className="mt-4 text-3xl font-black tracking-tight sm:text-4xl">Recupere o acesso da sua conta com segurança.</h1>
             <p className="mt-4 text-sm leading-7 text-slate-200 sm:text-base sm:leading-8">
-              Informe o e-mail da sua conta. Neste ambiente de desenvolvimento, o sistema libera um link direto de redefinição.
+              Informe o e-mail da sua conta. Enviaremos um link seguro para redefinição com validade limitada.
             </p>
           </div>
 
@@ -109,7 +108,7 @@ export default function ForgotPasswordPage() {
                 className="inline-flex w-full items-center justify-center gap-3 rounded-full bg-emerald-600 px-6 py-4 text-sm font-black uppercase tracking-[0.22em] text-white shadow-lg shadow-emerald-600/25 hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-70"
               >
                 {submitting ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
-                {submitting ? 'Enviando...' : 'Gerar link de redefinição'}
+                {submitting ? 'Enviando...' : 'Enviar instruções'}
               </button>
 
               {resetPath ? (

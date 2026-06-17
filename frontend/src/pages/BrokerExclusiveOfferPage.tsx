@@ -61,39 +61,43 @@ export default function BrokerExclusiveOfferPage() {
       : 'Preencha produto, volume, local, safra e condições comerciais para que o corretor avalie sua necessidade de compra com mais rapidez.';
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top,#eef5ff_0%,#ffffff_44%,#f6efe4_100%)]">
+    <div className="broker-link-compact-page min-h-screen bg-[radial-gradient(circle_at_top,#eef5ff_0%,#ffffff_44%,#f6efe4_100%)]">
       <Navbar />
 
-      <main className="mx-auto max-w-7xl px-4 py-10 sm:px-6 sm:py-14 lg:px-8 lg:py-16">
+      <main className="mx-auto max-w-7xl px-3 py-3 sm:px-4 sm:py-4 lg:px-6 lg:py-5">
         {loading ? (
-          <div className="flex items-center gap-3 rounded-[2rem] border border-slate-200 bg-white/90 px-5 py-5 text-sm text-slate-600 shadow-sm">
+          <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white/90 px-4 py-3 text-xs text-slate-600 shadow-sm">
             <LoaderCircle className="h-4 w-4 animate-spin" />
             Validando o canal exclusivo do corretor...
           </div>
         ) : error ? (
-          <div className="flex items-start gap-3 rounded-[2rem] border border-red-200 bg-red-50 px-5 py-5 text-sm text-red-700 shadow-sm">
-            <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" />
+          <div className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-xs text-red-700 shadow-sm">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
             <span>{error}</span>
           </div>
         ) : (
           <>
-            <section className="mb-6 rounded-[2rem] border border-sky-100 bg-white/92 p-5 shadow-[0_35px_100px_-70px_rgba(15,23,42,0.35)] sm:p-8">
-              <p className="text-[11px] font-black uppercase tracking-[0.28em] text-sky-700">Canal exclusivo com corretor</p>
-              <h1 className="mt-3 text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">{pageTitle}</h1>
-              <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-600 sm:text-base sm:leading-8">{pageIntro}</p>
+            <section className="mb-2 rounded-lg border border-sky-100 bg-white/92 px-3 py-2 shadow-[0_18px_55px_-48px_rgba(15,23,42,0.32)] sm:px-3.5 sm:py-2.5">
+              <div className="grid gap-2 lg:grid-cols-[0.9fr_1.1fr] lg:items-center">
+                <div className="min-w-0">
+                  <p className="text-[10px] font-black uppercase tracking-[0.14em] text-sky-700">Canal exclusivo com corretor</p>
+                  <h1 className="mt-0.5 text-xl font-black tracking-tight text-slate-950 sm:text-2xl">{pageTitle}</h1>
+                  <p className="mt-0.5 max-w-3xl text-sm leading-5 text-slate-600">{pageIntro}</p>
+                </div>
 
-              <div className="mt-5 grid gap-3 md:grid-cols-3">
-                <div className="rounded-[1.6rem] border border-slate-200 bg-slate-50 px-4 py-4">
-                  <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">Corretor responsável</p>
-                  <p className="mt-2 text-sm font-bold text-slate-900">{brokerLabel}</p>
-                </div>
-                <div className="rounded-[1.6rem] border border-slate-200 bg-slate-50 px-4 py-4">
-                  <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">Empresa</p>
-                  <p className="mt-2 text-sm font-bold text-slate-900">{brokerOfficeLabel}</p>
-                </div>
-                <div className="rounded-[1.6rem] border border-slate-200 bg-slate-50 px-4 py-4">
-                  <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">Como funciona</p>
-                  <p className="mt-2 text-sm leading-6 text-slate-600">Seu cadastro entra direto na base privada do corretor, sem precisar criar login agora.</p>
+                <div className="grid gap-1.5 sm:grid-cols-3">
+                  <div className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1.5">
+                    <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-500">Corretor responsável</p>
+                    <p className="mt-0.5 truncate text-sm font-bold leading-5 text-slate-900">{brokerLabel}</p>
+                  </div>
+                  <div className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1.5">
+                    <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-500">Empresa</p>
+                    <p className="mt-0.5 truncate text-sm font-bold leading-5 text-slate-900">{brokerOfficeLabel}</p>
+                  </div>
+                  <div className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1.5">
+                    <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-500">Como funciona</p>
+                    <p className="mt-0.5 text-sm leading-5 text-slate-600">Base privada do corretor, sem login agora.</p>
+                  </div>
                 </div>
               </div>
             </section>

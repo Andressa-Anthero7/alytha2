@@ -1,0 +1,16 @@
+[Unit]
+Description=Alytha Django API
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+Group=www-data
+WorkingDirectory=/srv/alytha/backend
+EnvironmentFile=/srv/alytha/backend/.env
+ExecStart=/srv/alytha/backend/.venv/bin/gunicorn alytha_backend.wsgi:application --bind 127.0.0.1:8000 --workers 3 --timeout 90
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

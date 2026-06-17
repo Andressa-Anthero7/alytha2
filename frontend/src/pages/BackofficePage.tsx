@@ -18,13 +18,14 @@ import {
   Users2,
   X,
 } from 'lucide-react';
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { apiFetch } from '../lib/api';
 import { clearAuth, getCurrentUser } from '../lib/auth';
 import { BACKOFFICE_PATH, HOME_PATH, OPERATIONS_PATH } from '../shared/appRoutes';
 import { BrandLogo } from '../shared/BrandLogo';
 import { formatCurrency, formatDateTime, formatNumber } from '../shared/format';
+import { formatZipCode, getZipCodeDigits, getZipLookupMessage, lookupBrazilZipCode, type ZipLookupStatus } from '../shared/zipCode';
 import type { BrokerageMode, BrokeragePayer, Negotiation, Offer, User } from '../types';
 
 type BackofficeTab = 'overview' | 'users' | 'offers' | 'negotiations';
@@ -373,6 +374,9 @@ export default function BackofficePage() {
   const [userValidatingId, setUserValidatingId] = useState<number | null>(null);
   const [userError, setUserError] = useState('');
   const [userNotice, setUserNotice] = useState('');
+  const [userZipLookupStatus, setUserZipLookupStatus] = useState<ZipLookupStatus>('idle');
+  const [userZipLookupEnabled, setUserZipLookupEnabled] = useState(false);
+  const userAddressNumberRef = useRef<HTMLInputElement | null>(null);
 
   const [offerSearch, setOfferSearch] = useState('');
   const [offerTypeFilter, setOfferTypeFilter] = useState<'todos' | Offer['type']>('todos');
@@ -440,6 +444,50 @@ export default function BackofficePage() {
 
     void loadData();
   }, []);
+
+  const userZipCodeDigits = useMemo(() => getZipCodeDigits(userForm.address_zip_code), [userForm.address_zip_code]);
+  const userZipLookupMessage = getZipLookupMessage(userZipLookupStatus);
+
+  useEffect(() => {
+    if (!userZipLookupEnabled || !userForm.address_zip_code || userZipCodeDigits.length !== 8) {
+      setUserZipLookupStatus('idle');
+      return undefined;
+    }
+
+    const controller = new AbortController();
+    const lookupTimer = window.setTimeout(async () => {
+      setUserZipLookupStatus('loading');
+
+      try {
+        const address = await lookupBrazilZipCode(userZipCodeDigits, controller.signal);
+        if (!address) {
+          setUserZipLookupStatus('not_found');
+          return;
+        }
+
+        setUserForm((current) => ({
+          ...current,
+          address_street: address.street || current.address_street,
+          address_district: address.district || current.address_district,
+          address_city: address.city || current.address_city,
+          address_state: address.state || current.address_state,
+          address_country: address.country,
+        }));
+        setUserZipLookupStatus('filled');
+        window.setTimeout(() => {
+          userAddressNumberRef.current?.focus();
+        }, 0);
+      } catch (lookupError) {
+        if (lookupError instanceof DOMException && lookupError.name === 'AbortError') return;
+        setUserZipLookupStatus('error');
+      }
+    }, 350);
+
+    return () => {
+      window.clearTimeout(lookupTimer);
+      controller.abort();
+    };
+  }, [userForm.address_zip_code, userZipLookupEnabled, userZipCodeDigits]);
 
   if (!currentUser) {
     return <Navigate to="/login" replace />;
@@ -833,12 +881,20 @@ export default function BackofficePage() {
     }));
   };
 
+  const handleUserZipCodeChange = (value: string) => {
+    setUserZipLookupEnabled(true);
+    setUserZipLookupStatus('idle');
+    setUserForm((current) => ({ ...current, address_zip_code: formatZipCode(value) }));
+  };
+
   const handleEditUser = (user: User) => {
     setActiveTab('users');
     setViewingUser(null);
     setEditingUserId(user.id);
     setUserError('');
     setUserNotice('');
+    setUserZipLookupEnabled(false);
+    setUserZipLookupStatus('idle');
     setUserForm({
       type: user.type,
       name: user.name || '',
@@ -868,6 +924,8 @@ export default function BackofficePage() {
     setUserForm(createEmptyUserForm());
     setUserError('');
     setUserNotice('');
+    setUserZipLookupEnabled(false);
+    setUserZipLookupStatus('idle');
   };
 
   const handleSaveUser = async (event: FormEvent<HTMLFormElement>) => {
@@ -1662,10 +1720,27 @@ export default function BackofficePage() {
                         <label className="space-y-2">
                           <span className="text-xs font-black uppercase tracking-[0.18em] text-slate-500">CEP</span>
                           <input
+                            inputMode="numeric"
+                            autoComplete="postal-code"
+                            maxLength={9}
+                            placeholder="00000-000"
                             value={userForm.address_zip_code}
-                            onChange={(event) => setUserForm((current) => ({ ...current, address_zip_code: event.target.value }))}
+                            onChange={(event) => handleUserZipCodeChange(event.target.value)}
                             className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none focus:border-emerald-500 focus:bg-white"
                           />
+                          {userZipLookupMessage ? (
+                            <p
+                              className={`text-xs font-bold leading-5 ${
+                                userZipLookupStatus === 'filled'
+                                  ? 'text-emerald-700'
+                                  : userZipLookupStatus === 'not_found' || userZipLookupStatus === 'error'
+                                    ? 'text-amber-700'
+                                    : 'text-slate-500'
+                              }`}
+                            >
+                              {userZipLookupMessage}
+                            </p>
+                          ) : null}
                         </label>
 
                         <label className="space-y-2 sm:col-span-2">
@@ -1680,6 +1755,7 @@ export default function BackofficePage() {
                         <label className="space-y-2">
                           <span className="text-xs font-black uppercase tracking-[0.18em] text-slate-500">Numero</span>
                           <input
+                            ref={userAddressNumberRef}
                             value={userForm.address_number}
                             onChange={(event) => setUserForm((current) => ({ ...current, address_number: event.target.value }))}
                             className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none focus:border-emerald-500 focus:bg-white"

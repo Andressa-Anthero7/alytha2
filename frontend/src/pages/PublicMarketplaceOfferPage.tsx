@@ -269,7 +269,6 @@ export default function PublicMarketplaceOfferPage() {
                     { label: 'Modalidade', value: channelLabel[offer.negotiationChannel] },
                     { label: 'Pagamento direto', value: directPaymentStatusLabel[offer.directPaymentStatus] || offer.directPaymentStatus },
                     { label: 'Taxa direta', value: formatCurrency(offer.directFee) },
-                    { label: 'Comissao da mesa', value: offer.mesaCommission ? formatCurrency(offer.mesaCommission) : '-' },
                   ].map((item) => (
                     <article key={item.label} className="rounded-[0.95rem] border border-slate-200 bg-white px-3 py-2.5">
                       <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">{item.label}</p>
