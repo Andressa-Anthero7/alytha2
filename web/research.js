@@ -106,7 +106,7 @@ document.addEventListener('DOMContentLoaded',()=>{
     try{await storageJson('/api/research/train',{});await modelStatus();if(researchHistory)await analysis();}
     catch(error){el('model-status').textContent=error.message;}finally{button.disabled=false;}
   });
-  el('ai-prompt-submit').textContent='Conversar com a Alytha';
+  el('ai-prompt-submit').textContent='Enviar';
   el('ai-prompt-submit').addEventListener('click',async event=>{
     const button=event.currentTarget;button.disabled=true;el('ai-prompt-status').textContent='Consultando evidências…';
     try {

@@ -228,12 +228,12 @@
         <button id="ai-panel-close" class="ai-close" type="button" aria-label="Fechar">&times;</button>
         <div class="ai-composer">
           <label for="ai-prompt">O que vamos investigar?</label>
-          <textarea id="ai-prompt" rows="3" placeholder="Ex.: O aumento da vegetação pode indicar emergência da lavoura?"></textarea>
+          <input id="ai-prompt" type="text" placeholder="Ex.: O aumento da vegetação pode indicar emergência da lavoura?">
           <div class="ai-suggestions" aria-label="Sugestões de perguntas">
             <button type="button" data-ai-question="O que mudou nas leituras recentes de vegetação da área pesquisada?">O que mudou?</button>
             <button type="button" data-ai-question="A sequência disponível é compatível com emergência da lavoura? Explique as evidências e o que ainda não podemos concluir.">Possível emergência</button>
           </div>
-          <button id="ai-prompt-submit" type="button">Conversar com a Alytha</button>
+          <button id="ai-prompt-submit" type="button">Enviar</button>
           <small>Ctrl + Enter para enviar</small>
         </div>
         <div class="ai-reading">
