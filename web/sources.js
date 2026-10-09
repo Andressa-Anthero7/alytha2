@@ -103,6 +103,7 @@ document.addEventListener('DOMContentLoaded', () => {
     el('mapbiomas-candidates').disabled = !result.features.length;
     el('mapbiomas-status').textContent = `${result.features.length} áreas · ${result.class_name} · ${result.year}${result.overview ? ` · visão geral (${result.resolution_m} m)` : ' · detalhe de 30 m'}`;
     el('mapbiomas-detail-status').textContent = `Recorte visível${document.getElementById('municipality-select').value ? ' dentro do município' : ''}. Classificação histórica; não confirma a cultura atual.${results.some(item => item.features.length >= 200) ? ' Limite de áreas atingido; aproxime o mapa.' : ''}${result.overview ? ' Visualização aproximada: áreas pequenas podem não aparecer. Aproxime o mapa para o detalhe de 30 m.' : ''}`;
+    document.dispatchEvent(new Event('alytha-crop-layer-updated'));
     if(pending) el('mapbiomas-status').textContent += ` / Carregando ${pending} cultura(s)...`;
   }
   function pollInactive(job,revision) {

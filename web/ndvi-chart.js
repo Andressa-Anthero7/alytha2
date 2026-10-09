@@ -1,4 +1,9 @@
 /* Shared interactive time series for Sentinel-2 and SATVeg. */
+const SOY_ACTIVITY_CLASSES={
+  possible_inactive:{label:'Baixo vigor persistente',color:'#ce9352'},
+  not_matched:{label:'Sem persistência de baixo vigor',color:'#33816d'},
+  unknown:{label:'Sem classificação',color:'#c5cdd2'}
+};
 function renderNdvi(input, options={}) {
   const prefix=options.prefix || 'ndvi';
   const svg=document.getElementById(prefix+'-chart');
@@ -11,9 +16,9 @@ function renderNdvi(input, options={}) {
     .slice().sort((a,b)=>a.date.localeCompare(b.date));
   svg.setAttribute('viewBox','0 0 640 260');
   const left=options.municipal?82:options.activity?174:48,right=614,top=28,bottom=216;
-  const activityLabels={possible_inactive:'Pouca vegetação persistente',not_matched:'Sinal baixo não persistiu',unknown:'Sem leitura suficiente'};
+  const activityLabels=Object.fromEntries(Object.entries(SOY_ACTIVITY_CLASSES).map(([key,value])=>[key,value.label]));
   const activityY={possible_inactive:60,not_matched:126,unknown:192};
-  const activityColor={possible_inactive:'#ce9352',not_matched:'#33816d',unknown:'#c5cdd2'};
+  const activityColor=Object.fromEntries(Object.entries(SOY_ACTIVITY_CLASSES).map(([key,value])=>[key,value.color]));
   let start=0,end=points.length-1,selected=-1,drag=null;
   if(options.municipal && points.length) {
     const previous=svg.chartSelection;
@@ -89,17 +94,17 @@ function renderNdvi(input, options={}) {
       if(options.municipal) {
         const hectares=value=>value.toLocaleString('pt-BR',{maximumFractionDigits:1})+' ha';
         detail.replaceChildren();
-        const date=document.createElement('span');date.className='chart-detail-date';date.textContent=`Situação em ${formatDate(p.date)}`;detail.append(date);
+        const date=document.createElement('span');date.className='chart-detail-date';date.textContent=`Avaliação da atividade vegetativa · ${formatDate(p.date)}`;detail.append(date);
         const cards=document.createElement('span');cards.className='chart-metrics';
-        for(const [label,value,color] of [['Pouca vegetação persistente',p.possible_inactive_ha,activityColor.possible_inactive],['Sinal baixo não persistiu',p.not_matched_ha,activityColor.not_matched],['Sem conclusão',p.unknown_ha+p.pending_ha,activityColor.unknown]]) {
+        for(const [label,value,color] of [[activityLabels.possible_inactive,p.possible_inactive_ha,activityColor.possible_inactive],[activityLabels.not_matched,p.not_matched_ha,activityColor.not_matched],[activityLabels.unknown,p.unknown_ha+p.pending_ha,activityColor.unknown]]) {
           const card=document.createElement('span');card.className='chart-metric';card.style.setProperty('--metric-color',color);
           const title=document.createElement('span');title.textContent=label;
           const amount=document.createElement('strong');amount.textContent=hectares(value);
           card.append(title,amount);cards.append(card);
         }
         detail.append(cards);
-        const note=document.createElement('span');note.className='chart-detail-note';note.textContent=`Sem conclusão: ${hectares(p.unknown_ha)} com leitura insuficiente e ${hectares(p.pending_ha)} ainda sem avaliação. Base histórica: ${hectares(p.total_soy_ha)}. Não confirma terra parada.`;detail.append(note);
-        technical.textContent='Os hectares são somados nos recortes de soja MapBiomas 2025 dentro da malha do IBGE. Manchas grandes são divididas em recortes de processamento, que não representam limites de talhões. Cada recorte usa três leituras aproveitáveis recentes de baixo vigor. Recortes menores que 5 ha ficam sem avaliação; falhas ficam com leitura insuficiente. A média de um recorte pode misturar situações diferentes. Não há extrapolação de uma amostra para a cidade.';
+        const note=document.createElement('span');note.className='chart-detail-note';note.textContent=`Sem classificação: ${hectares(p.unknown_ha)} com observações insuficientes e ${hectares(p.pending_ha)} não avaliados. Área de soja mapeada em 2025: ${hectares(p.total_soy_ha)}. Não determina área plantada na safra atual ou condição de pousio.`;detail.append(note);
+        technical.textContent='Classificação da atividade vegetativa em áreas de soja mapeadas pelo MapBiomas em 2025, delimitadas pelo município do IBGE. Baixo vigor persistente: NDVI médio ≤ 0,25 nas três observações válidas mais recentes, com intervalo mínimo de 10 dias entre a primeira e a última e última observação há no máximo 15 dias. Cada observação exige pelo menos 50 pixels válidos e cobertura de 50% da área. Sem persistência de baixo vigor: pelo menos uma dessas três observações apresenta NDVI acima de 0,25. Os polígonos são unidades de análise, não limites cadastrais de talhões; áreas menores que 5 ha permanecem não avaliadas. Valores médios podem reunir diferentes condições de cobertura vegetal. O limiar é experimental e não confirma colheita, preparo do solo, pousio ou implantação da cultura. Não há extrapolação para áreas não observadas.';
       } else {
       const coverage=Number.isFinite(p.valid_fraction)?Math.max(0,Math.min(1,p.valid_fraction)):null;
       const limited=(coverage!==null && coverage<.5) || (Number.isFinite(p.valid_pixels) && p.valid_pixels<50);
@@ -114,20 +119,21 @@ function renderNdvi(input, options={}) {
       technical.textContent=`Índice de vegetação (NDVI): ${p.ndvi_mean.toLocaleString('pt-BR',{minimumFractionDigits:3,maximumFractionDigits:3})}${Number.isFinite(p.valid_pixels)?` · ${p.valid_pixels.toLocaleString('pt-BR')} pixels aproveitados`:''}. O NDVI é calculado somente na parte da área com dados válidos. A indicação de pouca vegetação usa o limite experimental de 0,25 do piloto, sem confirmação agronômica.`;
       if(options.activity) {
         const status=p.activity?.status || 'unknown';
-        const interpretation={possible_inactive:'As três leituras aproveitáveis mais recentes mantiveram pouca vegetação. Pode ser pós-colheita, preparo ou pousio; confira no campo.',not_matched:'As leituras recentes não mantiveram pouca vegetação. Isso sozinho não confirma lavoura implantada.',unknown:'Faltam leituras recentes e suficientes para interpretar a situação da área.'};
+        const interpretation={possible_inactive:'Baixo vigor vegetativo nas três observações válidas mais recentes. Condição compatível com pós-colheita, preparo do solo ou pousio, sem identificação conclusiva do manejo.',not_matched:'Pelo menos uma das três observações válidas recentes apresenta vigor acima do limiar de baixa vegetação. Não determina a cultura presente nem sua fase fenológica.',unknown:'Série de observações insuficiente para classificar a atividade vegetativa no período.'};
         detail.replaceChildren();
-        for(const text of [`Situação avaliada até ${formatDate(p.activity_as_of || p.date)}`,activityLabels[status],interpretation[status],observed]) {
+        for(const text of [`Avaliação da atividade vegetativa até ${formatDate(p.activity_as_of || p.date)}`,activityLabels[status],interpretation[status],observed]) {
           const line=document.createElement('span');line.textContent=text;detail.append(line);
         }
         technical.textContent+=` Regra temporal: ${p.activity?.reason || 'Sem dados suficientes.'} Cada data usa somente as imagens disponíveis até ela, sem observações futuras.`;
       }
       }
     } else {
-      detail.textContent=options.municipal ? 'Consulte uma data para ver os hectares no município. Coral: pouca vegetação persistente. Verde: sinal baixo não persistiu. Cinza: leitura insuficiente ou ainda sem avaliação.' : options.activity ? 'Passe o mouse ou toque nas datas. Coral indica pouca vegetação persistente; verde indica que esse sinal não persistiu; cinza indica leitura insuficiente.' : 'Passe o mouse ou toque no gráfico para ver o que o satélite observou na área. Pontos cinza indicam menos da metade da área avaliada.';
+      detail.textContent=options.municipal || options.activity ? 'Selecione uma data para consultar a atividade vegetativa. Ocre: baixo vigor persistente. Verde: sem persistência de baixo vigor. Cinza: sem classificação.' : 'Passe o mouse ou toque no gráfico para ver o que o satélite observou na área. Pontos cinza indicam menos da metade da área avaliada.';
       technical.textContent='Selecione uma data para consultar o índice e os dados da imagem.';
     }
     const ticks=[...new Set([start,Math.round(start+(end-start)/3),Math.round(start+2*(end-start)/3),end])];
     ticks.forEach((i,index)=>node('text',{x:options.municipal?x(i):index===0?left:index===ticks.length-1?right:x(i),y:244,'text-anchor':options.municipal?'middle':index===0?'start':index===ticks.length-1?'end':'middle',fill:'#7b8892','font-size':12},formatDate(points[i].date).slice(0,5)));
+    if(options.municipal && selected>=0) document.dispatchEvent(new CustomEvent('alytha-soy-date-selected',{detail:{date:points[selected].date}}));
   }
   function position(event) {
     const matrix=svg.getScreenCTM();

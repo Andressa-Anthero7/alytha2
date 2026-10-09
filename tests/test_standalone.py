@@ -19,6 +19,11 @@ from app import research
 
 
 class StandaloneTests(unittest.TestCase):
+    def test_activity_map_endpoint_supports_geometry_and_state_only_updates(self):
+        result={'dates':['2026-10-09'],'states':[['unknown']]}
+        with patch.object(web_app.municipal_activity,'map_assessment',return_value=result) as operation:
+            with urlopen(self.base+'/api/soy-activity/municipality/'+'d'*64+'/map?geometry=0') as response:self.assertEqual(json.load(response),result)
+            operation.assert_called_once_with('d'*64,False,None)
     def test_spatial_routes_queue_and_retrieve_pixel_analysis(self):
         result={'id':'e'*64,'status':'loading','processed':0}
         with patch.object(web_app.spatial_activity,'start',return_value=result) as operation:

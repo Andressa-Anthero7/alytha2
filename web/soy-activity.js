@@ -14,13 +14,15 @@ document.addEventListener('DOMContentLoaded',()=>{
   }
   function resetChart() {
     revision++;clearTimeout(poll);loading=false;hasResult=false;
+    document.dispatchEvent(new Event('alytha-soy-context-cleared'));
     renderNdvi([],{prefix:'soy',activity:true});
-    el('soy-point-detail').textContent='O gráfico acompanha a cidade pesquisada no mapa e mostra os hectares de soja histórica por situação.';
-    el('soy-status').textContent='Pouca vegetação pode ocorrer após colheita, preparo ou pousio. Não confirma terra parada.';
+    el('soy-point-detail').textContent='Distribuição da área de soja histórica por classe de atividade vegetativa no município pesquisado.';
+    el('soy-status').textContent='Baixo vigor vegetativo pode ocorrer em pós-colheita, preparo do solo ou pousio, sem identificação conclusiva do manejo.';
     labels();
   }
   async function watch(job,current) {
     if(current!==revision)return;
+    document.dispatchEvent(new CustomEvent('alytha-soy-job-updated',{detail:job}));
     if(job.points?.length) {renderNdvi(job.points,{prefix:'soy',activity:true,municipal:true});hasResult=true;}
     if(job.phase==='mapping') el('soy-status').textContent='Identificando as áreas históricas de soja em toda a cidade…';
     else {

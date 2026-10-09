@@ -100,6 +100,20 @@
     #ndvi-chart:focus-visible, #soy-chart:focus-visible { outline:2px solid #287a51; border-radius:4px; }
     .chart-controls { display:flex; align-items:center; justify-content:flex-end; gap:5px; margin:12px 0 8px; }
     .chart-controls button { padding:5px 9px; background:#f4f7f8; border-color:#e1e7ea; color:#52676f; }
+    .chart-controls { flex-wrap:wrap; }
+    .chart-controls .activity-map-toggle { display:flex; align-items:center; gap:5px; margin:0 auto 0 0; color:#52676f; font-size:10px; cursor:pointer; }
+    .activity-map-toggle input { width:13px; height:13px; margin:0; accent-color:#33816d; }
+    #soy-map-status { color:#94764b; font-size:10px; }
+    #activity-map-legend { position:absolute; z-index:630; left:64px; bottom:calc(var(--timeline-height,68px) + 14px); width:290px; max-width:calc(100vw - 80px); padding:12px; background:#fffffff5; border:1px solid #e0e7eb; border-radius:10px; box-shadow:0 4px 20px #253b3918; color:#52676f; }
+    #activity-map-legend[hidden] { display:none; }
+    #side-panel:not(.closed) ~ #activity-map-legend { left:368px; }
+    .activity-map-heading { display:flex; justify-content:space-between; align-items:center; gap:8px; font-size:11px; }
+    #hide-activity-map { background:transparent; border:0; padding:2px 5px; font-size:15px; }
+    #activity-map-date { margin:5px 0 10px; font-size:10px; color:#75858d; }
+    .activity-map-row { display:grid; grid-template-columns:8px 1fr auto; align-items:center; gap:6px; margin:6px 0; font-size:10px; }
+    .activity-map-row i { width:8px; height:8px; border-radius:2px; }
+    .activity-map-row strong { font-size:10px; font-weight:600; font-variant-numeric:tabular-nums; }
+    #activity-map-note { margin:10px 0 0; font-size:9px; line-height:1.4; color:#7b8892; }
     .chart-legend { display:flex; flex-wrap:wrap; gap:8px 14px; margin:8px 0 0; color:#64747b; font-size:10px; }
     .chart-legend span { display:flex; align-items:center; gap:5px; }
     .chart-legend i { width:8px; height:8px; border-radius:2px; background:var(--legend-color); }
@@ -119,6 +133,7 @@
     .analysis { max-height:calc(100dvh - var(--timeline-height,68px) - 80px); overflow:auto; }
     #ndvi-status { margin:0; color:#82908a; font-size:9px; }
     .analysis.visible { display:block; }
+    @media(max-width:1100px) { #soy-activity-panel.visible ~ #activity-map-legend { display:none; } }
     footer { display:none; }
     @media(max-width:760px) {
       body > header { top:9px; left:10px; transform:none; width:64px; height:26px; }
@@ -143,6 +158,7 @@
       #soy-point-detail .chart-metric { padding:8px 6px; }
       #soy-point-detail .chart-metric strong { font-size:11px; overflow-wrap:anywhere; }
       #side-panel:not(.closed) ~ .analysis { width:calc(100vw - 28px); }
+      #activity-map-legend, #side-panel:not(.closed) ~ #activity-map-legend { left:64px; }
     }
     @media(max-width:430px) {
       body > header { width:58px; }
@@ -345,14 +361,19 @@
         </div>
       </section>
       <section class="analysis" id="soy-activity-panel" aria-label="Histórico de atividade da área de soja">
-        <h2>Atividade nas áreas de soja</h2>
+        <h2>Atividade vegetativa · soja histórica</h2>
         <p class="analysis-subtitle" id="soy-area-label">Selecione uma cidade para consultar suas áreas de soja histórica.</p>
-        <p id="soy-status" class="analysis-subtitle" role="status">A análise procura pouca vegetação persistente, sem confirmar terra parada.</p>
-        <div class="chart-controls" aria-label="Zoom do histórico de atividade"><button id="soy-zoom-in" type="button" aria-label="Aproximar histórico" disabled>+</button><button id="soy-zoom-out" type="button" aria-label="Afastar histórico" disabled>−</button><button id="soy-zoom-reset" type="button" disabled>Ver todo o período</button></div>
+        <p id="soy-status" class="analysis-subtitle" role="status">Avaliação do vigor vegetativo. Não determina a fase fenológica ou a condição de pousio.</p>
+        <div class="chart-controls" aria-label="Mapa e zoom do histórico de atividade"><label class="activity-map-toggle"><input id="soy-map-classes" type="checkbox" checked>Classes no mapa</label><button id="soy-zoom-in" type="button" aria-label="Aproximar histórico" disabled>+</button><button id="soy-zoom-out" type="button" aria-label="Afastar histórico" disabled>−</button><button id="soy-zoom-reset" type="button" disabled>Ver todo o período</button></div>
+        <p id="soy-map-status" role="status"></p>
         <svg id="soy-chart" viewBox="0 0 640 190" role="group" tabindex="0" aria-label="Histórico interativo dos sinais de atividade. Use as setas para consultar as datas." aria-describedby="soy-point-detail"><text x="320" y="95" text-anchor="middle" fill="#718078" font-size="14">Selecione uma cidade para consultar a soja</text></svg>
-        <div class="chart-legend" aria-label="Legenda das situações"><span><i style="--legend-color:#ce9352" aria-hidden="true"></i>Pouca vegetação persistente</span><span><i style="--legend-color:#33816d" aria-hidden="true"></i>Sinal baixo não persistiu</span><span><i style="--legend-color:#c5cdd2" aria-hidden="true"></i>Sem conclusão</span></div>
-        <p id="soy-point-detail" aria-live="polite">Cada ponto mostrará o que as imagens permitiam interpretar naquela data.</p>
-        <details><summary>Como interpretar esta análise</summary><p id="soy-technical-detail">O sinal do satélite precisa ser comparado com visitas e operações realizadas no campo.</p></details>
+        <div class="chart-legend" aria-label="Classes de atividade vegetativa"><span><i style="--legend-color:#ce9352" aria-hidden="true"></i>Baixo vigor persistente</span><span><i style="--legend-color:#33816d" aria-hidden="true"></i>Sem persistência de baixo vigor</span><span><i style="--legend-color:#c5cdd2" aria-hidden="true"></i>Sem classificação</span></div>
+        <p id="soy-point-detail" aria-live="polite">Selecione uma data para consultar a área por classe de atividade vegetativa.</p>
+        <details><summary>Critérios da avaliação vegetativa</summary><p id="soy-technical-detail">Classificação pelo vigor vegetativo observado via satélite. A interpretação não determina a fase fenológica ou as operações de manejo.</p></details>
+      </section>
+      <section id="activity-map-legend" aria-label="Legenda da atividade vegetativa no mapa" hidden>
+        <div class="activity-map-heading"><strong>Atividade vegetativa · soja</strong><button id="hide-activity-map" type="button" aria-label="Ocultar classes no mapa" title="Ocultar classes no mapa">×</button></div>
+        <p id="activity-map-date"></p><div id="activity-map-rows"></div><p id="activity-map-note"></p>
       </section>
       <section class="analysis" id="ndvi-panel">
           <div class="analysis-header">
@@ -376,6 +397,7 @@
   <script src="/research.js"></script>
   <script src="/ndvi-chart.js"></script>
   <script src="/soy-activity.js"></script>
+  <script src="/soy-activity-map.js"></script>
   <script src="/spatial-activity.js"></script>
   <script>
     const sidePanel = document.getElementById('side-panel');

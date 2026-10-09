@@ -10,6 +10,8 @@ python run.py
 
 Abra `http://127.0.0.1:8765/?municipio=5107925`. O gráfico **Atividade da soja** acompanha Sorriso e retoma a leitura municipal quando necessário. Não exige preencher um seletor dentro do gráfico.
 
+**Classes no mapa**, no gráfico de atividade, exibe os polígonos de soja histórica nas mesmas cores da legenda: baixo vigor persistente, sem persistência de baixo vigor e sem classificação. Selecionar uma barra ou usar as setas atualiza o mapa e os detalhes da área na mesma data, sem novas consultas ao satélite. A camada permanece ao recolher o gráfico; desmarque a opção ou use o botão de fechar da legenda para ocultá-la. Trocar de município limpa os resultados anteriores. Fragmentos menores que 5 ha permanecem na base de hectares, mas não são desenhados nessa camada. Durante a coleta, mapa e gráfico usam a mesma quantidade de polígonos consultados.
+
 Para gerar a base com as leituras já coletadas:
 
 ```powershell

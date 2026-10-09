@@ -240,6 +240,15 @@ class Handler(SimpleHTTPRequestHandler):
         super().end_headers()
 
     def do_GET(self):
+        parsed=urlsplit(self.path)
+        activity_map_match=re.fullmatch(r'/api/soy-activity/municipality/([a-f0-9]{64})/map',parsed.path)
+        if activity_map_match:
+            try:
+                query=parse_qs(parsed.query)
+                processed=int(query['processed'][0]) if 'processed' in query else None
+                self._send_json(municipal_activity.map_assessment(activity_map_match[1],query.get('geometry',['1'])==['1'],processed))
+            except ValueError as exc: self._send_json({'error':str(exc)},status=400)
+            return
         spatial_match=re.fullmatch(r'/api/spatial-activity/([a-f0-9]{64})',self.path)
         if spatial_match:
             try: self._send_json(spatial_activity.get(spatial_match[1]))

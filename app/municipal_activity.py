@@ -8,6 +8,71 @@ POOL=inactive_soy.POOL
 LOCK=inactive_soy.LOCK
 RUNNING=set()
 
+def map_assessment(job_id,include_geometry=True,processed=None):
+    """Read the same job snapshot and date cutoffs as the chart; no new imagery."""
+    from . import research
+    with storage.connect() as db:
+        db.execute('BEGIN')
+        row=db.execute('SELECT result FROM source_snapshots WHERE cache_key=?',('municipal-activity:'+job_id,)).fetchone()
+        if not row:raise ValueError('Consulta municipal não encontrada.')
+        job=json.loads(row['result'])
+        row=db.execute('SELECT result FROM source_snapshots WHERE cache_key=?',('municipal-soy:v1:'+job['parameters']['municipality_code'],)).fetchone()
+        if not row:raise ValueError('O mapeamento da soja ainda está em andamento.')
+        historical=json.loads(row['result'])
+        evidence={r['cache_key']:json.loads(r['result']) for r in db.execute("SELECT cache_key,result FROM source_snapshots WHERE cache_key LIKE 'inactive-evidence:%'")}
+    dates=[point['date'] for point in job.get('points',[])]
+    if not dates:raise ValueError('A avaliação municipal ainda não possui datas disponíveis.')
+    processed=job['processed'] if processed is None else processed
+    if type(processed) is not int or not 0<=processed<=job['processed']:raise ValueError('Andamento da avaliação municipal inválido.')
+    end=date.fromisoformat(job['parameters']['as_of'])
+    period={'from':(end-timedelta(days=60)).isoformat(),'to':end.isoformat()}
+    states=[]
+    features=historical['features']
+    for index,feature in enumerate(features):
+        if index>=processed:
+            states.append(['pending']*len(dates));continue
+        key='inactive-evidence:'+hashlib.sha256(json.dumps([feature['geometry'],period],sort_keys=True).encode()).hexdigest()
+        series=evidence.get(key)
+        if not series:
+            states.append(['unknown']*len(dates));continue
+        try:
+            points=series['points']
+            available_dates=[min(end,date.fromisoformat(point['date'])+timedelta(days=4)) for point in points]
+            states.append([inactive_soy.classify([point for point,available in zip(points,available_dates) if available<=date.fromisoformat(cutoff)],date.fromisoformat(cutoff))['status'] for cutoff in dates])
+        except (KeyError,TypeError,ValueError):
+            states.append(['unknown']*len(dates))
+    summaries=job['points']
+    if processed!=job['processed']:
+        summaries=[]
+        for date_index,cutoff in enumerate(dates):
+            entry={'date':cutoff,'possible_inactive_ha':0,'not_matched_ha':0,'unknown_ha':0,'pending_ha':historical['total_soy_ha'],'total_soy_ha':historical['total_soy_ha']}
+            for feature,area_states in zip(features[:processed],states[:processed]):
+                hectares=feature['properties']['area_ha']
+                entry[area_states[date_index]+'_ha']+=hectares
+                entry['pending_ha']=max(0,entry['pending_ha']-hectares)
+            summaries.append(entry)
+    result={'job_id':job_id,'municipality_code':job['parameters']['municipality_code'],'processed':processed,
+            'dates':dates,'states':states,'historical_year':2025,'summary_by_date':summaries,
+            'note':'Classes de vigor vegetativo em polígonos de soja histórica. Contornos simplificados para exibição; áreas calculadas nas geometrias originais. Fragmentos menores que 5 ha não são desenhados nesta camada.'}
+    if include_geometry:
+        # Geometry changes only with the historical municipal base, not on hover
+        # or progress updates. Keep a separate display cache to avoid large transfers.
+        cache_key='municipal-activity-display:v1:'+job['parameters']['municipality_code']+':'+research.fingerprint([f['geometry'] for f in features])
+        cached=storage.source_snapshot(cache_key)
+        if cached:display=cached['result']
+        else:
+            from shapely.geometry import shape,mapping
+            from rasterio.warp import transform_geom
+            display=[]
+            for index,feature in enumerate(features):
+                projected=shape(transform_geom('EPSG:4326','EPSG:3857',feature['geometry']))
+                simplified=projected.simplify(10,preserve_topology=True)
+                geometry=transform_geom('EPSG:3857','EPSG:4326',mapping(simplified))
+                display.append({'type':'Feature','geometry':geometry,'properties':{**feature['properties'],'activity_index':index}})
+            storage.source_snapshot(cache_key,display)
+        result['geojson']={'type':'FeatureCollection','features':display}
+    return result
+
 def start(data):
     code=data.get('municipality_code')
     municipalities.key(code)

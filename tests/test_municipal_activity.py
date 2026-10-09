@@ -1,4 +1,6 @@
 import copy
+import hashlib
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -41,6 +43,54 @@ class MunicipalActivityTests(unittest.TestCase):
         with patch.object(activity.POOL,'submit') as submit:
             with self.assertRaises(ValueError):activity.start({'municipality_code':'51'})
             submit.assert_not_called()
+    def seed_map_job(self):
+        features=[]
+        for index,hectares in enumerate((10,20,30,40)):
+            west=-55+index*.01
+            features.append({'type':'Feature','geometry':{'type':'Polygon','coordinates':[[[west,-12],[west+.005,-12],[west+.005,-11.995],[west,-11.995],[west,-12]]]},'properties':{'area_ha':hectares,'year':2025,'source':'MapBiomas','class_id':39}})
+        historical={'features':features,'total_soy_ha':102}
+        storage.source_snapshot('municipal-soy:v1:5107925',historical)
+        job={'id':'d'*64,'parameters':{'municipality_code':'5107925','as_of':self.end.isoformat()},'status':'loading','processed':3,'total':4,
+             'points':[{'date':'2026-09-24','possible_inactive_ha':0,'not_matched_ha':0,'unknown_ha':60,'pending_ha':42,'total_soy_ha':102},
+                       {'date':self.end.isoformat(),'possible_inactive_ha':10,'not_matched_ha':20,'unknown_ha':30,'pending_ha':42,'total_soy_ha':102}]}
+        storage.source_snapshot('municipal-activity:'+job['id'],job)
+        period={'from':(self.end-timedelta(days=60)).isoformat(),'to':self.end.isoformat()}
+        for index in (0,1,3):
+            geometry=features[index]['geometry']
+            key='inactive-evidence:'+hashlib.sha256(json.dumps([geometry,period],sort_keys=True).encode()).hexdigest()
+            points=[{'date':(self.end-timedelta(days=offset)).isoformat(),'ndvi_mean':.2 if index!=1 else .6,'valid_pixels':100,'valid_fraction':.8} for offset in (15,10,5)]
+            storage.source_snapshot(key,{'points':points})
+        return job,features
+    def test_map_uses_chart_dates_and_keeps_unprocessed_cached_areas_pending(self):
+        job,features=self.seed_map_job()
+        with patch.object(inactive_soy,'activity') as downloads:
+            result=activity.map_assessment(job['id'])
+            downloads.assert_not_called()
+        self.assertEqual(result['states'],[['unknown','possible_inactive'],['unknown','not_matched'],['unknown','unknown'],['pending','pending']])
+        self.assertEqual(len(result['geojson']['features']),4)
+        for feature,original in zip(result['geojson']['features'],features):
+            self.assertEqual(feature['properties']['area_ha'],original['properties']['area_ha'])
+        totals={state:0 for state in ('possible_inactive','not_matched','unknown','pending')}
+        for feature,states in zip(features,result['states']):totals[states[-1]]+=feature['properties']['area_ha']
+        for state in ('possible_inactive','not_matched','unknown'):self.assertEqual(totals[state],job['points'][-1][state+'_ha'])
+        self.assertEqual(totals['pending']+2,job['points'][-1]['pending_ha'])
+    def test_map_progress_can_refresh_without_resending_geometry(self):
+        job,_=self.seed_map_job()
+        initial=activity.map_assessment(job['id'])
+        update=activity.map_assessment(job['id'],False)
+        self.assertNotIn('geojson',update)
+        self.assertEqual(update['states'],initial['states'])
+        self.assertEqual(update['dates'],initial['dates'])
+    def test_map_can_match_an_earlier_chart_snapshot_during_collection(self):
+        job,_=self.seed_map_job()
+        result=activity.map_assessment(job['id'],False,1)
+        self.assertEqual(result['processed'],1)
+        self.assertEqual(result['states'][0][-1],'possible_inactive')
+        self.assertTrue(all(states==['pending','pending'] for states in result['states'][1:]))
+        self.assertEqual(result['summary_by_date'][-1]['possible_inactive_ha'],10)
+        self.assertEqual(result['summary_by_date'][-1]['not_matched_ha'],0)
+        self.assertEqual(result['summary_by_date'][-1]['pending_ha'],92)
+        with self.assertRaises(ValueError):activity.map_assessment(job['id'],False,4)
     def test_mapping_failure_is_not_reported_as_a_completed_city(self):
         with patch.object(data_sources,'municipal_soy_areas',side_effect=ValueError('Too large')):
             activity.build('c'*64,{'municipality_code':'5107925','as_of':self.end.isoformat()})
