@@ -1,0 +1,63 @@
+import io
+import json
+import unittest
+from urllib.error import HTTPError
+from unittest.mock import patch
+from app import assistant
+
+
+class GeminiTests(unittest.TestCase):
+    def setUp(self):
+        self.env={'AI_PROVIDER':'gemini','GEMINI_API_KEY':'private-gemini-secret','OPENAI_API_KEY':'unused-openai-secret'}
+        self.answer={'answer':'Manejo ainda não confirmado.','evidence_ids':['observed'],'limitations':['Cultura não identificada.'],'action':{'kind':'none','class_ids':[]}}
+
+    def call(self, answer=None, finish='STOP'):
+        response={'candidates':[{'finishReason':finish,'content':{'parts':[{'text':'internal reasoning','thought':True},{'text':json.dumps(self.answer if answer is None else answer)}]}}]}
+        with patch.object(assistant,'context',return_value={'evidence':[{'id':'observed','source':'Sentinel-2'}]}), patch.object(assistant,'urlopen',return_value=io.BytesIO(json.dumps(response).encode())) as api:
+            result=assistant.ask({'prompt':'Como está a área?'},self.env)
+            return result,api.call_args.args[0]
+
+    def test_gemini_request_preserves_grounding_and_keeps_key_out_of_url_and_body(self):
+        result,request=self.call()
+        self.assertEqual(result['provider'],'Gemini')
+        self.assertEqual(result['sources'],[{'id':'observed','source':'Sentinel-2'}])
+        self.assertIn('gemini-3.1-flash-lite:generateContent',request.full_url)
+        self.assertNotIn('private-gemini-secret',request.full_url+request.data.decode())
+        self.assertEqual(request.get_header('X-goog-api-key'),'private-gemini-secret')
+        payload=json.loads(request.data)
+        self.assertEqual(payload['generationConfig']['responseJsonSchema'],assistant.SCHEMA)
+        self.assertIn('observed',payload['contents'][0]['parts'][0]['text'])
+
+    def test_missing_gemini_key_does_not_fall_back_to_paid_openai(self):
+        with patch.object(assistant,'urlopen') as api:
+            with self.assertRaisesRegex(ValueError,'GEMINI_API_KEY'):
+                assistant.ask({'prompt':'Teste'},{'AI_PROVIDER':'gemini','OPENAI_API_KEY':'configured'})
+            api.assert_not_called()
+
+    def test_quota_error_is_safe_and_does_not_retry_or_switch_provider(self):
+        error=HTTPError('https://example.com',429,'limited',{},io.BytesIO(b'private-gemini-secret'))
+        with patch.object(assistant,'context',return_value={'evidence':[]}),patch.object(assistant,'urlopen',side_effect=error) as api:
+            with self.assertRaisesRegex(ValueError,'Cota gratuita') as caught:
+                assistant.ask({'prompt':'Teste'},self.env)
+            self.assertNotIn('private-gemini-secret',str(caught.exception))
+            api.assert_called_once()
+
+    def test_truncated_response_cannot_trigger_actions(self):
+        with self.assertRaisesRegex(ValueError,'não concluiu'):
+            self.call(finish='MAX_TOKENS')
+
+    def test_invented_evidence_and_malformed_actions_are_rejected(self):
+        for answer in ({**self.answer,'evidence_ids':['invented']},{**self.answer,'evidence_ids':[{}]},
+                       {**self.answer,'action':{'kind':'filter_crops','class_ids':[True]}},
+                       {**self.answer,'action':None},[],{**self.answer,'limitations':[42]}):
+            with self.subTest(answer=answer),self.assertRaises(ValueError):
+                self.call(answer)
+
+    def test_configuration_exposes_only_public_metadata(self):
+        config=assistant.configuration(self.env)
+        self.assertEqual(set(config),{'provider','model','configured'})
+        self.assertNotIn('secret',json.dumps(config))
+
+
+if __name__=='__main__':
+    unittest.main()

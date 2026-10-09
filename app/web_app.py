@@ -79,7 +79,7 @@ def read_app_env():
         if separator and not name.lstrip().startswith("#"):
             values[name.strip()] = value.strip().strip('"').strip("'")
     values.update({key: os.environ[key] for key in (
-        "GOOGLE_MAPS_API_KEY", "GOOGLE_MAPS_MAP_ID", "CDSE_CLIENT_ID", "CDSE_CLIENT_SECRET", "GEE_PROJECT_ID", "EMBRAPA_ACCESS_TOKEN", "OPENAI_API_KEY", "OPENAI_MODEL"
+        "GOOGLE_MAPS_API_KEY", "GOOGLE_MAPS_MAP_ID", "CDSE_CLIENT_ID", "CDSE_CLIENT_SECRET", "GEE_PROJECT_ID", "EMBRAPA_ACCESS_TOKEN", "OPENAI_API_KEY", "OPENAI_MODEL", "AI_PROVIDER", "GEMINI_API_KEY", "GEMINI_MODEL"
     ) if key in os.environ})
     return values
 
@@ -266,7 +266,8 @@ class Handler(SimpleHTTPRequestHandler):
             return
         if self.path=='/api/research/status':
             reference=storage.source_snapshot('research:sorriso:pilot')
-            self._send_json({'openai_configured':bool(read_app_env().get('OPENAI_API_KEY')),'ml':research.model_status(),'satellite':satellite_learning.status(),'pilot':reference['result'] if reference else None})
+            env=read_app_env()
+            self._send_json({'assistant':assistant.configuration(env),'openai_configured':bool(env.get('OPENAI_API_KEY')),'ml':research.model_status(),'satellite':satellite_learning.status(),'pilot':reference['result'] if reference else None})
             return
         if self.path=='/api/research/events':
             self._send_json(research.events());return

@@ -71,6 +71,14 @@ class StandaloneTests(unittest.TestCase):
         self.assertTrue(json.loads(body)['openai_configured'])
         self.assertNotIn('test-private-openai-secret',body)
 
+    def test_research_status_uses_gemini_without_exposing_key(self):
+        with patch.dict(os.environ,{'AI_PROVIDER':'gemini','GEMINI_API_KEY':'test-private-gemini-secret'}):
+            with urlopen(self.base+'/api/research/status') as response: body=response.read().decode()
+        config=json.loads(body)['assistant']
+        self.assertEqual(config['provider'],'Gemini')
+        self.assertTrue(config['configured'])
+        self.assertNotIn('test-private-gemini-secret',body)
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.env_file = Path(self.temp.name) / ".env"

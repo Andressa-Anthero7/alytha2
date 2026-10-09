@@ -16,7 +16,7 @@ document.addEventListener('DOMContentLoaded',()=>{
     satelliteStatus(status.satellite);
     el('model-status').textContent=ml.model ? `A análise também usa ${ml.model.events} situações de manejo confirmadas. Ainda precisa ser conferida em outras áreas antes de apoiar decisões de manejo.` : `Recurso opcional para quem possui informações de manejo: ${ml.events} situações confirmadas em ${ml.areas} áreas. Este modelo exige 30 situações em 3 áreas, com 2 etapas diferentes e 5 exemplos de cada etapa. A leitura e o aprendizado por satélite funcionam sem esses registros.`;
     el('train-management-model').disabled=ml.events<30 || ml.areas<3;
-    el('ai-prompt-status').textContent=status.openai_configured ? 'Assistente configurado. Faça uma pergunta sobre as evidências disponíveis.' : 'Assistente aguardando conexão OpenAI. O histórico e as regras temporais já podem ser usados.';
+    el('ai-prompt-status').textContent=status.assistant?.configured ? `Assistente ${status.assistant.provider} configurado. Faça uma pergunta sobre as evidências disponíveis.` : `Assistente ${status.assistant?.provider || ''} aguardando conexão. O histórico e as regras temporais já podem ser usados.`;
     return status;
   }
   async function analysis(date) {
