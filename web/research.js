@@ -106,11 +106,15 @@ document.addEventListener('DOMContentLoaded',()=>{
     try{await storageJson('/api/research/train',{});await modelStatus();if(researchHistory)await analysis();}
     catch(error){el('model-status').textContent=error.message;}finally{button.disabled=false;}
   });
-  el('ai-prompt-submit').textContent='Consultar assistente';
+  el('ai-prompt-submit').textContent='Conversar com a Alytha';
   el('ai-prompt-submit').addEventListener('click',async event=>{
     const button=event.currentTarget;button.disabled=true;el('ai-prompt-status').textContent='Consultando evidências…';
     try {
-      const result=await storageJson('/api/assistant',{prompt:el('ai-prompt').value,municipality_code:el('municipality-select').value || '5107925',dataset_id:researchHistory?.id});
+      const context=window.agriAssistantContext();
+      if(!context.municipality_code)throw Error('Pesquise ou selecione uma cidade no mapa para começarmos a leitura.');
+      const dataset=researchHistory?.parameters?.municipality_code || '5107925';
+      const result=await storageJson('/api/assistant',{prompt:el('ai-prompt').value,municipality_code:context.municipality_code,municipal_job_id:context.municipal_job_id,map_date:context.map_date,dataset_id:dataset===context.municipality_code ? researchHistory?.id : undefined});
+      if(window.agriAssistantContext().revision!==context.revision)throw Error('O contexto do mapa mudou durante a consulta. Consulte novamente para ler a área ou data atual.');
       el('ai-prompt-status').textContent=`${result.answer}\n${result.limitations.join(' ')}\nFontes: ${result.sources.map(s=>s.source).join(', ') || 'sem evidências locais suficientes'}`;
       if(result.action.kind==='filter_crops') {
         const inactive=el('inactive-soy-filter');if(inactive.checked){inactive.checked=false;inactive.dispatchEvent(new Event('change'));}

@@ -59,6 +59,29 @@ class GeminiTests(unittest.TestCase):
         self.assertEqual(set(config),{'provider','model','configured'})
         self.assertNotIn('secret',json.dumps(config))
 
+    def test_municipal_context_uses_selected_cutoff_and_validates_city(self):
+        key='a'*64
+        job={'parameters':{'municipality_code':'5107925','as_of':'2026-10-09'},'status':'ready','processed':2,'total':2,
+             'points':[{'date':'2026-10-04','not_matched_ha':12},{'date':'2026-10-09','not_matched_ha':99}]}
+        def snapshot(name):
+            return {'result':job} if name=='municipal-activity:'+key else None
+        with patch.object(assistant.storage,'source_snapshot',side_effect=snapshot),patch.object(assistant.research,'model_status',return_value={}):
+            context=assistant.context({'municipality_code':'5107925','municipal_job_id':key,'map_date':'2026-10-04'})
+            evidence=context['evidence'][0]
+            self.assertEqual(evidence['as_of'],'2026-10-04')
+            self.assertEqual(evidence['points'],job['points'][:1])
+            with self.assertRaisesRegex(ValueError,'município'):
+                assistant.context({'municipality_code':'1234567','municipal_job_id':key})
+            with self.assertRaisesRegex(ValueError,'data'):
+                assistant.context({'municipality_code':'5107925','municipal_job_id':key,'map_date':'2026-10-10'})
+            history={'parameters':{'municipality_code':'5107925','as_of':'2026-10-09','start_year':2026},'status':'ready','points':[{'date':'2026-10-04','ndvi_mean':.2},{'date':'2026-10-09','ndvi_mean':.8}]}
+            with patch.object(assistant.research,'dataset',return_value=history),patch.object(assistant.research,'analyze',return_value={}) as analyze:
+                context=assistant.context({'municipality_code':'5107925','municipal_job_id':key,'map_date':'2026-10-04','dataset_id':'b'*64})
+                observed=next(item for item in context['evidence'] if item['id']=='satellite_history')
+                self.assertEqual(observed['recent_points'],history['points'][:1])
+                self.assertEqual(observed['period']['to'],'2026-10-04')
+                analyze.assert_called_once_with('b'*64,'2026-10-04')
+
     def test_temporary_error_retries_same_request_then_succeeds(self):
         request=Request('https://example.com',data=b'{}')
         errors=[HTTPError(request.full_url,code,'temporary',{},io.BytesIO(b'private-secret')) for code in (503,500)]

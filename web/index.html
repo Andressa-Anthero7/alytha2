@@ -226,11 +226,26 @@
       <div class="toolbar" aria-label="Ferramentas do mapa"><button id="panel-toggle" class="tool-button" type="button" aria-label="Camadas e cenas" aria-expanded="false" title="Camadas e cenas">&#9776;</button><button id="pen-tool" class="tool-button" type="button" aria-label="Caneta: desenhar área" aria-pressed="false" title="Caneta: desenhar área (Esc cancela)" disabled><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m16 3 5 5-13 13H3v-5Z"/><path d="m14 5 5 5"/></svg></button><button id="upload-trigger" class="tool-button" type="button" aria-label="Carregar talh&#227;o GeoJSON" title="Carregar talh&#227;o GeoJSON">&#43;</button><button id="chart-toggle" class="tool-button" type="button" aria-label="Mostrar gr&#225;fico NDVI" title="Mostrar gr&#225;fico NDVI">&#8767;</button><button id="ai-mode-toggle" class="tool-button ai-mode-button" type="button" aria-label="Modo I.A" title="Modo I.A">Modo I.A</button></div>
       <section class="ai-prompt-panel" id="ai-prompt-panel" aria-label="Prompt da intelig&#234;ncia artificial" hidden>
         <button id="ai-panel-close" class="ai-close" type="button" aria-label="Fechar">&times;</button>
-        <h2>Modo I.A</h2>
-        <p>Descreva o que deseja investigar neste talh&#227;o.</p>
-        <textarea id="ai-prompt" rows="4" placeholder="Ex.: Analise o vigor da vegeta&#231;&#227;o e destaque mudan&#231;as recentes."></textarea>
-        <button id="ai-prompt-submit" type="button">Preparar an&#225;lise</button>
-        <p class="ai-note" id="ai-prompt-status">Assistente de análise em breve.</p>
+        <div class="ai-introduction">
+          <span class="ai-eyebrow">MODO I.A · LEITURA AGRÍCOLA</span>
+          <h2>Alytha</h2>
+          <p>Vamos entender o que mudou na área? Comparo as evidências do satélite e explico o que elas indicam para a lavoura.</p>
+          <p class="ai-context" id="ai-map-context">Contexto: aguardando a localidade do mapa.</p>
+        </div>
+        <div class="ai-composer">
+          <label for="ai-prompt">O que vamos investigar?</label>
+          <textarea id="ai-prompt" rows="3" placeholder="Ex.: O aumento da vegetação pode indicar emergência da lavoura?"></textarea>
+          <div class="ai-suggestions" aria-label="Sugestões de perguntas">
+            <button type="button" data-ai-question="O que mudou nas leituras recentes de vegetação da área pesquisada?">O que mudou?</button>
+            <button type="button" data-ai-question="A sequência disponível é compatível com emergência da lavoura? Explique as evidências e o que ainda não podemos concluir.">Possível emergência</button>
+          </div>
+          <button id="ai-prompt-submit" type="button">Conversar com a Alytha</button>
+          <small>Ctrl + Enter para enviar</small>
+        </div>
+        <div class="ai-reading">
+          <span class="ai-eyebrow">LEITURA DA ÁREA</span>
+          <p class="ai-note" id="ai-prompt-status" role="status" aria-live="polite">Escolha uma pergunta para começar.</p>
+        </div>
       </section>
       <section class="card panel" id="side-panel">
         <h2 class="section-title">Localidade</h2>
@@ -435,8 +450,8 @@
       button.title = label;
     }).observe(document.getElementById('ndvi-panel'), {attributes:true, attributeFilter:['class']});
     const aiPromptPanel = document.getElementById('ai-prompt-panel');
-    document.getElementById('ai-mode-toggle').addEventListener('click', () => { aiPromptPanel.hidden = !aiPromptPanel.hidden; if (!aiPromptPanel.hidden) document.getElementById('ai-prompt').focus(); });
-    document.getElementById('ai-panel-close').addEventListener('click', () => { aiPromptPanel.hidden = true; });
+    document.getElementById('ai-mode-toggle').addEventListener('click', () => { aiPromptPanel.hidden = !aiPromptPanel.hidden; document.getElementById('ai-mode-toggle').setAttribute('aria-expanded',String(!aiPromptPanel.hidden)); if (!aiPromptPanel.hidden) document.getElementById('ai-prompt').focus(); });
+    document.getElementById('ai-panel-close').addEventListener('click', () => { aiPromptPanel.hidden = true; document.getElementById('ai-mode-toggle').setAttribute('aria-expanded','false'); });
     const locationSearch = document.getElementById('location-search');
     let locationSearchRevision=0;
     async function notifyMapSearch(result,revision) {
