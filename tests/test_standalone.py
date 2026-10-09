@@ -1,0 +1,141 @@
+"""HTTP and configuration checks without external services or credentials."""
+
+import json
+import os
+from pathlib import Path
+import sys
+import tempfile
+import threading
+import unittest
+from unittest.mock import patch
+from urllib.error import HTTPError
+from urllib.request import Request, urlopen
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+from app import web_app
+from app import storage
+
+
+class StandaloneTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.env_file = Path(self.temp.name) / ".env"
+        self.env_file.write_text(
+            'GOOGLE_MAPS_API_KEY="public-map-key"\nCDSE_CLIENT_ID=client\n'
+            'CDSE_CLIENT_SECRET=private-secret\n', encoding="utf-8"
+        )
+        self.file_patch = patch.object(web_app, "APP_ENV", self.env_file)
+        self.file_patch.start()
+        self.db_patch = patch.object(storage, 'DB_PATH', Path(self.temp.name) / 'test.sqlite3')
+        self.db_patch.start()
+        self.env_patch = patch.dict(os.environ, {}, clear=True)
+        self.env_patch.start()
+        self.server = web_app.ThreadingHTTPServer(("127.0.0.1", 0), web_app.Handler)
+        self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
+        self.thread.start()
+        self.base = f"http://127.0.0.1:{self.server.server_port}"
+
+    def tearDown(self):
+        self.server.shutdown()
+        self.server.server_close()
+        self.thread.join()
+        self.file_patch.stop()
+        self.db_patch.stop()
+        self.env_patch.stop()
+        self.temp.cleanup()
+
+    def test_public_config_does_not_expose_oauth_secret(self):
+        with urlopen(self.base + "/api/config") as response:
+            body = response.read().decode()
+        config = json.loads(body)
+        self.assertEqual(config["google_maps_api_key"], "public-map-key")
+        self.assertTrue(config["ndvi_configured"])
+        self.assertNotIn("private-secret", body)
+        self.assertNotIn("CDSE_CLIENT_SECRET", body)
+
+    def test_starts_without_configuration_and_serves_local_map(self):
+        self.env_file.unlink()
+        with urlopen(self.base + "/api/config") as response:
+            config = json.load(response)
+        self.assertEqual(config["google_maps_api_key"], "")
+        self.assertFalse(config["ndvi_configured"])
+        for asset in ("/", "/alytha-logo.png", "/vendor/leaflet/leaflet.js", "/vendor/leaflet/leaflet.css"):
+            with urlopen(self.base + asset) as response:
+                self.assertEqual(response.status, 200)
+                self.assertTrue(response.read())
+
+    def test_process_environment_overrides_local_file(self):
+        with patch.dict(os.environ, {"GOOGLE_MAPS_API_KEY": "override"}):
+            self.assertEqual(web_app.read_map_config()["google_maps_api_key"], "override")
+
+    def test_missing_ndvi_credentials_returns_actionable_json(self):
+        self.env_file.unlink()
+        geometry = json.loads((ROOT / "data" / "sample-field.geojson").read_text())
+        request = Request(self.base + "/api/ndvi-series", data=json.dumps({
+            "geojson": geometry, "from": "2026-10-01", "to": "2026-10-07"
+        }).encode(), headers={"Content-Type": "application/json"})
+        with self.assertRaises(HTTPError) as caught:
+            urlopen(request)
+        self.assertEqual(caught.exception.code, 400)
+        self.assertIn("CDSE_CLIENT_ID", json.load(caught.exception)["error"])
+        caught.exception.close()
+
+    def test_invalid_search_does_not_call_provider(self):
+        request = Request(self.base + "/api/search", data=b'{"geojson":null}',
+                          headers={"Content-Type": "application/json"})
+        with patch.object(web_app, "request_items") as provider:
+            with self.assertRaises(HTTPError) as caught:
+                urlopen(request)
+            self.assertEqual(caught.exception.code, 400)
+            self.assertIn("error", json.load(caught.exception))
+            caught.exception.close()
+            provider.assert_not_called()
+
+    def test_locations_api_returns_provider_data(self):
+        with patch('app.localities.fetch_ibge', return_value=[{"id": 51, "nome": "Mato Grosso"}]) as provider:
+            with urlopen(self.base + '/api/locations/states') as response:
+                self.assertEqual(json.load(response)[0]['id'], 51)
+            provider.assert_called_once_with('/v1/localidades/estados?orderBy=nome')
+
+    def test_invalid_boundary_code_does_not_call_provider(self):
+        with patch('app.localities.fetch_ibge') as provider:
+            with self.assertRaises(HTTPError) as caught:
+                urlopen(self.base + '/api/locations/boundaries/municipalities/51')
+            self.assertEqual(caught.exception.code, 400)
+            caught.exception.close()
+            provider.assert_not_called()
+
+    def test_saved_area_survives_new_database_connection(self):
+        geometry = json.loads((ROOT / 'data' / 'sample-field.geojson').read_text())
+        area = storage.save_area({'name': 'Talhão teste', 'municipality': 'Sorriso/MT', 'crop': 'Não confirmada', 'season': '2026', 'geojson': geometry})
+        with urlopen(self.base + f'/api/areas/{area["id"]}') as response:
+            restored = json.load(response)
+        self.assertEqual(restored['geometry'], geometry['geometry'])
+        self.assertEqual(restored['name'], 'Talhão teste')
+
+    def test_catalog_saved_with_parameters_and_result(self):
+        geometry = json.loads((ROOT / 'data' / 'sample-field.geojson').read_text())
+        area = storage.save_area({'name': 'Teste', 'municipality': 'Sorriso', 'crop': 'Soja declarada', 'season': '2026', 'geojson': geometry})
+        data = {'geojson': geometry, 'area_id': area['id'], 'from': '2026-08-01', 'to': '2026-08-31', 'max_cloud': 40}
+        result = {'type': 'FeatureCollection', 'features': []}
+        with patch.object(web_app, 'request_items', return_value=result):
+            with urlopen(Request(self.base + '/api/search', data=json.dumps(data).encode(), headers={'Content-Type':'application/json'})) as response:
+                self.assertEqual(response.status, 200)
+        restored = storage.history(area['id'])
+        self.assertEqual(restored[0]['result'], result)
+        self.assertEqual(restored[0]['parameters']['from'], '2026-08-01')
+        self.assertEqual(restored[0]['kind'], 'catalog')
+
+    def test_changed_geometry_cannot_be_added_to_saved_area(self):
+        geometry = json.loads((ROOT / 'data' / 'sample-field.geojson').read_text())
+        area = storage.save_area({'name':'Teste','municipality':'Sorriso','crop':'Soja','season':'2026','geojson':geometry})
+        changed = json.loads(json.dumps(geometry['geometry']))
+        changed['coordinates'][0][1][0] += 0.001
+        with self.assertRaises(ValueError):
+            storage.validate_analysis_area({'area_id':area['id']}, changed)
+        self.assertEqual(storage.history(area['id']), [])
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -1,0 +1,536 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Alytha · Monitoramento de lotes</title>
+  <style>
+    :root { color-scheme:light; font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif; color:#334643; }
+    * { box-sizing:border-box; }
+    html,body { width:100%; height:100%; min-width:320px; margin:0; overflow:hidden; }
+    body { position:relative; background:#dce8e5; }
+    body > main { max-width:none; height:100%; margin:0; padding:0; }
+    main > h1,main > .intro,main > .notice,main > footer { display:none; }
+    .layout { height:100%; }
+    .map-card { position:absolute; inset:0; min-height:0; overflow:hidden; border:0; border-radius:0; box-shadow:none; background:#dce8e5; }
+    #map { position:absolute; inset:0; width:100%; height:100%; min-height:0; background:#dce8e5; }
+    .leaflet-top.leaflet-right { top:58px; }
+    .leaflet-bottom { bottom:70px; }
+    body > header { position:absolute; z-index:820; top:11px; left:50%; transform:translateX(calc(-1 * min(230px, 40vw) - 240px)); width:86px; height:36px; display:flex; align-items:center; justify-content:center; padding:1px 4px; overflow:hidden; border:1px solid #ffffff70; border-radius:6px; background:#f8fbf288; backdrop-filter:blur(5px); opacity:.72; }
+    .brand { display:block; width:78px; height:28px; object-fit:cover; object-position:center; }
+    .badge { position:absolute; left:0; top:0; padding:0; border:0; border-radius:0; color:transparent; font-size:0; }
+    body > main::before { display:none; }
+    .map-label { position:absolute; z-index:500; top:67px; left:18px; padding:5px 9px; border:1px solid #ffffff70; border-radius:6px; color:#3c514b; background:#f8fbf2ad; backdrop-filter:blur(8px); font-size:10px; box-shadow:0 1px 5px #253d2b20; }
+    .map-legend { position:absolute; z-index:500; right:12px; bottom:82px; width:150px; padding:7px 9px; border:1px solid #ffffff70; border-radius:7px; color:#40534d; background:#f8fbf2bd; backdrop-filter:blur(8px); font-size:9px; box-shadow:0 1px 5px #253d2b20; }
+    .map-legend strong { display:block; margin-bottom:5px; font-weight:650; }
+    .legend-ramp { height:6px; border-radius:9px; background:linear-gradient(90deg,#b87b52,#f0d15a,#94c24a,#1f7a38); }
+    .legend-labels { display:flex; justify-content:space-between; margin-top:3px; color:#71807b; }
+    .toolbar { position:absolute; z-index:700; top:68px; left:12px; display:flex; flex-direction:column; gap:5px; }
+    .tool-button { display:grid; place-items:center; width:36px; height:36px; margin:0; padding:0; border:1px solid #ffffffa8; border-radius:8px; color:#425b54; background:#f8fbf2d9; backdrop-filter:blur(7px); box-shadow:0 1px 6px #263d3220; font-size:16px; cursor:pointer; }
+    .tool-button:hover { background:#fff; }
+    .tool-button[aria-pressed=true] { color:#155c35; background:#d3e7c7; border:2px solid #177447; }
+    #map.drawing-mode, #map.drawing-mode .leaflet-interactive { cursor:crosshair; }
+    .ai-mode-button { width:auto; min-width:36px; padding:0 8px; font-size:9px; font-weight:700; white-space:nowrap; }
+    #ai-prompt { display:block; width:100%; min-height:78px; padding:8px; resize:vertical; border:1px solid #68897b44; border-radius:6px; color:#354746; background:#ffffffd9; font:inherit; font-size:11px; }
+    .panel { position:absolute; z-index:650; top:66px; left:56px; bottom:82px; width:300px; padding:13px; overflow:auto; border:1px solid #ffffffa8; border-radius:9px; background:#f8fbf2dc; backdrop-filter:blur(12px); box-shadow:0 3px 14px #263d3222; transition:transform .18s ease,opacity .18s ease; }
+    .panel.closed { transform:translateX(calc(-100% - 65px)); opacity:0; pointer-events:none; }
+    .panel h2 { margin:0 0 9px; color:#40534d; font-size:12px; font-weight:650; }
+    .source-list { display:grid; gap:5px; margin:0 0 10px; }
+    .source { display:flex; align-items:center; justify-content:space-between; gap:6px; padding:7px 8px; border:1px solid #708c791d; border-radius:6px; background:#ffffff64; font-size:10px; }
+    .source.active { border-color:#719d7c66; background:#e6f1e466; }
+    .source small { display:block; margin-top:2px; color:#82908a; font-size:9px; }
+    .source-state { color:#668c68; font-size:8px; font-weight:700; white-space:nowrap; }
+    .source.planned .source-state { color:#a0875b; }
+    .field-upload { margin:0 0 10px; padding:8px; border:1px dashed #6f918055; border-radius:7px; background:#ffffff55; }
+    label { display:block; margin:6px 0 4px; color:#687976; font-size:10px; font-weight:600; }
+    input { width:100%; padding:6px 8px; border:1px solid #68897b44; border-radius:6px; color:#354746; background:#ffffffb8; font:inherit; font-size:11px; }
+    input:focus { outline:2px solid #82a78555; }
+    select { width:100%; padding:7px; border:1px solid #68897b44; border-radius:6px; background:white; color:#354746; font:inherit; font-size:12px; }
+    .area-actions { display:flex; flex-wrap:wrap; gap:5px; margin:8px 0; }
+    .area-actions button { white-space:normal; }
+    #region-status, #area-details { font-size:11px; line-height:1.5; }
+    #draw-controls[hidden] { display:none; }
+    .field-upload label { margin-top:0; }
+    .field-upload input { padding:5px; font-size:10px; }
+    .analysis-subtitle { margin:3px 0 0; color:#85918c; font-size:9px; line-height:1.4; }
+    .results { margin-top:8px; }
+    .results-head { display:flex; align-items:baseline; justify-content:space-between; padding-bottom:6px; border-bottom:1px solid #6f918026; }
+    .results-head h2 { margin:0; }
+    #count { color:#89948e; font-size:10px; }
+    #items { max-height:calc(100vh - 365px); overflow:auto; }
+    .item { padding:8px 2px; border-bottom:1px solid #6f918020; color:#586967; font-size:10px; }
+    .item strong { display:block; margin-bottom:3px; color:#506b58; font-weight:650; }
+    .item a { color:#668c68; font-size:10px; }
+    .scene-map-action { width:auto; margin:6px 5px 0 0; padding:5px 7px; color:#46615b; background:#d7e7c299; font-size:9px; }
+    .empty { padding:12px 2px; color:#89948e; font-size:11px; }
+    .searchbar { position:absolute; z-index:810; top:11px; left:50%; transform:translateX(-50%); display:flex; align-items:center; width:min(460px,calc(100% - 180px)); height:38px; padding:0 5px 0 13px; border:1px solid #ffffffb8; border-radius:22px; background:#ffffffed; box-shadow:0 2px 10px #283e3525; }
+    #location-search { min-width:0; height:32px; padding:0 4px; border:0; outline:0; background:transparent; font-size:12px; }
+    #location-search:focus { outline:0; }
+    #location-search-button { flex:none; display:grid; place-items:center; width:29px; height:29px; margin:0; padding:0; border:0; border-radius:50%; color:#526b63; background:#eaf0e5; font-size:14px; }
+    .timeline { position:absolute; z-index:700; left:0; right:0; bottom:0; min-height:68px; display:flex; align-items:center; gap:10px; padding:8px 14px; border-top:1px solid #ffffffbb; background:#f8fbf2d9; backdrop-filter:blur(12px); box-shadow:0 -2px 12px #263d321a; }
+    .timeline-controls { display:flex; align-items:center; gap:8px; min-width:0; flex:1; }
+    .timeline-controls h2 { display:none; }
+    .timeline-controls label { display:none; }
+    .timeline-controls > div:not(.cloud-control):not(.timeline-actions) { width:125px; flex:none; }
+    .timeline-controls input[type=date] { height:31px; padding:4px 6px; font-size:10px; }
+    .cloud-control { display:flex; align-items:center; gap:5px; width:145px; flex:none; }
+    .cloud-control label { display:block; width:62px; margin:0; font-size:9px; line-height:1.2; }
+    .range-row { display:flex; align-items:center; gap:4px; min-width:0; }
+    input[type=range] { padding:0; accent-color:#91ae76; }
+    .range-value { min-width:26px; color:#75847d; font-size:9px; font-variant-numeric:tabular-nums; }
+    .timeline-actions { display:flex; align-items:center; gap:5px; flex:none; }
+    button { width:auto; margin:0; padding:7px 10px; border:1px solid #61857526; border-radius:6px; color:#526b63; background:#dcead8d9; font:inherit; font-size:10px; font-weight:650; cursor:pointer; white-space:nowrap; }
+    button:hover { background:#cfe2c7; } button:disabled { opacity:.55; cursor:not-allowed; }
+    #search { color:#4e6959; background:#d3e7c7; }
+    #ndvi-button { display:block; color:#526b63; }
+    #status { position:absolute; left:14px; bottom:75px; max-width:min(560px,calc(100vw - 30px)); min-height:0; margin:0; padding:5px 8px; border-radius:5px; color:#61716c; background:#f8fbf2c9; font-size:9px; }
+    #status.error,#ndvi-status.error { color:#a13c31; }
+    .analysis { position:absolute; z-index:660; left:14px; bottom:78px; width:min(480px,calc(100vw - 28px)); display:none; padding:10px; border:1px solid #ffffffb8; border-radius:8px; background:#f8fbf2dd; backdrop-filter:blur(10px); }
+    .analysis h2 { margin:0; color:#50615e; font-size:11px; }
+    .analysis > .analysis-subtitle { font-size:9px; }
+    #ndvi-chart { display:block; width:100%; height:100px; min-height:100px; }
+    #ndvi-status { margin:0; color:#82908a; font-size:9px; }
+    .analysis.visible { display:block; }
+    footer { display:none; }
+    @media(max-width:760px) {
+      body > header { top:9px; left:10px; transform:none; width:64px; height:26px; }
+      .brand { width:56px; height:20px; }
+      .searchbar { width:calc(100% - 150px); left:auto; right:10px; transform:none; }
+      .toolbar { top:60px; left:8px; }
+      .tool-button { width:33px; height:33px; }
+      .panel { top:59px; left:48px; bottom:78px; width:min(280px,calc(100vw - 60px)); }
+      .timeline { min-height:106px; align-items:stretch; padding:6px 8px; }
+      .timeline-controls { flex-wrap:wrap; gap:4px 6px; align-content:center; }
+      .timeline-controls > div:not(.cloud-control):not(.timeline-actions) { width:calc(50% - 3px); }
+      .timeline-controls input[type=date] { width:100%; height:26px; }
+      .cloud-control { width:calc(50% - 3px); }
+      .cloud-control label { display:none; }
+      .timeline-actions { flex:1; justify-content:flex-end; }
+      .timeline-actions button { padding:7px 6px; font-size:9px; }
+      #status { bottom:111px; }
+      .leaflet-bottom { bottom:108px; }
+      .map-legend { bottom:115px; }
+      .analysis { bottom:112px; }
+    }
+    @media(max-width:430px) {
+      body > header { width:58px; }
+      .brand { width:50px; }
+      .searchbar { left:64px; right:10px; top:9px; width:auto; }
+      .toolbar { top:58px; }
+      .panel { top:57px; bottom:112px; }
+      .timeline { min-height:110px; }
+      .timeline-controls > div:not(.cloud-control):not(.timeline-actions) { width:calc(50% - 3px); }
+      #status { bottom:114px; }
+      .map-legend { right:8px; width:135px; }
+    }
+    @media(prefers-reduced-motion:reduce) { *,*::before,*::after { transition:none !important; } }
+    .ai-prompt-panel { position:absolute; z-index:680; top:68px; left:56px; width:min(320px,calc(100vw - 72px)); padding:14px; border:1px solid #ffffffb8; border-radius:9px; color:#40534d; background:#f8fbf2e8; backdrop-filter:blur(12px); box-shadow:0 3px 14px #263d3222; }
+    .ai-prompt-panel[hidden] { display:none; }
+    .ai-prompt-panel h2 { margin:0 0 5px; font-size:12px; }
+    .ai-prompt-panel p { margin:0 0 8px; color:#75847d; font-size:10px; line-height:1.45; }
+    #ai-prompt { display:block; resize:vertical; min-height:78px; font:inherit; font-size:11px; }
+    #ai-prompt-submit { margin-top:8px; background:#d3e7c7; }
+    .ai-prompt-panel .ai-note { margin:8px 0 0; font-size:9px; }
+    .ai-prompt-panel .ai-close { position:absolute; top:7px; right:7px; width:25px; height:25px; padding:0; background:transparent; color:#75847d; }
+    @media(max-width:760px) { .ai-prompt-panel { top:60px; left:48px; width:min(290px,calc(100vw - 60px)); } }
+    .crop-filters { border:0; padding:4px 0; margin:6px 0; display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+    .crop-filters legend { font-size:11px; color:#40534d; }
+    .crop-filters label { display:flex; align-items:center; gap:6px; margin:0; font-size:11px; }
+    .crop-filters input { width:15px; height:15px; margin:0; accent-color:#287a51; }
+    #side-panel details { border-bottom:1px solid #d5dfcf; padding:10px 0; }
+    #side-panel summary { cursor:pointer; font-size:12px; font-weight:600; margin-bottom:8px; }
+    .municipal-metric { display:flex; justify-content:space-between; gap:8px; padding:6px 0; border-bottom:1px solid #e0e8da; }
+    #side-panel { background:#fff; backdrop-filter:none; border:1px solid #e2e8e2; border-radius:14px; box-shadow:0 8px 32px #142f2226; padding:18px; color:#243c32; }
+    #side-panel .section-title { text-transform:uppercase; letter-spacing:1px; font-size:10px; color:#74877a; margin:14px 0 9px; }
+    #side-panel select, #side-panel input:not([type=checkbox]):not([type=file]) { border:1px solid #dce5dd; border-radius:7px; background:#f8faf8; min-height:34px; }
+    #side-panel details { border-bottom:1px solid #e8eee8; padding:11px 0; }
+    #side-panel summary { font-size:12px; color:#2f4e3e; margin:0; }
+    #side-panel details[open] summary { margin-bottom:9px; }
+    .crop-filters { gap:6px; margin:8px 0 12px; }
+    .crop-filters legend { display:none; }
+    .crop-filters label { border:1px solid #e4eae4; border-left:3px solid var(--crop-color); border-radius:6px; padding:7px 5px; font-size:11px; background:#fff; min-height:32px; }
+    .crop-filters label:has(input:checked) { background:color-mix(in srgb,var(--crop-color) 9%,white); border-color:var(--crop-color); }
+    .crop-filters input { accent-color:var(--crop-color); flex-shrink:0; }
+    #side-panel .inactive-filter { display:flex; align-items:flex-start; gap:7px; padding:9px 7px; margin:8px 0; border:1px solid #ead2c9; border-radius:6px; background:#fff7f3; font-size:11px; line-height:1.4; }
+    #side-panel .inactive-filter input { width:15px; height:15px; margin:0; flex-shrink:0; accent-color:#e76f51; }
+    #clear-mapbiomas { width:100%; background:transparent; color:#76877c; font-size:10px; margin-top:4px; padding:5px; }
+    #side-panel .layer-status { font-size:10px; line-height:1.5; color:#6d7f72; margin:7px 0; }
+    #side-panel .layer-info summary { font-size:10px; color:#7c8e80; }
+    #side-panel .municipal-overview { margin-top:6px; }
+    #municipal-base-status { font-size:11px; }
+    @media(max-width:760px) { #side-panel { padding:13px; } }
+  </style>
+</head>
+<body>
+  <header aria-label="Alytha"><img class="brand" src="/alytha-logo.png" alt="Alytha"></header>
+  <main>
+    <h1>Monitoramento de talh&#245;es</h1>
+    <p class="intro">Acompanhe a &#225;rea delimitada, encontre imagens de sat&#233;lite e visualize a evolu&#231;&#227;o do vigor da lavoura ao longo da safra.</p>
+    <div class="notice"><strong>Uso na valida&#231;&#227;o do lote:</strong> &#237;ndices de vegeta&#231;&#227;o s&#227;o evid&#234;ncias auxiliares. Eles n&#227;o comprovam titularidade, produtividade final, volume dispon&#237;vel ou estoque.</div>
+    <div class="searchbar"><input id="location-search" type="search" placeholder="Buscar munic&#237;pio, fazenda ou coordenadas" aria-label="Buscar local no mapa"><button id="location-search-button" type="button" aria-label="Buscar">&#8981;</button></div>
+    <div class="layout">
+      <section class="card map-card" aria-label="Mapa do talh&#227;o e das cenas"><div class="map-label" id="map-label">Nenhuma &#225;rea selecionada</div><div id="map"></div><div class="map-legend"><strong>NDVI &middot; vigor da vegeta&#231;&#227;o</strong><div class="legend-ramp"></div><div class="legend-labels"><span>mais baixo</span><span>mais alto</span></div></div></section>
+      <div class="toolbar" aria-label="Ferramentas do mapa"><button id="panel-toggle" class="tool-button" type="button" aria-label="Camadas e cenas" aria-expanded="false" title="Camadas e cenas">&#9776;</button><button id="pen-tool" class="tool-button" type="button" aria-label="Caneta: desenhar área" aria-pressed="false" title="Caneta: desenhar área (Esc cancela)" disabled><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m16 3 5 5-13 13H3v-5Z"/><path d="m14 5 5 5"/></svg></button><button id="upload-trigger" class="tool-button" type="button" aria-label="Carregar talh&#227;o GeoJSON" title="Carregar talh&#227;o GeoJSON">&#43;</button><button id="chart-toggle" class="tool-button" type="button" aria-label="Mostrar gr&#225;fico NDVI" title="Mostrar gr&#225;fico NDVI">&#8767;</button><button id="ai-mode-toggle" class="tool-button ai-mode-button" type="button" aria-label="Modo I.A" title="Modo I.A">Modo I.A</button></div>
+      <section class="ai-prompt-panel" id="ai-prompt-panel" aria-label="Prompt da intelig&#234;ncia artificial" hidden>
+        <button id="ai-panel-close" class="ai-close" type="button" aria-label="Fechar">&times;</button>
+        <h2>Modo I.A</h2>
+        <p>Descreva o que deseja investigar neste talh&#227;o.</p>
+        <textarea id="ai-prompt" rows="4" placeholder="Ex.: Analise o vigor da vegeta&#231;&#227;o e destaque mudan&#231;as recentes."></textarea>
+        <button id="ai-prompt-submit" type="button">Preparar an&#225;lise</button>
+        <p class="ai-note" id="ai-prompt-status">Assistente de análise em breve.</p>
+      </section>
+      <section class="card panel" id="side-panel">
+        <h2 class="section-title">Localidade</h2>
+        <label for="state-select">Estado</label><select id="state-select"><option value="">Carregando estados…</option></select>
+        <label for="municipality-select">Município</label><select id="municipality-select" disabled><option value="">Selecione um estado</option></select>
+        <h2 class="section-title">Culturas</h2>
+        <div class="crop-section">
+          <label for="mapbiomas-year">Ano de referência</label><select id="mapbiomas-year"></select>
+          <fieldset class="crop-filters"><legend>Culturas mapeadas</legend>
+            <label><input type="checkbox" name="map-crop" value="39"> Soja</label>
+            <label><input type="checkbox" name="map-crop" value="20"> Cana-de-açúcar</label>
+            <label><input type="checkbox" name="map-crop" value="40"> Arroz</label>
+            <label><input type="checkbox" name="map-crop" value="62"> Algodão (beta)</label>
+            <label><input type="checkbox" name="map-crop" value="46"> Café</label>
+            <label><input type="checkbox" name="map-crop" value="47"> Citrus</label>
+            <label><input type="checkbox" name="map-crop" value="35"> Dendê</label>
+            <label><input type="checkbox" name="map-crop" value="41"> Outras temporárias</label>
+            <label><input type="checkbox" name="map-crop" value="48"> Outras perenes</label>
+          </fieldset>
+          <label class="inactive-filter"><input id="inactive-soy-filter" type="checkbox"> Soja histórica com possível lavoura inativa</label>
+          <button id="clear-mapbiomas" type="button">Ocultar camada</button>
+          <p id="mapbiomas-status" class="layer-status" role="status">Marque uma cultura para visualizar as áreas.</p>
+          <details class="layer-info"><summary>Selecionar uma mancha / sobre os dados</summary>
+          <p id="mapbiomas-detail-status" class="analysis-subtitle">Classificação histórica; confirme a cultura atual.</p>
+          <div id="inactive-soy-evidence" class="analysis-subtitle"></div>
+          <p class="analysis-subtitle">Milho e sorgo não são separados neste mapa. Consulte suas estatísticas em Produção regional.</p>
+          <label for="mapbiomas-candidates">Usar uma área encontrada</label><select id="mapbiomas-candidates" disabled><option value="">Consulte o mapa primeiro</option></select>
+          <small><a href="https://brasil.mapbiomas.org/downloads/mapas-para-download-geotiff/" target="_blank" rel="noopener">MapBiomas · Coleção 11 · CC BY 4.0</a></small>
+          </details>
+        </div>
+        <details class="municipal-overview"><summary>Panorama do munic&iacute;pio</summary>
+        <p id="region-status" role="status">Limites territoriais: IBGE. Escolha uma região para navegar.</p>
+        <p id="municipal-base-status" role="status">Escolha uma cidade para consultar o panorama agrícola.</p>
+        <div id="municipal-base-results" style="font-size:11px"></div>
+        <button id="retry-locations" type="button" hidden>Tentar carregar estados novamente</button>
+        </details>
+        <details id="selected-area-tools"><summary>&Aacute;rea de an&aacute;lise</summary>
+        <div class="area-actions"><button id="draw-area" type="button" disabled>Desenhar área</button><button id="clear-area" type="button">Limpar área</button></div>
+        <div class="area-actions" id="draw-controls" hidden><button id="finish-drawing" type="button" disabled>Concluir desenho</button><button id="undo-point" type="button">Desfazer ponto</button><button id="cancel-drawing" type="button">Cancelar</button></div>
+        <p id="area-details" role="status">Desenhe uma área com pelo menos três pontos no mapa ou carregue um GeoJSON.</p>
+        </details>
+        <details><summary>Produção regional · CONAB</summary>
+          <label for="conab-uf">UF</label><input id="conab-uf" maxlength="2" value="MT">
+          <label for="conab-crop">Cultura</label><select id="conab-crop"><option>SOJA</option><option>MILHO</option><option>SORGO</option></select>
+          <button id="load-conab" type="button">Consultar CONAB</button>
+          <p id="conab-status" role="status">Área, produção e produtividade por UF e safra. Estes valores não estimam o talhão.</p><div id="conab-results" style="overflow:auto"></div>
+        </details>
+        <details><summary>Vigor da vegetação · histórico</summary>
+          <button id="load-satveg" type="button" disabled>Consultar NDVI histórico</button>
+          <p id="satveg-status" role="status">Selecione uma área e um período para consultar o histórico.</p>
+
+        </details>
+        <details><summary>Minha área e histórico</summary>
+        <label for="area-name">Nome da área</label><input id="area-name" maxlength="200" placeholder="Ex.: Talhão norte">
+        <label for="area-city">Município / UF</label><input id="area-city" maxlength="200" placeholder="Ex.: Sorriso / MT">
+        <label for="area-crop">Cultura declarada</label><input id="area-crop" maxlength="200" placeholder="Ex.: Soja ou Não confirmada">
+        <label for="area-season">Safra declarada</label><input id="area-season" maxlength="200" placeholder="Ex.: 2026/2027">
+        <div class="area-actions"><button id="save-area" type="button">Salvar área</button><button id="refresh-areas" type="button">Atualizar lista</button></div>
+        <p id="saved-status" role="status">Salve a área antes de consultar para guardar o histórico.</p>
+        <label for="saved-areas">Áreas salvas</label><select id="saved-areas"><option value="">Selecione uma área salva</option></select>
+        <label for="saved-history">Consultas anteriores</label><select id="saved-history" disabled><option value="">Selecione uma área salva</option></select>
+        <div class="area-actions"><button id="download-history" type="button" disabled>Exportar histórico</button></div>
+        <label for="compare-history">Comparar séries NDVI</label><select id="compare-history" disabled><option value="">Escolha uma série anterior</option></select>
+        <p id="comparison-result" role="status"></p>
+        </details>
+        <details><summary>Imagens e área importada</summary>
+        <div class="source-list">
+          <div class="source active"><div><strong>Sentinel-2</strong><small>10 m &middot; revisita nominal de 5 dias &middot; NDVI</small></div><span class="source-state">DISPON&#205;VEL</span></div>
+        </div>
+        <div class="field-upload"><label for="field-file">&#193;rea do talh&#227;o (GeoJSON)</label><input id="field-file" type="file" accept=".geojson,.json,application/geo+json,application/json"><div class="analysis-subtitle">Importe o contorno de uma área ou use a caneta no mapa. Salve a área para acompanhar seu histórico.</div></div>
+        </details>
+        <details><summary>Imagens encontradas</summary>
+        <div class="results"><div class="results-head"><h2>Cenas encontradas</h2><span id="count">&mdash;</span></div><div id="items"><div class="empty">Defina o per&#237;odo e consulte o cat&#225;logo.</div></div></div>
+        </details>
+      </section>
+      <section class="timeline" aria-label="Linha do tempo de imagens e NDVI">
+        <div class="timeline-controls">
+          <h2>Per&#237;odo e consulta de imagens</h2>
+          <div><label for="date-from">Data inicial</label><input id="date-from" type="date" aria-label="Data inicial"></div>
+          <div><label for="date-to">Data final</label><input id="date-to" type="date" aria-label="Data final"></div>
+          <div class="cloud-control"><label for="cloud">Nuvens m&#225;x.</label><div class="range-row"><input id="cloud" type="range" min="0" max="100" value="40" aria-label="Cobertura m&#225;xima de nuvens"><span class="range-value" id="cloud-value">40%</span></div></div>
+          <div class="timeline-actions"><button id="search">Buscar imagens</button><button id="ndvi-button">Calcular NDVI</button></div>
+          <p id="status" role="status">Aguardando inicializa&#231;&#227;o do mapa&hellip;</p>
+        </div>
+        <section class="analysis" id="ndvi-panel">
+          <h2>Vigor da vegeta&#231;&#227;o &middot; NDVI</h2>
+          <p class="analysis-subtitle">M&#233;dia do talh&#227;o por intervalo de 5 dias, com pixels de nuvem e sombra removidos.</p>
+          <svg id="ndvi-chart" viewBox="0 0 640 190" role="img" aria-label="S&#233;rie temporal do &#237;ndice NDVI"><text x="320" y="95" text-anchor="middle" fill="#718078" font-size="14">Ainda n&#227;o h&#225; uma s&#233;rie processada</text></svg>
+          <p id="ndvi-status" role="status">Selecione uma área e um período para acompanhar o vigor da vegetação.</p>
+        </section>
+      </section>
+    </div>
+    <footer>Mapa: Google Maps &middot; &#237;ndices: Copernicus Sentinel Hub &middot; cenas: cat&#225;logo Sentinel-2 L2A. PlanetScope depende de licen&#231;a comercial.</footer>
+  </main>
+  <script src="/areas.js"></script>
+  <script src="/saved-areas.js"></script>
+  <script src="/sources.js"></script>
+  <script>
+    const sidePanel = document.getElementById('side-panel');
+    const panelToggle = document.getElementById('panel-toggle');
+    panelToggle.setAttribute('aria-expanded', 'true');
+    panelToggle.addEventListener('click', () => {
+      const isClosed = sidePanel.classList.toggle('closed');
+      panelToggle.setAttribute('aria-expanded', String(!isClosed));
+    });
+    document.getElementById('upload-trigger').addEventListener('click', () => fieldFile.click());
+    document.getElementById('chart-toggle').addEventListener('click', () => document.getElementById('ndvi-panel').classList.toggle('visible'));
+    const aiPromptPanel = document.getElementById('ai-prompt-panel');
+    document.getElementById('ai-mode-toggle').addEventListener('click', () => { aiPromptPanel.hidden = !aiPromptPanel.hidden; if (!aiPromptPanel.hidden) document.getElementById('ai-prompt').focus(); });
+    document.getElementById('ai-panel-close').addEventListener('click', () => { aiPromptPanel.hidden = true; });
+    document.getElementById('ai-prompt-submit').addEventListener('click', () => {
+      const prompt = document.getElementById('ai-prompt').value.trim();
+      const promptStatus = document.getElementById('ai-prompt-status');
+      promptStatus.textContent = prompt ? 'Prompt pronto. A conex\u00e3o com a I.A ainda n\u00e3o foi ativada.' : 'Escreva sua pergunta para preparar o prompt.';
+    });
+    const locationSearch = document.getElementById('location-search');
+    async function searchLocation() {
+      const query = locationSearch.value.trim();
+      if (!query) return;
+      if (openMap && mapReady) {
+        const coordinates = query.split(',').map(value => Number(value.trim()));
+        if (coordinates.length !== 2 || coordinates.some(value => !Number.isFinite(value)) || Math.abs(coordinates[0]) > 85 || Math.abs(coordinates[1]) > 180) {
+          setStatus('Informe latitude, longitude; por exemplo: -12.5, -55.7.', true); return;
+        }
+        map.setView(coordinates, 13); setStatus('Mapa centralizado nas coordenadas informadas.'); return;
+      }
+      if (!mapReady || !window.google?.maps?.Geocoder) { setStatus('Aguarde o carregamento do mapa para buscar um local.', true); return; }
+      const geocoder = new google.maps.Geocoder();
+      try {
+        const result = await geocoder.geocode({ address: query, region: 'BR' });
+        if (!result.results.length) throw new Error('Local n\u00e3o encontrado. Tente munic\u00edpio, endere\u00e7o ou coordenadas.');
+        map.fitBounds(result.results[0].geometry.viewport || new google.maps.LatLngBounds(result.results[0].geometry.location, result.results[0].geometry.location));
+        if (!result.results[0].geometry.viewport) map.setZoom(13);
+        setStatus(`Mapa centralizado em ${result.results[0].formatted_address}.`);
+      } catch (error) { setStatus(error.message || 'N\u00e3o foi poss\u00edvel encontrar esse local.', true); }
+    }
+    document.getElementById('location-search-button').addEventListener('click', searchLocation);
+    locationSearch.addEventListener('keydown', event => { if (event.key === 'Enter') searchLocation(); });
+    let map, fieldLayer, scenesLayer, ndviOverlay, ndviObjectUrl, mapReady = false, fieldLoaded = false, ndviConfigured = false;
+    let openMap = false, uploadedGeojson;
+    async function fieldGeojson() {
+      if (openMap) return uploadedGeojson;
+      return new Promise(resolve => fieldLayer.toGeoJson(resolve));
+    }
+    async function initializeOpenMap() {
+      const stylesheet = document.createElement('link');
+      stylesheet.rel = 'stylesheet'; stylesheet.href = '/vendor/leaflet/leaflet.css';
+      await new Promise((resolve, reject) => {
+        stylesheet.onload = resolve; stylesheet.onerror = () => reject(new Error('Não foi possível carregar o estilo do mapa.'));
+        document.head.append(stylesheet);
+      });
+      await new Promise((resolve, reject) => {
+        const script = document.createElement('script'); script.src = '/vendor/leaflet/leaflet.js';
+        script.onload = resolve; script.onerror = () => reject(new Error('Não foi possível carregar o mapa local.')); document.head.append(script);
+      });
+      openMap = true;
+      map = L.map('map', { zoomControl: false }).setView([-14.235, -51.925], 4);
+      L.control.zoom({ position: 'topright' }).addTo(map);
+      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+      }).addTo(map);
+      fieldLayer = L.geoJSON(null, { style: { color: '#177447', weight: 3, fillColor: '#48a76f', fillOpacity: .28 } }).addTo(map);
+      locationSearch.placeholder = 'Coordenadas: latitude, longitude';
+      mapReady = true;
+      document.dispatchEvent(new Event('alytha-map-ready'));
+      enableAreaTools();
+      setStatus('Mapa pronto. Escolha uma localidade e desenhe uma área, ou carregue um GeoJSON.');
+    }
+    const status = document.getElementById('status');
+    const button = document.getElementById('search');
+    const ndviButton = document.getElementById('ndvi-button');
+    const ndviStatus = document.getElementById('ndvi-status');
+    const fieldFile = document.getElementById('field-file');
+    const dateFrom = document.getElementById('date-from');
+    const dateTo = document.getElementById('date-to');
+    const now = new Date();
+    const iso = d => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+    dateTo.value = iso(now);
+    const start = new Date(now); start.setMonth(start.getMonth() - 6); dateFrom.value = iso(start);
+    document.getElementById('cloud').addEventListener('input', e => document.getElementById('cloud-value').textContent = `${e.target.value}%`);
+    function setStatus(message, error = false) { status.textContent = message; status.classList.toggle('error', error); }
+    function setNdviStatus(message, error = false) { ndviStatus.textContent = message; ndviStatus.classList.toggle('error', error); }
+    async function readApiJson(response) {
+      const contentType = response.headers.get('content-type') || '';
+      if (!contentType.includes('application/json')) {
+        throw new Error('O servidor está desatualizado. Pare-o com Ctrl+C e inicie novamente com python run.py.');
+      }
+      return response.json();
+    }
+    function renderItems(features) {
+      const list = document.getElementById('items'); list.replaceChildren();
+      document.getElementById('count').textContent = `${features.length} ${features.length === 1 ? 'cena' : 'cenas'}`;
+      if (!features.length) { list.innerHTML = '<div class="empty">Nenhuma cena encontrada nesse período e limite de nuvens.</div>'; return; }
+      features.forEach(item => {
+        const props = item.properties || {};
+        const row = document.createElement('div'); row.className = 'item';
+        const title = document.createElement('strong');
+        const when = props.datetime ? new Date(props.datetime).toLocaleString('pt-BR', { dateStyle: 'medium', timeStyle: 'short' }) : 'Data não informada';
+        const cloud = Number.isFinite(props['eo:cloud_cover']) ? `${props['eo:cloud_cover'].toFixed(1)}% de nuvens` : 'Nuvens sem informação';
+        title.textContent = `${when} · ${cloud}`;
+        const id = document.createElement('div'); id.textContent = item.id || 'Cena sem identificador';
+        row.append(title, id);
+        const link = (item.links || []).find(x => x.rel === 'self');
+        if (link) { const a = document.createElement('a'); a.href = link.href; a.target = '_blank'; a.rel = 'noreferrer'; a.textContent = 'Abrir metadados da cena'; row.append(a); }
+        if (props.datetime) {
+          const mapButton = document.createElement('button'); mapButton.className = 'scene-map-action'; mapButton.textContent = 'Mostrar NDVI no mapa'; mapButton.disabled = !ndviConfigured;
+          mapButton.title = ndviConfigured ? 'Calcular e exibir o NDVI desta data sobre o talhão' : 'NDVI indisponível no momento';
+          mapButton.addEventListener('click', () => showNdviMap(props.datetime.slice(0, 10), mapButton));
+          row.append(mapButton);
+        }
+        list.append(row);
+      });
+    }
+    function extendBounds(bounds, coordinates) {
+      if (typeof coordinates[0] === 'number') { bounds.extend({ lat: coordinates[1], lng: coordinates[0] }); return; }
+      coordinates.forEach(point => extendBounds(bounds, point));
+    }
+    async function initializeMap() {
+      try {
+        const configResponse = await fetch('/api/config');
+        const config = await readApiJson(configResponse);
+        ndviConfigured = Boolean(config.ndvi_configured);
+        ndviButton.disabled = !ndviConfigured;
+        if (config.ndvi_configured) setNdviStatus('NDVI Sentinel-2 disponível · acompanhe o vigor da área selecionada.');
+        else setNdviStatus('Configure CDSE_CLIENT_ID e CDSE_CLIENT_SECRET no arquivo .env na raiz do projeto para processar o índice.');
+        if (!config.google_maps_api_key) { await initializeOpenMap(); return; }
+        const callbackName = 'alythaMapsLoaded';
+        window[callbackName] = async () => {
+          try {
+            const { Map, Data } = await google.maps.importLibrary('maps');
+            map = new Map(document.getElementById('map'), {
+              center: { lat: -14.235, lng: -51.925 }, zoom: 4, mapTypeId: 'hybrid',
+              mapTypeControl: true, mapTypeControlOptions: { mapTypeIds: ['roadmap', 'satellite', 'hybrid', 'terrain'] },
+              fullscreenControl: true, streetViewControl: false, clickableIcons: false,
+              zoomControl: true, zoomControlOptions: { position: google.maps.ControlPosition.RIGHT_TOP },
+              scrollwheel: true,
+              ...(config.google_maps_map_id ? { mapId: config.google_maps_map_id } : {})
+            });
+            fieldLayer = new Data({ map });
+            fieldLayer.setStyle({ strokeColor: '#177447', strokeWeight: 3, fillColor: '#48a76f', fillOpacity: .28, clickable: false });
+            mapReady = true;
+            document.dispatchEvent(new Event('alytha-map-ready'));
+            enableAreaTools();
+            setStatus('Escolha uma localidade e desenhe uma área, ou carregue um GeoJSON para analisar.');
+          } catch (error) { setStatus(`Não foi possível iniciar o Google Maps: ${error.message}`, true); }
+          delete window[callbackName];
+        };
+        window.gm_authFailure = () => setStatus('O Google rejeitou a chave do Maps. Confira faturamento e habilitação da Maps JavaScript API; autorize também http://127.0.0.1:8765/* e http://localhost:8765/* nas restrições de HTTP referrer.', true);
+        const script = document.createElement('script');
+        const params = new URLSearchParams({ key: config.google_maps_api_key, loading: 'async', callback: callbackName, v: 'weekly' });
+        script.src = `https://maps.googleapis.com/maps/api/js?${params}`;
+        script.async = true; script.onerror = () => setStatus('O Google Maps não carregou. Confira a chave, faturamento, APIs habilitadas e restrições por HTTP referrer.', true);
+        document.head.append(script);
+        window.setTimeout(() => { if (!mapReady && !status.classList.contains('error')) setStatus('O Google Maps ainda não respondeu. Confira a conexão e as permissões da chave no Google Cloud Console.', true); }, 15000);
+      } catch (error) { setStatus(error.message, true); }
+    }
+    initializeMap();
+    async function showNdviMap(acquisitionDate, actionButton) {
+      actionButton.disabled = true; setStatus(`Calculando a camada NDVI para ${acquisitionDate}…`);
+      try {
+        const response = await fetch('/api/ndvi-map', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ geojson: await fieldGeojson(), date: acquisitionDate }) });
+        if (!response.ok) {
+          const problem = await readApiJson(response);
+          throw new Error(problem.error || 'Falha no processamento da imagem.');
+        }
+        const bbox = JSON.parse(response.headers.get('X-Image-Bounds'));
+        const imageUrl = URL.createObjectURL(await response.blob());
+        if (ndviOverlay) { if (openMap) map.removeLayer(ndviOverlay); else ndviOverlay.setMap(null); }
+        if (ndviObjectUrl) URL.revokeObjectURL(ndviObjectUrl);
+        ndviObjectUrl = imageUrl;
+        if (openMap) ndviOverlay = L.imageOverlay(imageUrl, [[bbox[1], bbox[0]], [bbox[3], bbox[2]]], { opacity: .82 }).addTo(map);
+        else {
+          const bounds = new google.maps.LatLngBounds({ lat: bbox[1], lng: bbox[0] }, { lat: bbox[3], lng: bbox[2] });
+          ndviOverlay = new google.maps.GroundOverlay(imageUrl, bounds, { opacity: .82, clickable: false }); ndviOverlay.setMap(map);
+        }
+        setStatus(`Camada NDVI de ${acquisitionDate} exibida. Cores: baixo vigor em marrom, alto vigor em verde; nuvens e sombras transparentes.`);
+      } catch (error) { setStatus(error.message, true); }
+      finally { actionButton.disabled = false; }
+    }
+    fieldFile.addEventListener('change', async () => {
+      const file = fieldFile.files?.[0];
+      if (!file) return;
+      try {
+        if (!mapReady) throw new Error('Aguarde o carregamento do mapa.');
+        if (file.size > 2_000_000) throw new Error('O GeoJSON precisa ter menos de 2 MB nesta PoC.');
+        const geojson = JSON.parse(await file.text());
+        const features = geojson.type === 'FeatureCollection' ? geojson.features : [geojson.type === 'Feature' ? geojson : { type: 'Feature', properties: {}, geometry: geojson }];
+        if (features.length !== 1 || !['Polygon', 'MultiPolygon'].includes(features[0]?.geometry?.type)) throw new Error('Envie um polígono GeoJSON único (Polygon ou MultiPolygon).');
+        selectAnalysisArea(geojson, file.name);
+        setStatus('GeoJSON carregado nesta sessão. Escolha o período para consultar imagens ou calcular NDVI.');
+      } catch (error) { setStatus(error.message, true); }
+    });
+    function renderNdvi(points) {
+      const svg = document.getElementById('ndvi-chart');
+      svg.replaceChildren();
+      if (!points.length) {
+        const empty = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        empty.setAttribute('x', '320'); empty.setAttribute('y', '95'); empty.setAttribute('text-anchor', 'middle'); empty.setAttribute('fill', '#718078'); empty.setAttribute('font-size', '14'); empty.textContent = 'Sem observações válidas no período'; svg.append(empty); return;
+      }
+      const left = 48, right = 620, top = 16, bottom = 148;
+      const x = i => points.length === 1 ? (left + right) / 2 : left + i * (right - left) / (points.length - 1);
+      const y = v => bottom - (Math.max(-0.2, Math.min(1, v)) + 0.2) / 1.2 * (bottom - top);
+      [0, .25, .5, .75, 1].forEach(value => {
+        const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        line.setAttribute('x1', left); line.setAttribute('x2', right); line.setAttribute('y1', y(value)); line.setAttribute('y2', y(value)); line.setAttribute('stroke', '#e4ebe6'); svg.append(line);
+        const label = document.createElementNS('http://www.w3.org/2000/svg', 'text'); label.setAttribute('x', '8'); label.setAttribute('y', y(value) + 4); label.setAttribute('fill', '#718078'); label.setAttribute('font-size', '11'); label.textContent = value.toFixed(2); svg.append(label);
+      });
+      const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      path.setAttribute('d', points.map((p, i) => `${i ? 'L' : 'M'} ${x(i)} ${y(p.ndvi_mean)}`).join(' ')); path.setAttribute('fill', 'none'); path.setAttribute('stroke', '#287a51'); path.setAttribute('stroke-width', '3'); path.setAttribute('stroke-linecap', 'round'); path.setAttribute('stroke-linejoin', 'round'); svg.append(path);
+      points.forEach((point, i) => {
+        const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle'); dot.setAttribute('cx', x(i)); dot.setAttribute('cy', y(point.ndvi_mean)); dot.setAttribute('r', '4'); dot.setAttribute('fill', '#287a51');
+        const title = document.createElementNS('http://www.w3.org/2000/svg', 'title'); title.textContent = `${point.date}: NDVI ${point.ndvi_mean.toFixed(3)} · ${point.valid_pixels} pixels válidos`; dot.append(title); svg.append(dot);
+      });
+      const first = document.createElementNS('http://www.w3.org/2000/svg', 'text'); first.setAttribute('x', left); first.setAttribute('y', '176'); first.setAttribute('fill', '#718078'); first.setAttribute('font-size', '11'); first.textContent = points[0].date; svg.append(first);
+      const last = document.createElementNS('http://www.w3.org/2000/svg', 'text'); last.setAttribute('x', right); last.setAttribute('y', '176'); last.setAttribute('text-anchor', 'end'); last.setAttribute('fill', '#718078'); last.setAttribute('font-size', '11'); last.textContent = points[points.length - 1].date; svg.append(last);
+    }
+    ndviButton.addEventListener('click', async () => {
+      document.querySelector('#ndvi-panel .analysis-subtitle').textContent = 'Sentinel-2 · média por intervalo de 5 dias, com pixels de nuvem e sombra removidos.';
+      document.getElementById('ndvi-panel').classList.add('visible');
+      if (!mapReady || !fieldLayer || !fieldLoaded) { setNdviStatus('Desenhe uma área ou carregue um GeoJSON antes de calcular a série NDVI.', true); return; }
+      if (!dateFrom.value || !dateTo.value || dateFrom.value > dateTo.value) { setNdviStatus('Informe um período válido.', true); return; }
+      ndviButton.disabled = true; setNdviStatus('Calculando a série temporal no Copernicus Sentinel Hub…');
+      try {
+        const response = await fetch('/api/ndvi-series', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ geojson: await fieldGeojson(), area_id: savedAreaId, from: dateFrom.value, to: dateTo.value }) });
+        const result = await readApiJson(response);
+        if (!response.ok) throw new Error(result.error || 'Falha no processamento.');
+        renderNdvi(result.points || []);
+        await refreshSavedHistory();
+        setNdviStatus(result.points?.length ? `${result.points.length} intervalos processados · Sentinel‑2 L2A · pixel de 10 m. O valor é a média dos pixels válidos do polígono.` : 'A consulta terminou sem pixels válidos no período; nuvens, sombra ou ausência de aquisição podem explicar o resultado.');
+      } catch (error) { setNdviStatus(error.message, true); }
+      finally { ndviButton.disabled = false; }
+    });
+    button.addEventListener('click', async () => {
+      if (!mapReady || !fieldLayer || !fieldLoaded) { setStatus('Desenhe uma área ou carregue um GeoJSON antes de consultar imagens.', true); return; }
+      if (!dateFrom.value || !dateTo.value || dateFrom.value > dateTo.value) { setStatus('Informe um período válido.', true); return; }
+      button.disabled = true; setStatus('Consultando o catálogo público Copernicus…');
+      try {
+        const response = await fetch('/api/search', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ geojson: await fieldGeojson(), area_id: savedAreaId, from: dateFrom.value, to: dateTo.value, max_cloud: Number(document.getElementById('cloud').value) }) });
+        const result = await readApiJson(response);
+        if (!response.ok) throw new Error(result.error || 'Falha na consulta.');
+        if (scenesLayer) { if (openMap) map.removeLayer(scenesLayer); else scenesLayer.setMap(null); }
+        const features = result.features || [];
+        if (openMap) scenesLayer = L.geoJSON(result, { style: { color: '#b66a17', weight: 2, fillOpacity: 0 } }).addTo(map);
+        else {
+          scenesLayer = new google.maps.Data({ map }); scenesLayer.addGeoJson(result);
+          scenesLayer.setStyle({ strokeColor: '#b66a17', strokeWeight: 2, fillOpacity: 0, clickable: false });
+        }
+        renderItems(features);
+        await refreshSavedHistory();
+        setStatus(`Consulta concluída. ${features.length} cena(s) retornada(s); nenhuma imagem foi baixada.`);
+      } catch (error) { setStatus(`Não foi possível consultar o catálogo: ${error.message}`, true); }
+      finally { button.disabled = false; }
+    });
+  </script>
+</body>
+</html>
