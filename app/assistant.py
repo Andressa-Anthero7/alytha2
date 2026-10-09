@@ -1,5 +1,8 @@
 """Agricultural assistant grounded in server-side evidence, with bounded UI actions."""
 import json
+import logging
+import random
+import time
 from urllib.request import Request,urlopen
 from urllib.error import HTTPError,URLError
 from . import storage,research
@@ -40,6 +43,37 @@ def configuration(env):
     return {'provider': name, 'model': model, 'configured': bool(env.get(key_name, '').strip())}
 
 
+def provider_response(request, provider):
+    """Retry temporary Gemini failures; never retry credentials or depleted quota."""
+    attempts=3 if provider=='Gemini' else 1
+    for attempt in range(attempts):
+        try:
+            with urlopen(request,timeout=25 if provider=='Gemini' else 90) as response:
+                return json.load(response)
+        except HTTPError as exc:
+            status=exc.code
+            exc.close()
+            logging.getLogger(__name__).warning('%s HTTP %d (attempt %d/%d)',provider,status,attempt+1,attempts)
+            if provider=='Gemini' and status in (500,502,503,504) and attempt+1<attempts:
+                time.sleep(2**attempt+random.uniform(0,.25))
+                continue
+            messages={400:f'Consulta {provider} recusada. Verifique a chave e o modelo configurado.',
+                      401:f'Chave {provider} inválida ou sem acesso.',403:f'Projeto {provider} sem permissão para esta consulta.',
+                      404:f'Modelo {provider} indisponível. Confira o modelo configurado.',
+                      429:('Cota gratuita ou limite do Gemini atingido. Tente mais tarde ou confira os limites no Google AI Studio.' if provider=='Gemini' else 'Limite ou saldo da OpenAI insuficiente; confira sua conta.')}
+            if provider=='Gemini' and status in (500,502,503,504):
+                raise ValueError(f'O Gemini apresentou uma falha temporária (HTTP {status}) e não respondeu após {attempts} tentativas. Aguarde um pouco e consulte novamente.') from None
+            raise ValueError(messages.get(status,f'{provider} indisponível para esta consulta (HTTP {status}). Tente novamente.')) from None
+        except (URLError,TimeoutError,OSError):
+            logging.getLogger(__name__).warning('%s connection failed (attempt %d/%d)',provider,attempt+1,attempts)
+            if provider=='Gemini' and attempt+1<attempts:
+                time.sleep(2**attempt+random.uniform(0,.25))
+                continue
+            raise ValueError('Não foi possível conectar ao assistente. Tente novamente.') from None
+        except ValueError:
+            raise ValueError('Resposta do assistente não pôde ser validada.') from None
+
+
 def ask(data,env):
     prompt=data.get('prompt')
     if not isinstance(prompt,str) or not 1<=len(prompt.strip())<=3000: raise ValueError('Escreva uma pergunta de até 3000 caracteres.')
@@ -61,17 +95,7 @@ def ask(data,env):
         body={'model':model,'store':False,'max_output_tokens':1600,'instructions':INSTRUCTIONS,'input':content,
               'text':{'format':{'type':'json_schema','name':'cropsense_answer','strict':True,'schema':SCHEMA}}}
         request=Request('https://api.openai.com/v1/responses',data=json.dumps(body).encode(),headers={'Authorization':'Bearer '+key,'Content-Type':'application/json'})
-    try:
-        with urlopen(request,timeout=90) as response: result=json.load(response)
-    except HTTPError as exc:
-        status=exc.code
-        exc.close()
-        messages={400:f'Consulta {provider} recusada. Verifique a chave e o modelo configurado.',
-                  401:f'Chave {provider} inválida ou sem acesso.',403:f'Projeto {provider} sem permissão para esta consulta.',
-                  404:f'Modelo {provider} indisponível. Confira o modelo configurado.',
-                  429:('Cota gratuita ou limite do Gemini atingido. Tente mais tarde ou confira os limites no Google AI Studio.' if provider=='Gemini' else 'Limite ou saldo da OpenAI insuficiente; confira sua conta.')}
-        raise ValueError(messages.get(status,f'{provider} indisponível para esta consulta. Tente novamente.')) from None
-    except (URLError,TimeoutError,OSError,ValueError): raise ValueError('Não foi possível conectar ao assistente. Tente novamente.') from None
+    result=provider_response(request,provider)
     if not isinstance(result,dict): raise ValueError('Resposta do assistente não pôde ser validada.')
     if provider=='Gemini':
         candidates=result.get('candidates',[])

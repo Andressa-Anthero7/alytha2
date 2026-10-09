@@ -14,6 +14,8 @@ Abra o assistente no mapa e pergunte sobre a cidade selecionada ou o histórico 
 
 Esta integração envia texto e evidências numéricas. Ainda não envia imagens nem implementa identificação das etapas de preparo ou janela provável de semeadura. Gemini não substitui as medições do cv2 nem transforma hipóteses em confirmação de manejo.
 
+Falhas temporárias HTTP 500, 502, 503 e 504 ou de conexão são repetidas até três tentativas, com intervalos crescentes e timeout de 25 segundos por tentativa. Erros de chave, permissão, configuração e cota não são repetidos. O log registra somente o provedor, código HTTP e número da tentativa, sem chave, pergunta ou corpo da resposta. Se a instabilidade persistir, a mensagem informa o código HTTP. Veja a [orientação oficial para retentativas](https://ai.google.dev/gemini-api/docs/troubleshooting).
+
 O plano gratuito está sujeito aos limites da conta e pode usar os dados enviados para melhorar os produtos do Google. Confira [preços e condições](https://ai.google.dev/gemini-api/docs/pricing). A resposta segue um esquema JSON e passa por validação local, conforme o suporte a [respostas estruturadas](https://ai.google.dev/gemini-api/docs/generate-content/structured-output).
 
 Para selecionar explicitamente a integração anterior, use `AI_PROVIDER=openai`. Sem seleção explícita, o sistema prioriza Gemini quando `GEMINI_API_KEY` está preenchida; caso contrário, usa OpenAI para compatibilidade com instalações anteriores.

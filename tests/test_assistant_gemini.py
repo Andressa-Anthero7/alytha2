@@ -2,6 +2,7 @@ import io
 import json
 import unittest
 from urllib.error import HTTPError
+from urllib.request import Request
 from unittest.mock import patch
 from app import assistant
 
@@ -57,6 +58,36 @@ class GeminiTests(unittest.TestCase):
         config=assistant.configuration(self.env)
         self.assertEqual(set(config),{'provider','model','configured'})
         self.assertNotIn('secret',json.dumps(config))
+
+    def test_temporary_error_retries_same_request_then_succeeds(self):
+        request=Request('https://example.com',data=b'{}')
+        errors=[HTTPError(request.full_url,code,'temporary',{},io.BytesIO(b'private-secret')) for code in (503,500)]
+        with patch.object(assistant,'urlopen',side_effect=errors+[io.BytesIO(b'{"ok":true}')]) as api,patch.object(assistant.time,'sleep') as sleep,patch.object(assistant.random,'uniform',return_value=0),self.assertLogs('app.assistant',level='WARNING') as logs:
+            self.assertEqual(assistant.provider_response(request,'Gemini'),{'ok':True})
+        self.assertEqual(api.call_count,3)
+        self.assertTrue(all(call.args[0] is request for call in api.call_args_list))
+        self.assertEqual([call.args[0] for call in sleep.call_args_list],[1,2])
+        self.assertNotIn('private-secret',' '.join(logs.output))
+
+    def test_persistent_temporary_error_stops_after_three_attempts(self):
+        errors=[HTTPError('https://example.com',503,'temporary',{},io.BytesIO(b'secret')) for _ in range(3)]
+        with patch.object(assistant,'urlopen',side_effect=errors) as api,patch.object(assistant.time,'sleep'),self.assertLogs('app.assistant',level='WARNING'):
+            with self.assertRaisesRegex(ValueError,'HTTP 503.*3 tentativas'):
+                assistant.provider_response(Request('https://example.com'),'Gemini')
+            self.assertEqual(api.call_count,3)
+
+    def test_invalid_credentials_are_not_retried(self):
+        error=HTTPError('https://example.com',403,'denied',{},io.BytesIO(b'secret'))
+        with patch.object(assistant,'urlopen',side_effect=error) as api,patch.object(assistant.time,'sleep') as sleep,self.assertLogs('app.assistant',level='WARNING'):
+            with self.assertRaisesRegex(ValueError,'permissão'):
+                assistant.provider_response(Request('https://example.com'),'Gemini')
+            api.assert_called_once()
+            sleep.assert_not_called()
+
+    def test_connection_timeout_retries_then_succeeds(self):
+        with patch.object(assistant,'urlopen',side_effect=[TimeoutError(),io.BytesIO(b'{}')]) as api,patch.object(assistant.time,'sleep'),self.assertLogs('app.assistant',level='WARNING'):
+            self.assertEqual(assistant.provider_response(Request('https://example.com'),'Gemini'),{})
+            self.assertEqual(api.call_count,2)
 
 
 if __name__=='__main__':
