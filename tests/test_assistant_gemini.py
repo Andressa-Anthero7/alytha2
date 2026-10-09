@@ -1,6 +1,8 @@
 import io
 import json
+import tempfile
 import unittest
+from pathlib import Path
 from urllib.error import HTTPError
 from urllib.request import Request
 from unittest.mock import patch
@@ -28,6 +30,31 @@ class GeminiTests(unittest.TestCase):
         payload=json.loads(request.data)
         self.assertEqual(payload['generationConfig']['responseJsonSchema'],assistant.SCHEMA)
         self.assertIn('observed',payload['contents'][0]['parts'][0]['text'])
+
+    def test_editable_guide_is_reloaded_between_requests_and_sent_to_gemini(self):
+        with tempfile.TemporaryDirectory() as directory:
+            guide=Path(directory)/'guide.md'
+            with patch.object(assistant,'PROMPT_PATH',guide):
+                for text in ('Primeiro roteiro agrícola.','Novo roteiro salvo pelo usuário.'):
+                    guide.write_text(text,encoding='utf-8-sig')
+                    _,request=self.call()
+                    instructions=json.loads(request.data)['systemInstruction']['parts'][0]['text']
+                    self.assertTrue(instructions.startswith(text))
+                    self.assertIn(assistant.INSTRUCTIONS,instructions)
+
+    def test_missing_empty_or_unreadable_guide_prevents_provider_call(self):
+        with tempfile.TemporaryDirectory() as directory:
+            guide=Path(directory)/'guide.md'
+            with patch.object(assistant,'PROMPT_PATH',guide),patch.object(assistant,'context',return_value={'evidence':[]}),patch.object(assistant,'urlopen') as api:
+                with self.assertRaisesRegex(ValueError,'roteiro'):
+                    assistant.ask({'prompt':'Teste'},self.env)
+                guide.write_text('   ',encoding='utf-8')
+                with self.assertRaisesRegex(ValueError,'vazio'):
+                    assistant.ask({'prompt':'Teste'},self.env)
+                guide.write_bytes(b'\xff\xff')
+                with self.assertRaisesRegex(ValueError,'roteiro'):
+                    assistant.ask({'prompt':'Teste'},self.env)
+                api.assert_not_called()
 
     def test_missing_gemini_key_does_not_fall_back_to_paid_openai(self):
         with patch.object(assistant,'urlopen') as api:
