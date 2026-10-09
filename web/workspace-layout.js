@@ -26,21 +26,13 @@ document.addEventListener('DOMContentLoaded',()=>{
     return {municipality_code:code,municipal_job_id:job?.id,map_date:job ? selectedDate || job.parameters.as_of : undefined,name,revision:contextRevision};
   }
   window.agriAssistantContext=assistantContext;
-  function updateContext() {
-    const context=assistantContext();
-    const parts=[context.name];
-    if(context.map_date)parts.push('avaliação em '+context.map_date.split('-').reverse().join('/'));
-    parts.push(context.municipal_job_id ? 'soja histórica · leitura municipal' : 'panorama da cidade; histórico de uma área quando disponível');
-    document.getElementById('ai-map-context').textContent=parts.join(' · ');
-  }
-  document.addEventListener('alytha-map-search',event=>{searchedCity=event.detail;contextRevision++;updateContext();});
-  for(const id of ['municipality-select','state-select'])document.getElementById(id).addEventListener('change',()=>{searchedCity=null;contextRevision++;updateContext();});
-  window.addEventListener('popstate',()=>{searchedCity=null;contextRevision++;setTimeout(updateContext,0);});
-  document.addEventListener('alytha-region-ready',updateContext);
-  document.addEventListener('alytha-soy-job-updated',event=>{municipalJob=event.detail;updateContext();});
-  document.addEventListener('alytha-soy-context-cleared',()=>{municipalJob=null;selectedDate='';contextRevision++;updateContext();});
-  document.addEventListener('alytha-soy-date-selected',event=>{if(selectedDate!==event.detail.date)contextRevision++;selectedDate=event.detail.date;updateContext();});
-  for(const type of ['alytha-area-selected','alytha-area-cleared'])document.addEventListener(type,()=>{contextRevision++;updateContext();});
+  document.addEventListener('alytha-map-search',event=>{searchedCity=event.detail;contextRevision++;});
+  for(const id of ['municipality-select','state-select'])document.getElementById(id).addEventListener('change',()=>{searchedCity=null;contextRevision++;});
+  window.addEventListener('popstate',()=>{searchedCity=null;contextRevision++;});
+  document.addEventListener('alytha-soy-job-updated',event=>{municipalJob=event.detail;});
+  document.addEventListener('alytha-soy-context-cleared',()=>{municipalJob=null;selectedDate='';contextRevision++;});
+  document.addEventListener('alytha-soy-date-selected',event=>{if(selectedDate!==event.detail.date)contextRevision++;selectedDate=event.detail.date;});
+  for(const type of ['alytha-area-selected','alytha-area-cleared'])document.addEventListener(type,()=>{contextRevision++;});
   document.querySelectorAll('[data-ai-question]').forEach(button=>button.addEventListener('click',()=>{
     document.getElementById('ai-prompt').value=button.dataset.aiQuestion;
     document.getElementById('ai-prompt').focus();
@@ -48,7 +40,7 @@ document.addEventListener('DOMContentLoaded',()=>{
   document.getElementById('ai-prompt').addEventListener('keydown',event=>{
     if(event.key==='Enter' && (event.ctrlKey || event.metaKey)) {event.preventDefault();document.getElementById('ai-prompt-submit').click();}
   });
-  updateContext();
+
   for(const prefix of ['soy','ndvi'])document.getElementById(prefix+'-panel-close').addEventListener('click',()=>{
     document.getElementById(prefix==='soy'?'soy-activity-panel':'ndvi-panel').classList.remove('visible');
   });

@@ -2,7 +2,7 @@
 
 Edite a identidade, o tom e o roteiro agrícola em [`prompts/alytha-agro.md`](../prompts/alytha-agro.md). O servidor lê esse arquivo a cada pergunta: basta salvar e fazer uma nova consulta, sem reiniciar. Respostas já exibidas não são reescritas. As regras de evidências, o esquema de resposta e a validação de ações continuam no servidor. Arquivo ausente, vazio ou ilegível impede a consulta e informa o problema.
 
-No notebook, o modo I.A abre uma faixa horizontal acima da barra inferior: apresentação da Alytha, pergunta e leitura lado a lado. O mapa, o menu e os gráficos reservam espaço para essa faixa. Sugestões preenchem a pergunta; Ctrl + Enter envia. A personalidade usa linguagem do agro, explica a leitura prática e diferencia evidência observada de hipótese de manejo.
+No notebook, o modo I.A abre uma faixa horizontal acima da barra inferior, com pergunta e leitura lado a lado. O mapa, o menu e os gráficos reservam espaço para essa faixa. Sugestões preenchem a pergunta; Ctrl + Enter envia. O contexto é enviado ao assistente sem um bloco de apresentação no painel. A personalidade usa linguagem do agro, explica a leitura prática e diferencia evidência observada de hipótese de manejo.
 
 O contexto acompanha a pesquisa do mapa. Quando o gráfico municipal está carregado, o servidor recupera os dados dessa consulta e inclui apenas avaliações até a data selecionada. Consultas de outra cidade ou datas sem avaliação são rejeitadas. O histórico de um recorte é identificado como tal, sem extrapolação municipal. Se a cidade, área ou data mudar durante uma resposta, ela não executa ações no novo contexto.
 
