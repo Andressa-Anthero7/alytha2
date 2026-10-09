@@ -24,6 +24,23 @@ class InactiveTests(unittest.TestCase):
     def test_growth_is_not_classified_as_inactive(self):
         self.points[-1]['ndvi_mean']=0.6
         self.assertEqual(inactive.classify(self.points,self.end)['status'],'not_matched')
+    def test_activity_timeline_uses_only_past_observations_and_reuses_cache(self):
+        geometry={'type':'Polygon','coordinates':[[[-55,-12],[-54.99,-12],[-54.99,-11.99],[-55,-12]]]}
+        feature={'type':'Feature','geometry':geometry,'properties':{'source':'MapBiomas','class_id':39,'year':2025,'area_ha':10,'overview':False}}
+        points=self.points+[{'date':self.end.isoformat(),'ndvi_mean':.6,'valid_pixels':100,'valid_fraction':.8}]
+        with patch.object(inactive,'today',return_value=self.end),patch.object(web_app,'request_ndvi_series',return_value={'points':points}) as api:
+            result=inactive.activity({'geojson':feature})
+            statuses=[p['activity']['status'] for p in result['points']]
+            self.assertEqual(statuses,['unknown','unknown','possible_inactive','not_matched'])
+            self.assertEqual(result['summary']['status'],'not_matched')
+            inactive.activity({'geojson':feature});api.assert_called_once()
+    def test_activity_rejects_other_crops_and_overviews_before_network(self):
+        geometry={'type':'Polygon','coordinates':[[[-55,-12],[-54.99,-12],[-54.99,-11.99],[-55,-12]]]}
+        with patch.object(web_app,'request_ndvi_series') as api:
+            for properties in ({'source':'MapBiomas','class_id':20},{'source':'MapBiomas','class_id':39,'overview':True}):
+                with self.assertRaisesRegex(ValueError,'soja histórica'):
+                    inactive.activity({'geojson':{'type':'Feature','geometry':geometry,'properties':properties}})
+            api.assert_not_called()
     def test_worker_preserves_evidence_and_cache(self):
         geometry={'type':'Polygon','coordinates':[[[-55,-12],[-54.99,-12],[-54.99,-11.99],[-55,-12]]]}
         historical={'features':[{'type':'Feature','geometry':geometry,'properties':{'class_id':39,'area_ha':10,'year':2025}}]}

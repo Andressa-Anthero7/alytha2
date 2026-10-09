@@ -32,6 +32,7 @@ function useAgriculturalArea(index) {
   const p = feature.properties, name = `${p.class_name} · mapa ${p.year} · ${p.area_ha} ha`;
   selectAnalysisArea(feature, name);
   selectedAreaProvenance = { ...p };
+  if(p.class_id===39 && !p.overview) document.dispatchEvent(new CustomEvent('alytha-soy-selected',{detail:feature}));
   document.getElementById('area-name').value = name;
   document.getElementById('area-crop').value = 'Não confirmada';
   document.getElementById('area-season').value = 'Não confirmada';
@@ -40,7 +41,7 @@ function useAgriculturalArea(index) {
     document.getElementById('selected-area-tools').open=true;
     document.getElementById('area-details').textContent=`${p.area_ha} ha · última observação ${p.evidence.latest_date} · NDVI ${p.evidence.latest_ndvi.toFixed(3)}. ${p.evidence.reason}`;
     renderNdvi(p.evidence.points); document.getElementById('ndvi-panel').classList.add('visible');
-    document.querySelector('#ndvi-panel .analysis-subtitle').textContent='Triagem Sentinel-2 · três intervalos recentes com cobertura suficiente.';
+    document.querySelector('#ndvi-panel .analysis-subtitle').textContent='Três leituras recentes da vegetação, cada uma com pelo menos metade da área avaliada. Confira a situação no campo.';
     setNdviStatus('Possível ausência de lavoura ativa. Não confirma área vazia ou disponibilidade para plantio.');
   }
 }
@@ -109,7 +110,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if(job.type==='FeatureCollection') renderCropResults([job],0);
     const unknown=(job.assessed || []).filter(item=>item.status==='unknown').length;
     el('mapbiomas-status').textContent=`${job.features.length} possíveis áreas inativas · ${job.processed}/${job.total ?? job.limit} verificadas${unknown ? ` · ${unknown} sem evidência suficiente` : ''}${job.status==='loading' ? ' · analisando…' : ''}`;
-    el('mapbiomas-detail-status').textContent=`Soja no mapa anual de ${job.parameters.year}; não confirma a safra passada. Triagem de até 10 manchas menores por recorte${job.period ? `, ${job.period.from} a ${job.period.to}` : ', últimos 60 dias'}. Coral: possível ausência de lavoura ativa. Não confirma talhão vazio. Regra experimental: três intervalos com NDVI ≤ 0,25, cobertura válida ≥ 50%, ao menos 50 pixels válidos e última observação em até 15 dias. Pós-colheita, preparo e pousio podem apresentar o mesmo sinal.`;
+    el('mapbiomas-detail-status').textContent=`Área identificada como soja no mapa de ${job.parameters.year}; a cultura atual precisa ser conferida. A busca avalia até 10 áreas menores na parte do mapa exibida. Em coral: pouco sinal recente de vegetação, sem confirmação de área livre para plantio. A triagem exige três leituras recentes com pelo menos metade da área observada. Pós-colheita, preparo e pousio podem apresentar sinais parecidos; confirme o manejo no campo.`;
     const output=el('inactive-soy-evidence'); output.replaceChildren();
     (job.assessed || []).forEach(item=>{const p=document.createElement('p');p.textContent=`${item.area_ha} ha · ${item.status==='possible_inactive' ? 'possível inatividade' : item.status==='unknown' ? 'inconclusivo' : 'não corresponde'}${item.latest_date ? ` · ${item.latest_date} · NDVI ${item.latest_ndvi.toFixed(3)}` : ''}. ${item.reason}`;output.append(p);});
     if(job.status==='loading') inactivePoll=setTimeout(async()=>{
@@ -170,8 +171,8 @@ document.addEventListener('DOMContentLoaded', () => {
   el('load-satveg').addEventListener('click', event => run(event.currentTarget, el('satveg-status'), async () => {
     if (!fieldLoaded || drawingArea) throw new Error('Selecione uma área primeiro.');
     const result = await storageJson('/api/sources/satveg', {geojson:await fieldGeojson(),from:dateFrom.value,to:dateTo.value});
-    renderNdvi(result.points); el('ndvi-panel').classList.add('visible');
-    document.querySelector('#ndvi-panel .analysis-subtitle').textContent = 'Embrapa SATVeg · MODIS 250 m · 16 dias.';
+    renderNdvi(result.points,{aggregationDays:16}); el('ndvi-panel').classList.add('visible');
+    document.querySelector('#ndvi-panel .analysis-subtitle').textContent = 'Histórico Embrapa · cada leitura reúne 16 dias. A imagem é menos detalhada que a do Sentinel-2; evite comparar os valores diretamente.';
     setNdviStatus(`${result.source}: ${result.points.length} observações. ${result.note}`);
     el('satveg-status').textContent = `${result.points.length} observações. ${result.note}`;
   }));

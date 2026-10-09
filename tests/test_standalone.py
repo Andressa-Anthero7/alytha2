@@ -15,9 +15,48 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from app import web_app
 from app import storage
+from app import research
 
 
 class StandaloneTests(unittest.TestCase):
+    def test_municipal_activity_endpoints_use_selected_city(self):
+        result={'id':'d'*64,'status':'loading','points':[]}
+        with patch.object(web_app.municipal_activity,'start',return_value=result) as operation:
+            request=Request(self.base+'/api/soy-activity/municipality',data=json.dumps({'municipality_code':'5107925'}).encode(),headers={'Content-Type':'application/json'})
+            with urlopen(request) as response:self.assertEqual(json.load(response),result)
+            operation.assert_called_once_with({'municipality_code':'5107925'})
+        with patch.object(web_app.municipal_activity,'get',return_value=result) as operation:
+            with urlopen(self.base+'/api/soy-activity/municipality/'+result['id']) as response:self.assertEqual(json.load(response),result)
+            operation.assert_called_once_with(result['id'])
+
+    def test_soy_activity_endpoint_returns_temporal_assessment(self):
+        payload={'geojson':{'type':'Feature','geometry':{'type':'Polygon','coordinates':[]},'properties':{'source':'MapBiomas','class_id':39}}}
+        result={'points':[],'summary':{'status':'unknown'},'period':{'from':'2026-08-09','to':'2026-10-08'}}
+        with patch.object(web_app.inactive_soy,'activity',return_value=result) as operation:
+            request=Request(self.base+'/api/soy-activity',data=json.dumps(payload).encode(),headers={'Content-Type':'application/json'})
+            with urlopen(request) as response:
+                self.assertEqual(json.load(response),result)
+            operation.assert_called_once_with(payload)
+
+    def test_history_endpoint_resumes_interrupted_job(self):
+        key='a'*64
+        history={'id':key,'status':'loading','parameters':{'start_year':2018},'points':[]}
+        storage.source_snapshot('history:'+key,history)
+        try:
+            with patch.object(research.POOL,'submit') as submit:
+                with urlopen(self.base+'/api/research/history/'+key) as response:
+                    self.assertEqual(json.load(response)['status'],'loading')
+                with urlopen(self.base+'/api/research/history/'+key) as response:
+                    response.read()
+                submit.assert_called_once_with(research.build_history,key,history['parameters'])
+        finally: research.RUNNING.discard(key)
+
+    def test_research_status_does_not_expose_openai_secret(self):
+        with patch.dict(os.environ,{'OPENAI_API_KEY':'test-private-openai-secret'}):
+            with urlopen(self.base+'/api/research/status') as response: body=response.read().decode()
+        self.assertTrue(json.loads(body)['openai_configured'])
+        self.assertNotIn('test-private-openai-secret',body)
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.env_file = Path(self.temp.name) / ".env"

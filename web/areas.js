@@ -69,6 +69,7 @@ function clearAnalysisArea(clearFile = true) {
   uploadedGeojson = undefined; fieldLoaded = false;
   resetSavedArea();
   resetAnalysisResults();
+  document.dispatchEvent(new Event('alytha-area-cleared'));
   if (clearFile) document.getElementById('field-file').value = '';
   document.getElementById('map-label').textContent = 'Nenhuma área selecionada';
   document.getElementById('area-details').textContent = 'Desenhe uma área ou carregue um GeoJSON para analisar.';
@@ -164,6 +165,7 @@ async function showRegion(kind, id, request) {
   }
   fitGeojson(geometry);
   document.getElementById('region-status').textContent = 'Limite IBGE exibido. Aproxime o mapa e desenhe uma área menor para analisar.';
+  document.dispatchEvent(new CustomEvent('alytha-region-ready',{detail:{kind,id}}));
 }
 
 document.addEventListener('DOMContentLoaded', () => {

@@ -17,7 +17,7 @@ from urllib.request import Request, urlopen
 
 from .catalog_search import DEFAULT_COLLECTION, DEFAULT_ENDPOINT, extract_geometry, request_items, validate_date
 from .localities import location_data
-from . import storage, data_sources, municipalities, inactive_soy
+from . import storage, data_sources, municipalities, inactive_soy, research, assistant, municipal_activity, satellite_learning
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -79,7 +79,7 @@ def read_app_env():
         if separator and not name.lstrip().startswith("#"):
             values[name.strip()] = value.strip().strip('"').strip("'")
     values.update({key: os.environ[key] for key in (
-        "GOOGLE_MAPS_API_KEY", "GOOGLE_MAPS_MAP_ID", "CDSE_CLIENT_ID", "CDSE_CLIENT_SECRET", "GEE_PROJECT_ID", "EMBRAPA_ACCESS_TOKEN"
+        "GOOGLE_MAPS_API_KEY", "GOOGLE_MAPS_MAP_ID", "CDSE_CLIENT_ID", "CDSE_CLIENT_SECRET", "GEE_PROJECT_ID", "EMBRAPA_ACCESS_TOKEN", "OPENAI_API_KEY", "OPENAI_MODEL"
     ) if key in os.environ})
     return values
 
@@ -240,6 +240,22 @@ class Handler(SimpleHTTPRequestHandler):
         super().end_headers()
 
     def do_GET(self):
+        municipal_match=re.fullmatch(r'/api/soy-activity/municipality/([a-f0-9]{64})',self.path)
+        if municipal_match:
+            try: self._send_json(municipal_activity.get(municipal_match[1]))
+            except ValueError as exc: self._send_json({'error':str(exc)},status=400)
+            return
+        match=re.fullmatch(r'/api/research/history/([a-f0-9]{64})',self.path)
+        if match:
+            try: self._send_json(research.restore_history(match[1]))
+            except ValueError as exc: self._send_json({'error':str(exc)},status=400)
+            return
+        if self.path=='/api/research/status':
+            reference=storage.source_snapshot('research:sorriso:pilot')
+            self._send_json({'openai_configured':bool(read_app_env().get('OPENAI_API_KEY')),'ml':research.model_status(),'satellite':satellite_learning.status(),'pilot':reference['result'] if reference else None})
+            return
+        if self.path=='/api/research/events':
+            self._send_json(research.events());return
         match = re.fullmatch(r'/api/inactive-soy/([a-f0-9]{64})',self.path)
         if match:
             try: self._send_json(inactive_soy.get(match[1]))
@@ -293,6 +309,26 @@ class Handler(SimpleHTTPRequestHandler):
         super().do_GET()
 
     def do_POST(self):
+        if self.path in ('/api/research/history','/api/research/pilot','/api/research/events','/api/research/train','/api/research/satellite-learning','/api/research/analyze','/api/assistant','/api/soy-activity','/api/soy-activity/municipality'):
+            try:
+                size=int(self.headers.get('Content-Length','0'))
+                if not 0<size<=2_000_000: raise ValueError('Pedido inválido.')
+                data=json.loads(self.rfile.read(size))
+                if not isinstance(data,dict): raise ValueError('Informe um objeto JSON.')
+                if self.path in ('/api/research/history','/api/research/pilot','/api/soy-activity','/api/soy-activity/municipality') and not all(read_app_env().get(key) for key in ('CDSE_CLIENT_ID','CDSE_CLIENT_SECRET')): raise ValueError('Histórico Sentinel-2 indisponível no momento.')
+                if self.path=='/api/research/history': result=research.start_history(data)
+                elif self.path=='/api/research/pilot': result=research.pilot()
+                elif self.path=='/api/research/events': result=research.add_event(data)
+                elif self.path=='/api/research/train': result=research.train()
+                elif self.path=='/api/research/satellite-learning': result=satellite_learning.train(str(data.get('municipality_code','5107925')))
+                elif self.path=='/api/research/analyze': result=research.analyze(data.get('dataset_id'),data.get('date'))
+                elif self.path=='/api/soy-activity': result=inactive_soy.activity(data)
+                elif self.path=='/api/soy-activity/municipality': result=municipal_activity.start(data)
+                else: result=assistant.ask(data,read_app_env())
+                self._send_json(result)
+            except (ValueError,TypeError,ImportError) as exc: self._send_json({'error':str(exc)},status=400)
+            except Exception: self._send_json({'error':'Não foi possível concluir esta operação. Verifique os dados e tente novamente.'},status=502)
+            return
         if self.path == '/api/inactive-soy':
             try:
                 size=int(self.headers.get('Content-Length','0'))

@@ -26,6 +26,10 @@ def connect():
         CREATE TABLE IF NOT EXISTS source_snapshots (
             cache_key TEXT PRIMARY KEY, result TEXT NOT NULL, fetched_at TEXT NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS field_events (
+            id INTEGER PRIMARY KEY, dataset_id TEXT NOT NULL, area_key TEXT NOT NULL,
+            date_from TEXT NOT NULL,date_to TEXT NOT NULL,stage TEXT NOT NULL,note TEXT NOT NULL,created_at TEXT NOT NULL
+        );
     ''')
     if 'provenance' not in {row['name'] for row in connection.execute('PRAGMA table_info(areas)')}:
         connection.execute("ALTER TABLE areas ADD COLUMN provenance TEXT NOT NULL DEFAULT '{}'")

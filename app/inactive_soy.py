@@ -6,6 +6,7 @@ import threading
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timedelta, timezone
 from . import storage, data_sources
+from .catalog_search import extract_geometry
 
 POOL=ThreadPoolExecutor(max_workers=2,thread_name_prefix='inactive-soy')
 LOCK=threading.Lock()
@@ -13,6 +14,32 @@ RUNNING=set()
 LIMIT=10
 
 def today(): return (datetime.now(timezone.utc)-timedelta(hours=3)).date()
+
+def activity(data,end=None):
+    """Recent activity evidence for a selected historical soybean polygon."""
+    if not isinstance(data,dict): raise ValueError('Pedido inválido.')
+    geometry=extract_geometry(data.get('geojson'))
+    properties=data['geojson'].get('properties',{})
+    if properties.get('source')!='MapBiomas' or properties.get('class_id')!=39 or properties.get('overview'):
+        raise ValueError('Selecione uma área de soja histórica no mapa em detalhe.')
+    end=end or today();first=end-timedelta(days=60)
+    period={'from':first.isoformat(),'to':end.isoformat()}
+    key='inactive-evidence:'+hashlib.sha256(json.dumps([geometry,period],sort_keys=True).encode()).hexdigest()
+    cached=storage.source_snapshot(key)
+    if cached: series=cached['result']
+    else:
+        from .web_app import request_ndvi_series
+        series=request_ndvi_series(geometry,period['from'],period['to'])
+        storage.source_snapshot(key,series)
+    points=sorted(series['points'],key=lambda p:p['date'])
+    timeline=[]
+    for index,p in enumerate(points):
+        as_of=min(end,date.fromisoformat(p['date'])+timedelta(days=4))
+        timeline.append({**p,'activity_as_of':as_of.isoformat(),'activity':classify(points[:index+1],as_of)})
+    return {'points':timeline,'summary':classify(points,end),'period':period,
+            'source':'Sentinel-2 L2A','historical_year':properties.get('year'),
+            'area_ha':properties.get('area_ha'),
+            'note':'Pouca vegetação persistente pode indicar pós-colheita, preparo ou pousio. Não confirma terra parada, disponibilidade para plantio ou limite de talhão.'}
 
 def classify(points,end):
     usable=[]

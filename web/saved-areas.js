@@ -96,7 +96,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!record) return;
     dateFrom.value = record.parameters.from; dateTo.value = record.parameters.to;
     if (record.kind === 'ndvi') {
-      document.querySelector('#ndvi-panel .analysis-subtitle').textContent = 'Sentinel-2 · média por intervalo de 5 dias, com pixels de nuvem e sombra removidos.';
+      document.querySelector('#ndvi-panel .analysis-subtitle').textContent = 'Histórico da vegetação nesta área · leituras de até 5 dias. Partes sem boa visibilidade ficam fora do cálculo.';
       renderNdvi(record.result.points || []);
       document.getElementById('ndvi-panel').classList.add('visible');
       setNdviStatus(`Histórico: ${record.source} · consulta em ${new Date(record.created_at).toLocaleString('pt-BR')}.`);

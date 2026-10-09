@@ -142,6 +142,63 @@ def municipal_landcover(boundary):
                         label=str(int(value)); totals[label]=totals.get(label,0)+hectares
     return {'source':'MapBiomas Coleção 11','source_url':url,'year':2025,'resolution_m':30,'scope':'municipality','valid_pixels':pixels,'classes':[{'class_id':int(k),'class_name':CLASSES.get(int(k),'Outra classe de cobertura'),'area_ha':round(v,2)} for k,v in sorted(totals.items(),key=lambda item:-item[1])],'fetched_at':storage.now(),'note':'Área estimada por pixels de 30 m dentro da malha simplificada IBGE; mapa histórico, não cadastro de talhões.'}
 
+def municipal_soy_areas(code):
+    """Read every native soybean pixel inside the municipality, without viewport caps."""
+    from . import municipalities
+    municipalities.key(code)
+    key='municipal-soy:v1:'+code
+    cached=storage.source_snapshot(key)
+    if cached: return cached['result']
+    import numpy as np
+    import rasterio
+    from rasterio.windows import from_bounds,Window
+    from rasterio.features import geometry_mask,shapes
+    from rasterio.warp import transform_geom
+    from shapely.geometry import shape,mapping,box
+    from shapely.ops import unary_union
+    from .localities import fetch_ibge
+    saved=storage.source_snapshot(municipalities.key(code))
+    boundary=saved['result'].get('boundary') if saved else None
+    if not boundary:
+        boundary=fetch_ibge(f'/v3/malhas/municipios/{code}?formato=application/vnd.geo%2Bjson&qualidade=minima')
+    geometries=[f['geometry'] for f in boundary['features']]
+    region=unary_union([shape(g) for g in geometries])
+    url=MAPBIOMAS_URL.format(year=2025)
+    features=[];total=0
+    with rasterio.Env(GDAL_DISABLE_READDIR_ON_OPEN='EMPTY_DIR',GDAL_HTTP_TIMEOUT='30',GDAL_HTTP_MAX_RETRY='1',CPL_VSIL_CURL_ALLOWED_EXTENSIONS='.tif'):
+        with rasterio.open(url) as ds:
+            window=from_bounds(*region.bounds,ds.transform).round_offsets().round_lengths().intersection(Window(0,0,ds.width,ds.height))
+            if window.width*window.height>50_000_000: raise ValueError('Este município excede o limite de processamento municipal do piloto. Nenhuma amostra parcial foi usada como total da cidade.')
+            raster=ds.read(1,window=window)
+            transform=ds.window_transform(window)
+            mask=(raster==39)&geometry_mask(geometries,out_shape=raster.shape,transform=transform,invert=True)
+            for geometry,value in shapes(mask.astype('uint8'),mask=mask,transform=transform):
+                clipped=shape(geometry).intersection(region)
+                if clipped.is_empty: continue
+                geometry=mapping(clipped)
+                hectares=shape(transform_geom(ds.crs,'EPSG:6933',geometry)).area/10000
+                total+=hectares
+                if hectares<5: continue
+                projected=shape(transform_geom(ds.crs,'EPSG:3857',geometry))
+                west,south,east,north=projected.bounds
+                if east-west<=10_000 and north-south<=10_000:
+                    parts=[geometry]
+                else:
+                    # Computational recortes, never claimed as field boundaries.
+                    parts=[]
+                    for x in range(math.floor(west/10_000)*10_000,math.ceil(east),10_000):
+                        for y in range(math.floor(south/10_000)*10_000,math.ceil(north),10_000):
+                            piece=projected.intersection(box(x,y,x+10_000,y+10_000))
+                            if piece.is_empty or piece.geom_type not in ('Polygon','MultiPolygon'):continue
+                            parts.append(transform_geom('EPSG:3857',ds.crs,mapping(piece)))
+                for part in parts:
+                    part_ha=shape(transform_geom(ds.crs,'EPSG:6933',part)).area/10000
+                    if part_ha<5:continue
+                    features.append({'type':'Feature','geometry':part,'properties':{'source':'MapBiomas','class_id':39,'year':2025,'area_ha':part_ha,'overview':False}})
+    result={'features':features,'total_soy_ha':total,'candidate_ha':sum(f['properties']['area_ha'] for f in features),'year':2025,'municipality_code':code,'source_url':url}
+    storage.source_snapshot(key,result)
+    return result
+
 def satveg(data, token):
     if not token: raise ValueError('SATVeg aguarda token AgroAPI. Configure EMBRAPA_ACCESS_TOKEN no .env; nenhum dado foi simulado.')
     geometry = extract_geometry(data.get('geojson'))
