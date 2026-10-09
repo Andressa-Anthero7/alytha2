@@ -228,17 +228,17 @@
         <button id="ai-panel-close" class="ai-close" type="button" aria-label="Fechar">&times;</button>
         <div class="ai-reading">
           <span class="ai-eyebrow">LEITURA DA ÁREA</span>
-          <div class="ai-note" id="ai-prompt-status" role="status" aria-live="polite"></div>
+          <div class="ai-note" id="ai-prompt-status" role="log" aria-live="polite" aria-label="Conversa com a Alytha"></div>
         </div>
         <div class="ai-composer">
           <label for="ai-prompt">O que vamos investigar?</label>
-          <input id="ai-prompt" type="text" placeholder="Ex.: Como está avançando a safra e o que precisamos acompanhar nesta área?">
+          <input id="ai-prompt" type="text" maxlength="3000" placeholder="Converse com a Alytha sobre esta área…">
           <div class="ai-suggestions" aria-label="Sugestões de perguntas">
             <button type="button" data-ai-question="O que mudou nas leituras recentes de vegetação da área pesquisada?">O que mudou?</button>
             <button type="button" data-ai-question="A sequência disponível é compatível com emergência da lavoura? Explique as evidências e o que ainda não podemos concluir.">Possível emergência</button>
           </div>
           <button id="ai-prompt-submit" type="button">Enviar</button>
-          <small>Ctrl + Enter para enviar</small>
+          <small>Enter para enviar</small>
         </div>
       </section>
       <section class="card panel" id="side-panel">
@@ -420,6 +420,7 @@
   <script src="/soy-activity-map.js"></script>
   <script src="/spatial-activity.js"></script>
   <script src="/crop-monitoring.js"></script>
+  <script src="/agri-assistant.js"></script>
   <script src="/workspace-layout.js"></script>
   <script>
     const sidePanel = document.getElementById('side-panel');

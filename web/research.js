@@ -106,32 +106,7 @@ document.addEventListener('DOMContentLoaded',()=>{
     try{await storageJson('/api/research/train',{});await modelStatus();if(researchHistory)await analysis();}
     catch(error){el('model-status').textContent=error.message;}finally{button.disabled=false;}
   });
-  el('ai-prompt-submit').textContent='Enviar';
-  el('ai-prompt-submit').addEventListener('click',async event=>{
-    const button=event.currentTarget;button.disabled=true;el('ai-prompt-status').textContent='Consultando evidências…';
-    try {
-      const context=window.agriAssistantContext();
-      if(!context.municipality_code)throw Error('Pesquise ou selecione uma cidade no mapa para começarmos a leitura.');
-      const monitoring=window.cropMonitoringContext?.();
-      const history=monitoring?.municipality_code===context.municipality_code ? monitoring : researchHistory;
-      const dataset=history?.parameters?.municipality_code || history?.municipality_code || '5107925';
-      const result=await storageJson('/api/assistant',{prompt:el('ai-prompt').value,municipality_code:context.municipality_code,municipal_job_id:context.municipal_job_id,map_date:context.map_date,dataset_id:dataset===context.municipality_code ? history?.dataset_id || history?.id : undefined,area_geojson:fieldLoaded && !drawingArea ? await fieldGeojson() : undefined});
-      if(window.agriAssistantContext().revision!==context.revision)throw Error('O contexto do mapa mudou durante a consulta. Consulte novamente para ler a área ou data atual.');
-      const answer=document.createElement('p');answer.textContent=result.answer;
-      const parts=[answer];
-      if(result.limitations.length) {const note=document.createElement('p');note.textContent=result.limitations.join(' ');parts.push(note);}
-      const sources=document.createElement('details'),summary=document.createElement('summary'),sourceText=document.createElement('p');
-      summary.textContent='Bases do acompanhamento';sourceText.textContent=result.sources.map(s=>s.source).join(', ') || 'Sem evidências locais suficientes.';
-      sources.append(summary,sourceText);parts.push(sources);el('ai-prompt-status').replaceChildren(...parts);
-      if(result.action.kind==='filter_crops') {
-        const inactive=el('inactive-soy-filter');if(inactive.checked){inactive.checked=false;inactive.dispatchEvent(new Event('change'));}
-        document.querySelectorAll('input[name="map-crop"]').forEach(input=>input.checked=result.action.class_ids.includes(Number(input.value)));
-        document.querySelector('input[name="map-crop"]').dispatchEvent(new Event('change'));
-      }
-      if(result.action.kind==='show_history') {el('research-panel').open=true;if(researchHistory)chartYear();}
-      if(result.action.kind==='view_sorriso') {const url=new URL(location.href);url.searchParams.set('municipio','5107925');url.searchParams.delete('estado');historyPush(url);}
-    }catch(error){el('ai-prompt-status').textContent=error.message;}finally{button.disabled=false;}
-  });
+  document.addEventListener('alytha-show-history',()=>{el('research-panel').open=true;if(researchHistory)chartYear();});
   const initialRevision=researchRevision;
   modelStatus().then(async status=>{
     if(researchRevision!==initialRevision) return;

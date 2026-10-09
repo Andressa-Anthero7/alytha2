@@ -7,6 +7,15 @@
 #crop-monitoring-map-legend { width:180px; }
 #crop-monitoring-map-legend:not([hidden]) { display:block; }
 #crop-monitoring-map-legend .monitoring-legend { display:grid; gap:6px; margin:0; }
+.ai-turn { padding:8px 0; }
+.ai-turn-user { margin-top:8px; padding:7px 10px; border-radius:6px; background:#f3f7f4; }
+.ai-turn-name { display:block; margin-bottom:3px; color:#668071; font-size:10px; font-weight:600; }
+#ai-prompt-panel .ai-turn p { margin:0 0 7px; color:inherit; }
+#ai-prompt-panel .ai-turn .ai-turn-limits { color:#73867a; font-size:11px; }
+.ai-turn details { font-size:10px; color:#73867a; }
+.ai-turn details summary { cursor:pointer; }
+.ai-followups { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
+.ai-followups button { padding:4px 9px; border:1px solid #dde9e1; border-radius:14px; color:#4d6b59; background:#f0f6f2; font-size:11px; }
 @media (min-width:1000px) {
   body { --workspace-header:56px; --workspace-rail:56px; --workspace-sidebar:272px; --workspace-analysis:400px; --workspace-left:var(--workspace-rail); --workspace-right:0px; }
   body:has(#side-panel:not(.closed)) { --workspace-left:calc(var(--workspace-rail) + var(--workspace-sidebar)); }
