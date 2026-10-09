@@ -5,11 +5,34 @@ const CROP_COLORS = {39:'#d6a316',20:'#269b65',40:'#3b82f6',62:'#a855f7',46:'#a6
 function cropColor(classId) { return CROP_COLORS[classId] || '#64748b'; }
 function featureColor(properties) { return properties.possible_inactive ? '#e76f51' : cropColor(properties.class_id); }
 const cropDataCache = new Map();
+async function cropMapJson(url, payload) {
+  try {
+    const response = await fetch(url, {method:payload ? 'POST' : 'GET',headers:payload ? {'Content-Type':'application/json'} : undefined,body:payload ? JSON.stringify(payload) : undefined,signal:AbortSignal.timeout(15000)});
+    const result = await response.json();
+    if(!response.ok) throw new Error(result.error || 'Não foi possível consultar as culturas do mapa.');
+    return result;
+  } catch(error) {
+    if(error.name==='TimeoutError' || error.name==='AbortError') throw new Error('A conexão com o mapa demorou para responder. Envie o pedido novamente para retomar a consulta.');
+    if(error instanceof TypeError) throw new Error('A conexão com o mapa foi interrompida. Confira sua conexão e envie o pedido novamente para retomar a consulta.');
+    throw error;
+  }
+}
+async function loadCropData(payload) {
+  let job=await cropMapJson('/api/sources/mapbiomas/jobs',payload);
+  const started=Date.now();
+  while(job.status==='loading') {
+    if(!/^[a-f0-9]{64}$/.test(job.id))throw new Error('Não foi possível acompanhar a consulta de culturas. Tente novamente.');
+    if(Date.now()-started>=600000)throw new Error('O mapa de culturas ainda está sendo preparado. Envie o pedido novamente para acompanhar a mesma consulta.');
+    await new Promise(resolve=>setTimeout(resolve,1500));
+    job=await cropMapJson('/api/sources/mapbiomas/jobs/'+job.id);
+  }
+  if(job.status!=='ready')throw new Error(job.error || 'Não foi possível carregar as culturas do mapa. Tente novamente.');
+  return job.result;
+}
 function cropData(payload) {
   const key = JSON.stringify(payload);
   if (!cropDataCache.has(key)) {
-    const request = fetch('/api/sources/mapbiomas', {method:'POST',headers:{'Content-Type':'application/json'},body:key,signal:AbortSignal.timeout(90000)})
-      .then(async response => { const result=await response.json(); if(!response.ok) throw new Error(result.error || 'Não foi possível carregar a cultura.'); return result; })
+    const request = loadCropData(payload)
       .catch(error => { cropDataCache.delete(key); throw error; });
     cropDataCache.set(key,request);
     if(cropDataCache.size>40) cropDataCache.delete(cropDataCache.keys().next().value);

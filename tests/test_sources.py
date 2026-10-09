@@ -61,6 +61,30 @@ class SourceTests(unittest.TestCase):
             self.assertGreater(result['features'][0]['properties']['area_ha'],100)
             self.assertFalse(result['overview'])
 
+    def test_municipal_map_reads_only_intersection_and_skips_outside_views(self):
+        try:
+            import numpy as np
+            import rasterio
+            from rasterio.transform import from_origin
+        except ImportError: self.skipTest('Optional geospatial dependencies absent')
+        from app import municipalities
+        file=Path(self.temp.name)/'municipality.tif'
+        with rasterio.open(file,'w',driver='GTiff',height=1200,width=1200,count=1,dtype='uint8',crs='EPSG:4326',transform=from_origin(-55.2,-12.2,.00025,.00025)) as ds:
+            ds.write(np.full((1200,1200),39,dtype='uint8'),1)
+        geometry={'type':'Polygon','coordinates':[[[-55.2,-12.21],[-55.19,-12.21],[-55.19,-12.2],[-55.2,-12.2],[-55.2,-12.21]]]}
+        boundary={'type':'FeatureCollection','features':[{'type':'Feature','geometry':geometry,'properties':{}}]}
+        original=rasterio.open
+        params={'bounds':[-55.2,-12.5,-54.9,-12.2],'municipality_code':'5107925'}
+        with patch.object(municipalities,'boundary',return_value=boundary), patch.object(rasterio,'open',side_effect=lambda url:original(file)) as read:
+            result=sources.mapbiomas(params)
+            self.assertFalse(result['overview'])
+            self.assertEqual(result['resolution_m'],30)
+            self.assertEqual(len(result['features']),1)
+            read.assert_called_once()
+            outside=sources.mapbiomas({**params,'bounds':[-56,-13,-55.9,-12.9]})
+            self.assertEqual(outside['features'],[])
+            read.assert_called_once()
+
     def test_large_map_uses_categorical_overview(self):
         try:
             import numpy as np

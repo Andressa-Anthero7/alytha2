@@ -19,6 +19,44 @@ from app import research
 
 
 class StandaloneTests(unittest.TestCase):
+    def test_crop_map_returns_pending_while_raster_worker_is_blocked(self):
+        from concurrent.futures import ThreadPoolExecutor
+        entered, release = threading.Event(), threading.Event()
+        params={'bounds':[-55.2,-12.5,-55.19,-12.49],'year':2025,'class_id':39}
+        result={'type':'FeatureCollection','features':[]}
+        def slow_raster(data):
+            entered.set()
+            if not release.wait(5): raise TimeoutError('test worker was not released')
+            return result
+        pool=ThreadPoolExecutor(max_workers=1)
+        try:
+            with patch.object(web_app.map_layers,'POOL',pool), patch.object(web_app.data_sources,'mapbiomas',side_effect=slow_raster) as raster:
+                request=Request(self.base+'/api/sources/mapbiomas/jobs',data=json.dumps(params).encode(),headers={'Content-Type':'application/json'})
+                with urlopen(request,timeout=2) as response:
+                    self.assertEqual(response.status,202)
+                    job=json.load(response)
+                self.assertTrue(entered.wait(1))
+                with urlopen(self.base+'/api/sources/mapbiomas/jobs/'+job['id'],timeout=2) as response:
+                    self.assertEqual(json.load(response)['status'],'loading')
+                with urlopen(request,timeout=2) as response:
+                    self.assertEqual(json.load(response)['id'],job['id'])
+                release.set()
+                pool.shutdown(wait=True)
+                with urlopen(self.base+'/api/sources/mapbiomas/jobs/'+job['id']) as response:
+                    ready=json.load(response)
+                self.assertEqual(ready['status'],'ready')
+                self.assertEqual(ready['result'],result)
+                raster.assert_called_once()
+        finally:
+            release.set()
+            pool.shutdown(wait=True)
+
+    def test_disconnected_browser_does_not_trigger_second_json_response(self):
+        handler=object.__new__(web_app.Handler)
+        with patch.object(handler,'send_response',side_effect=ConnectionAbortedError()) as send:
+            handler._send_json({'status':'ready'})
+            send.assert_called_once_with(200)
+
     def test_crop_monitoring_route_keeps_dataset_and_date(self):
         body={'dataset_id':'a'*64,'date':'2026-10-08','spatial_job_id':'b'*64}
         with patch.object(web_app.crop_monitoring,'create',return_value={'status':'ready','scope':'recorte'}) as operation:

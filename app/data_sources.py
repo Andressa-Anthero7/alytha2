@@ -49,16 +49,9 @@ def conab(uf, crop):
     records.sort(key=lambda r: (r['season'], r['phase']))
     return {'source':'CONAB — Série Histórica Grãos', 'source_url':CONAB_URL, 'scope':'UF', 'uf':uf, 'crop':crop, 'fetched_at':snapshot['fetched_at'], 'records':records, 'note':'Dados agregados por UF; não são estimativas para o polígono selecionado.'}
 
-def mapbiomas(data):
-    try:
-        import numpy as np
-        import rasterio
-        from rasterio.windows import from_bounds
-        from rasterio.features import shapes
-        from rasterio.warp import transform_geom
-        from shapely.geometry import shape, mapping
-    except ImportError as exc:
-        raise ValueError('Instale requirements-geospatial.txt para processar MapBiomas.') from exc
+def mapbiomas_parameters(data):
+    """Validate before scheduling any remote raster work."""
+    if not isinstance(data, dict): raise ValueError('Informe um objeto JSON.')
     year, class_id = data.get('year',2025), data.get('class_id',39)
     if type(year) is not int or not 1985 <= year <= 2025 or type(class_id) is not int or class_id not in CLASSES:
         raise ValueError('Ano ou classe MapBiomas inválidos.')
@@ -68,22 +61,54 @@ def mapbiomas(data):
     west,south,east,north = bounds
     if not (-75<=west<east<=-30 and -35<=south<north<=6):
         raise ValueError('Escolha uma área no Brasil e aproxime o mapa.')
+    code = data.get('municipality_code') or None
+    if code:
+        from .municipalities import key
+        key(code)
+    return {'year':year,'class_id':class_id,'bounds':list(bounds),'municipality_code':code}
+
+
+def _mapbiomas_result(features, year, class_id, overview, resolution_m):
+    url = MAPBIOMAS_URL.format(year=year)
+    return {'type':'FeatureCollection','features':features,'source':'MapBiomas Brasil — Coleção 11','year':year,'class_name':CLASSES[class_id],'source_url':url,'attribution':'MapBiomas — CC BY 4.0','fetched_at':storage.now(),'limit':200,'note':'Manchas históricas recortadas pela área visível, mínimo 5 ha. Não representam limites cadastrais, titularidade ou cultura atual.','overview':overview,'resolution_m':resolution_m}
+
+
+def mapbiomas(data):
+    data = mapbiomas_parameters(data)
+    try:
+        import numpy as np
+        import rasterio
+        from rasterio.windows import from_bounds
+        from rasterio.features import shapes
+        from rasterio.warp import transform_geom
+        from shapely.geometry import shape, mapping
+    except ImportError as exc:
+        raise ValueError('Instale requirements-geospatial.txt para processar MapBiomas.') from exc
+    year, class_id, bounds = data['year'], data['class_id'], data['bounds']
+    key = 'mapbiomas:v4:' + json.dumps([year,class_id,bounds,data.get('municipality_code')])
+    cached = storage.source_snapshot(key)
+    if cached: return cached['result']
     municipal_geometry = None
+    raster_bounds = bounds
     if data.get('municipality_code'):
         from .municipalities import boundary
         from shapely.ops import unary_union
+        from shapely.geometry import box
         boundary_data = boundary(data['municipality_code'])
-        municipal_geometry = unary_union([shape(f['geometry']) for f in boundary_data['features']])
-    key = 'mapbiomas:v3:' + json.dumps([year,class_id,bounds,data.get('municipality_code')])
-    cached = storage.source_snapshot(key)
-    if cached: return cached['result']
+        municipal_geometry = unary_union([shape(f['geometry']) for f in boundary_data['features']]).intersection(box(*bounds))
+        if municipal_geometry.is_empty:
+            result = _mapbiomas_result([], year, class_id, False, 30)
+            storage.source_snapshot(key, result)
+            return result
+        # Read only the municipality visible in the viewport, not its neighbours.
+        raster_bounds = municipal_geometry.bounds
     url = MAPBIOMAS_URL.format(year=year)
     features = []
     with rasterio.Env(GDAL_DISABLE_READDIR_ON_OPEN='EMPTY_DIR', GDAL_HTTP_TIMEOUT='30', GDAL_HTTP_MAX_RETRY='1', CPL_VSIL_CURL_ALLOWED_EXTENSIONS='.tif'):
         with rasterio.open(url) as ds:
             from rasterio.windows import Window
             from rasterio.enums import Resampling
-            window = from_bounds(*bounds, ds.transform).round_offsets().round_lengths().intersection(Window(0,0,ds.width,ds.height))
+            window = from_bounds(*raster_bounds, ds.transform).round_offsets().round_lengths().intersection(Window(0,0,ds.width,ds.height))
             if window.width<1 or window.height<1: raise ValueError('Área visível pequena demais para pixels de 30 m.')
             factor = max(1, math.sqrt(window.width*window.height/1_000_000))
             width, height = max(1,int(window.width/factor)), max(1,int(window.height/factor))
@@ -102,8 +127,7 @@ def mapbiomas(data):
                 simplified = mapping(shape(geometry).simplify(ds.res[0],preserve_topology=True)) if municipal_geometry is None else geometry
                 features.append({'type':'Feature','geometry':simplified,'properties':{'source':'MapBiomas','collection':11,'year':year,'class_id':class_id,'class_name':CLASSES[class_id],'resolution_m':resolution_m,'native_resolution_m':30,'overview':overview,'area_ha':round(area_ha,2),'source_url':url,'historical':True,'clipped_to_view':True}})
                 if len(features)>=200: break
-    result = {'type':'FeatureCollection','features':features,'source':'MapBiomas Brasil — Coleção 11','year':year,'class_name':CLASSES[class_id],'source_url':url,'attribution':'MapBiomas — CC BY 4.0','fetched_at':storage.now(),'limit':200,'note':'Manchas históricas recortadas pela área visível, mínimo 5 ha. Não representam limites cadastrais, titularidade ou cultura atual.'}
-    result.update(overview=overview,resolution_m=resolution_m)
+    result = _mapbiomas_result(features, year, class_id, overview, resolution_m)
     storage.source_snapshot(key,result)
     return result
 

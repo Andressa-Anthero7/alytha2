@@ -17,7 +17,7 @@ from urllib.request import Request, urlopen
 
 from .catalog_search import DEFAULT_COLLECTION, DEFAULT_ENDPOINT, extract_geometry, request_items, validate_date
 from .localities import location_data
-from . import storage, data_sources, municipalities, inactive_soy, research, assistant, municipal_activity, satellite_learning, spatial_activity, crop_monitoring
+from . import storage, data_sources, municipalities, inactive_soy, research, assistant, municipal_activity, satellite_learning, spatial_activity, crop_monitoring, map_layers
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -241,6 +241,11 @@ class Handler(SimpleHTTPRequestHandler):
 
     def do_GET(self):
         parsed=urlsplit(self.path)
+        crop_map_match=re.fullmatch(r'/api/sources/mapbiomas/jobs/([a-f0-9]{64})', parsed.path)
+        if crop_map_match:
+            try: self._send_json(map_layers.get(crop_map_match[1]))
+            except ValueError as exc: self._send_json({'error':str(exc)}, status=400)
+            return
         activity_map_match=re.fullmatch(r'/api/soy-activity/municipality/([a-f0-9]{64})/map',parsed.path)
         if activity_map_match:
             try:
@@ -324,6 +329,15 @@ class Handler(SimpleHTTPRequestHandler):
         super().do_GET()
 
     def do_POST(self):
+        if self.path == '/api/sources/mapbiomas/jobs':
+            try:
+                size = int(self.headers.get('Content-Length','0'))
+                if not 0 < size <= 2_000_000: raise ValueError('Tamanho do pedido inválido.')
+                job = map_layers.start(json.loads(self.rfile.read(size)))
+                self._send_json(job, status=202 if job['status']=='loading' else 200)
+            except ValueError as exc: self._send_json({'error':str(exc)}, status=400)
+            except Exception: self._send_json({'error':'Não foi possível iniciar a consulta de culturas. Tente novamente.'}, status=502)
+            return
         if self.path in ('/api/crop-monitoring','/api/spatial-activity','/api/research/history','/api/research/pilot','/api/research/events','/api/research/train','/api/research/satellite-learning','/api/research/analyze','/api/assistant','/api/soy-activity','/api/soy-activity/municipality'):
             try:
                 size=int(self.headers.get('Content-Length','0'))
@@ -467,12 +481,16 @@ class Handler(SimpleHTTPRequestHandler):
 
     def _send_json(self, value, status=200):
         body = json.dumps(value, ensure_ascii=False).encode("utf-8")
-        self.send_response(status)
-        self.send_header("Content-Type", "application/json; charset=utf-8")
-        self.send_header("Content-Length", str(len(body)))
-        self.send_header("Cache-Control", "no-store")
-        self.end_headers()
-        self.wfile.write(body)
+        try:
+            self.send_response(status)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            self.wfile.write(body)
+        except ConnectionError:
+            # A disconnected browser cannot receive a second error response.
+            pass
 
     def _send_image(self, body, bbox):
         self.send_response(200)
