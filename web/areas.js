@@ -98,6 +98,7 @@ function selectAnalysisArea(geojson, name) {
   document.getElementById('map-label').textContent = name;
   document.getElementById('area-details').textContent = `${name}. Área pronta para consultar imagens e NDVI; permanece nesta sessão.`;
   setStatus('Área selecionada. Escolha o período e consulte imagens ou calcule NDVI.');
+  document.dispatchEvent(new CustomEvent('alytha-area-selected',{detail:{geojson,name}}));
 }
 
 function redrawSketch() {

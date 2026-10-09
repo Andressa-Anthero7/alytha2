@@ -19,6 +19,15 @@ from app import research
 
 
 class StandaloneTests(unittest.TestCase):
+    def test_spatial_routes_queue_and_retrieve_pixel_analysis(self):
+        result={'id':'e'*64,'status':'loading','processed':0}
+        with patch.object(web_app.spatial_activity,'start',return_value=result) as operation:
+            request=Request(self.base+'/api/spatial-activity',data=b'{}',headers={'Content-Type':'application/json'})
+            with urlopen(request) as response:self.assertEqual(json.load(response),result)
+            operation.assert_called_once_with({})
+        with patch.object(web_app.spatial_activity,'get',return_value=result) as operation:
+            with urlopen(self.base+'/api/spatial-activity/'+result['id']) as response:self.assertEqual(json.load(response),result)
+            operation.assert_called_once_with(result['id'])
     def test_municipal_activity_endpoints_use_selected_city(self):
         result={'id':'d'*64,'status':'loading','points':[]}
         with patch.object(web_app.municipal_activity,'start',return_value=result) as operation:

@@ -7,7 +7,7 @@ import shutil
 import uuid
 from datetime import date,timedelta
 from pathlib import Path
-from . import storage,research,municipalities,inactive_soy
+from . import storage,research,municipalities,inactive_soy,spatial_activity
 
 OUTPUT_ROOT=Path(__file__).resolve().parents[1]/'data/outputs/ml'
 
@@ -16,7 +16,7 @@ def export_dataset(code='5107925',output_root=None):
     # One database snapshot prevents an advancing municipal job from mixing versions.
     with storage.connect() as db:
         db.execute('BEGIN')
-        snapshots={r['cache_key']:json.loads(r['result']) for r in db.execute("SELECT cache_key,result FROM source_snapshots WHERE cache_key LIKE 'municipal-activity:%' OR cache_key LIKE 'municipal-soy:%' OR cache_key LIKE 'inactive-evidence:%'")}
+        snapshots={r['cache_key']:json.loads(r['result']) for r in db.execute("SELECT cache_key,result FROM source_snapshots WHERE cache_key LIKE 'municipal-activity:%' OR cache_key LIKE 'municipal-soy:%' OR cache_key LIKE 'inactive-evidence:%' OR cache_key LIKE 'cv:job:%'")}
         labels=[dict(r) for r in db.execute('SELECT * FROM field_events')]
     jobs=[v for k,v in snapshots.items() if k.startswith('municipal-activity:') and v['parameters']['municipality_code']==code]
     if not jobs:raise ValueError('Inicie a leitura da cidade no mapa antes de exportar a base.')
@@ -60,6 +60,17 @@ def export_dataset(code='5107925',output_root=None):
     common=['area_id','municipality_code','area_ha','historical_year','historical_class','source']
     write_csv('observacoes.csv',observations,common+['date_from','date_to','ndvi_mean','valid_pixels','valid_fraction','quality_usable'])
     write_csv('janelas_ml.csv',windows,common+['date_to','group_id']+research.FEATURE_NAMES+['automatic_signal','target_stage','label_source','field_reference'])
+    # Spatial observations remain separately dated; never join a future image
+    # to an earlier temporal window or turn the CV threshold into a true label.
+    area_ids={feature['properties']['area_id'] for feature in areas}
+    spatial_rows={}
+    for key,value in snapshots.items():
+        if not key.startswith('cv:job:') or value.get('status')!='ready' or not value.get('ml_features'):continue
+        area_id=value['parameters']['area_id'];first=value['periods'][0]['from'];last=value['periods'][-1]['to']
+        if area_id not in area_ids or not period['from']<=first<=last<=period['to']:continue
+        row={'area_id':area_id,'municipality_code':code,'date_from':first,'date_to':last,**value['ml_features']}
+        spatial_rows[(area_id,first,last)]=row
+    write_csv('caracteristicas_espaciais.csv',list(spatial_rows.values()),['area_id','municipality_code','date_from','date_to']+spatial_activity.FEATURE_NAMES)
     write_csv('referencias_campo.csv',[{'area_id':f['properties']['area_id'],'municipality_code':code,'date_from':'','date_to':'','stage':'','reference':''} for f in areas],['area_id','municipality_code','date_from','date_to','stage','reference'])
     (folder/'areas.geojson').write_text(json.dumps({'type':'FeatureCollection','features':areas},ensure_ascii=False),encoding='utf-8')
     labeled=sum(bool(row['target_stage']) for row in windows)
@@ -68,6 +79,7 @@ def export_dataset(code='5107925',output_root=None):
               'collection_complete':job['status']=='ready','candidate_areas':len(areas),'cached_areas':collected,
               'areas_with_readings':with_readings,'areas_without_cached_series':len(areas)-collected,
               'observations':len(observations),'usable_feature_windows':len(windows),'field_labeled_windows':labeled,
+              'spatial_feature_rows':len(spatial_rows),
               'supervised_training_ready':False,
               'note':'Base observacional para exploração e preparação de ML. Não representa comparação entre safras. Sinais automáticos não são rótulos confirmados de manejo. Prontidão para treino supervisionado exige revisão dos rótulos e validação espacial/temporal independente.'}
     (folder/'manifest.json').write_text(json.dumps(manifest,ensure_ascii=False,indent=2),encoding='utf-8')
@@ -75,6 +87,7 @@ def export_dataset(code='5107925',output_root=None):
 
 `observacoes.csv`: leituras reais do satélite e qualidade das imagens.
 `janelas_ml.csv`: características de vegetação calculadas somente com imagens disponíveis até a data indicada. Janelas sem leituras suficientes são excluídas.
+`caracteristicas_espaciais.csv`: observações de cv2 com geometria idêntica à base municipal e datas inteiramente dentro do período exportado. Pode estar vazio. Para combinar com uma janela temporal, exija a mesma área e data final espacial não posterior à data da janela. O agrupamento atual usa características temporais; estas observações espaciais ficam preparadas para a próxima etapa de ML.
 `areas.geojson`: recortes de soja histórica com identificadores estáveis; não são talhões confirmados.
 `referencias_campo.csv`: ficha opcional em branco para quem possui informações de manejo confirmado. Não é necessária para o aprendizado exploratório por satélite. Preencher essa ficha não importa os rótulos automaticamente no aplicativo.
 `manifest.json`: período, andamento da coleta e quantidades presentes nesta exportação.

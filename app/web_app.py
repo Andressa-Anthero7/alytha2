@@ -17,7 +17,7 @@ from urllib.request import Request, urlopen
 
 from .catalog_search import DEFAULT_COLLECTION, DEFAULT_ENDPOINT, extract_geometry, request_items, validate_date
 from .localities import location_data
-from . import storage, data_sources, municipalities, inactive_soy, research, assistant, municipal_activity, satellite_learning
+from . import storage, data_sources, municipalities, inactive_soy, research, assistant, municipal_activity, satellite_learning, spatial_activity
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -240,6 +240,11 @@ class Handler(SimpleHTTPRequestHandler):
         super().end_headers()
 
     def do_GET(self):
+        spatial_match=re.fullmatch(r'/api/spatial-activity/([a-f0-9]{64})',self.path)
+        if spatial_match:
+            try: self._send_json(spatial_activity.get(spatial_match[1]))
+            except ValueError as exc: self._send_json({'error':str(exc)},status=400)
+            return
         municipal_match=re.fullmatch(r'/api/soy-activity/municipality/([a-f0-9]{64})',self.path)
         if municipal_match:
             try: self._send_json(municipal_activity.get(municipal_match[1]))
@@ -309,14 +314,15 @@ class Handler(SimpleHTTPRequestHandler):
         super().do_GET()
 
     def do_POST(self):
-        if self.path in ('/api/research/history','/api/research/pilot','/api/research/events','/api/research/train','/api/research/satellite-learning','/api/research/analyze','/api/assistant','/api/soy-activity','/api/soy-activity/municipality'):
+        if self.path in ('/api/spatial-activity','/api/research/history','/api/research/pilot','/api/research/events','/api/research/train','/api/research/satellite-learning','/api/research/analyze','/api/assistant','/api/soy-activity','/api/soy-activity/municipality'):
             try:
                 size=int(self.headers.get('Content-Length','0'))
                 if not 0<size<=2_000_000: raise ValueError('Pedido inválido.')
                 data=json.loads(self.rfile.read(size))
                 if not isinstance(data,dict): raise ValueError('Informe um objeto JSON.')
-                if self.path in ('/api/research/history','/api/research/pilot','/api/soy-activity','/api/soy-activity/municipality') and not all(read_app_env().get(key) for key in ('CDSE_CLIENT_ID','CDSE_CLIENT_SECRET')): raise ValueError('Histórico Sentinel-2 indisponível no momento.')
-                if self.path=='/api/research/history': result=research.start_history(data)
+                if self.path in ('/api/spatial-activity','/api/research/history','/api/research/pilot','/api/soy-activity','/api/soy-activity/municipality') and not all(read_app_env().get(key) for key in ('CDSE_CLIENT_ID','CDSE_CLIENT_SECRET')): raise ValueError('Histórico Sentinel-2 indisponível no momento.')
+                if self.path=='/api/spatial-activity': result=spatial_activity.start(data)
+                elif self.path=='/api/research/history': result=research.start_history(data)
                 elif self.path=='/api/research/pilot': result=research.pilot()
                 elif self.path=='/api/research/events': result=research.add_event(data)
                 elif self.path=='/api/research/train': result=research.train()

@@ -6,7 +6,7 @@ import unittest
 from datetime import date,timedelta
 from pathlib import Path
 from unittest.mock import patch
-from app import storage,research,ml_dataset
+from app import storage,research,ml_dataset,spatial_activity
 
 class DatasetTests(unittest.TestCase):
     def setUp(self):
@@ -50,5 +50,16 @@ class DatasetTests(unittest.TestCase):
         storage.source_snapshot(self.key,series)
         result=ml_dataset.export_dataset(output_root=self.root/'exports')
         self.assertEqual(result['observations'],8)
+    def test_spatial_export_requires_matching_geometry_and_no_future_images(self):
+        area_id=research.fingerprint(self.geometry)
+        base={'status':'ready','parameters':{'area_id':area_id},'periods':[{'from':'2026-09-18','to':'2026-09-22'},{'from':'2026-09-23','to':'2026-09-27'},{'from':'2026-10-03','to':'2026-10-07'}],'ml_features':dict.fromkeys(spatial_activity.FEATURE_NAMES,.5)}
+        storage.source_snapshot('cv:job:valid',base)
+        storage.source_snapshot('cv:job:other',{**base,'parameters':{'area_id':'other'}})
+        storage.source_snapshot('cv:job:future',{**base,'periods':[{'from':'2026-09-18','to':'2026-09-22'},{'from':'2026-09-23','to':'2026-09-27'},{'from':'2026-10-08','to':'2026-10-12'}]})
+        result=ml_dataset.export_dataset(output_root=self.root/'exports')
+        self.assertEqual(result['spatial_feature_rows'],1)
+        with (Path(result['folder'])/'caracteristicas_espaciais.csv').open(encoding='utf-8-sig',newline='') as stream:rows=list(csv.DictReader(stream))
+        self.assertEqual(rows[0]['area_id'],area_id)
+        self.assertEqual(rows[0]['date_to'],'2026-10-07')
 
 if __name__=='__main__':unittest.main()

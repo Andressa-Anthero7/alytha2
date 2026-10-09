@@ -255,6 +255,15 @@
         <div class="area-actions" id="draw-controls" hidden><button id="finish-drawing" type="button" disabled>Concluir desenho</button><button id="undo-point" type="button">Desfazer ponto</button><button id="cancel-drawing" type="button">Cancelar</button></div>
         <p id="area-details" role="status">Desenhe uma área com pelo menos três pontos no mapa ou carregue um GeoJSON.</p>
         </details>
+        <details id="spatial-panel"><summary>Manchas de pouca vegetação · visão espacial</summary>
+          <p class="analysis-subtitle">Compare os mesmos pontos da área em três períodos de imagens. Os contornos destacam manchas de pelo menos 1 ha com pouca vegetação persistente.</p>
+          <p id="spatial-scope" class="analysis-subtitle">Usa o recorte selecionado no mapa. Sem recorte selecionado, usa a referência de Sorriso; não representa a cidade inteira.</p>
+          <button id="start-spatial-analysis" type="button">Analisar manchas por satélite</button>
+          <button id="clear-spatial-analysis" type="button" hidden>Retirar contornos do mapa</button>
+          <p id="spatial-status" class="analysis-subtitle" role="status">Não exige registros de campo. Nuvens e áreas sem leitura ficam fora da conclusão.</p>
+          <div id="spatial-results" class="analysis-subtitle"></div>
+          <details><summary>Como interpretar</summary><p class="analysis-subtitle">Pouca vegetação persistente pode ocorrer após colheita, em preparo ou pousio. Não confirma abandono, terra disponível, linhas de plantio ou manejo. A análise precisa observar pelo menos metade do recorte nos três períodos. Os hectares são estimados com pixels de 10 m.</p></details>
+        </details>
         <details id="research-panel"><summary>Leitura por satélite · piloto Sorriso</summary>
           <p class="analysis-subtitle">Explore a evolução da vegetação e os padrões das áreas de soja histórica, sem precisar de registros de campo.</p>
           <details open><summary>Aprendizado por satélite · Sorriso</summary>
@@ -367,6 +376,7 @@
   <script src="/research.js"></script>
   <script src="/ndvi-chart.js"></script>
   <script src="/soy-activity.js"></script>
+  <script src="/spatial-activity.js"></script>
   <script>
     const sidePanel = document.getElementById('side-panel');
     const timeline = document.querySelector('.timeline');

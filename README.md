@@ -127,3 +127,7 @@ No **Modo I.A**, pergunte sobre as evidências ou solicite filtros, por exemplo:
 Históricos, rótulos e métricas ficam em `data/monitoring.sqlite3`; o modelo treinado fica em `data/models/manejo.joblib`. Ambos precisam de backup e não entram no Git. Para detalhes de validação e pendências: [piloto de IA e ML](docs/ia-ml-piloto.md).
 
 Para Sorriso, `python -m app.ml_dataset` exporta as leituras já coletadas e as características temporais para CSV, com geometria, ficha de campo, manifesto e ZIP em `data/outputs/ml`. Exportações durante a coleta são identificadas como parciais. Hipóteses automáticas ficam separadas dos rótulos de campo. Veja [ambiente e base de Sorriso](docs/sorriso-ml.md).
+
+## Visão espacial: cv2 + ML
+
+O painel **Manchas de pouca vegetação · visão espacial** compara os mesmos pixels em três janelas de imagens Copernicus, desenha manchas persistentes de pelo menos 1 ha no mapa e exporta características espaciais para exploração com ML. Analisa o recorte selecionado ou a referência de Sorriso, sem representar a cidade inteira. Instale `requirements-cv.txt`. Método, uso e limites em [docs/cv2-ml.md](docs/cv2-ml.md); meta registrada em [docs/meta-cv2-ml.md](docs/meta-cv2-ml.md).
