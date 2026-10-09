@@ -40,6 +40,7 @@ document.addEventListener('DOMContentLoaded',()=>{
   document.addEventListener('alytha-soy-context-cleared',()=>{municipalJob=null;selectedDate='';contextRevision++;});
   document.addEventListener('alytha-soy-date-selected',event=>{if(selectedDate!==event.detail.date)contextRevision++;selectedDate=event.detail.date;});
   for(const type of ['alytha-area-selected','alytha-area-cleared'])document.addEventListener(type,()=>{contextRevision++;});
+  for(const type of ['alytha-crop-monitoring-updated','alytha-crop-monitoring-cleared'])document.addEventListener(type,()=>{contextRevision++;});
   document.querySelectorAll('[data-ai-question]').forEach(button=>button.addEventListener('click',()=>{
     document.getElementById('ai-prompt').value=button.dataset.aiQuestion;
     document.getElementById('ai-prompt').focus();

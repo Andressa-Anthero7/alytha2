@@ -306,6 +306,13 @@
           <p id="research-status" class="analysis-subtitle" role="status">Selecione uma área ou abra a referência do piloto.</p>
           <label for="research-year">Ver ano no gráfico</label><select id="research-year" disabled><option value="">Carregue um histórico</option></select>
           <div id="research-analysis" class="analysis-subtitle"></div>
+          <details id="crop-monitoring-panel" open><summary>Acompanhamento da área</summary>
+            <p id="crop-monitoring-scope" class="analysis-subtitle">Histórico, mudanças no mapa e padrões de vegetação do mesmo recorte.</p>
+            <button id="start-crop-monitoring" type="button" disabled>Atualizar acompanhamento</button>
+            <p id="crop-monitoring-status" class="analysis-subtitle" role="status">Abra um histórico para iniciar.</p>
+            <div id="crop-monitoring-results"></div>
+            <button id="hide-crop-monitoring" type="button" hidden>Ocultar manchas do acompanhamento</button>
+          </details>
           <details><summary>Como esta análise foi feita</summary><p id="research-analysis-method" class="analysis-subtitle"></p></details>
           <details><summary>Registrar manejo conhecido · opcional</summary>
             <label for="event-from">Início da etapa</label><input id="event-from" type="date">
@@ -412,6 +419,7 @@
   <script src="/soy-activity.js"></script>
   <script src="/soy-activity-map.js"></script>
   <script src="/spatial-activity.js"></script>
+  <script src="/crop-monitoring.js"></script>
   <script src="/workspace-layout.js"></script>
   <script>
     const sidePanel = document.getElementById('side-panel');

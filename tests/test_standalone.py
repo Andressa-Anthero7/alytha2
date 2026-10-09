@@ -19,6 +19,12 @@ from app import research
 
 
 class StandaloneTests(unittest.TestCase):
+    def test_crop_monitoring_route_keeps_dataset_and_date(self):
+        body={'dataset_id':'a'*64,'date':'2026-10-08','spatial_job_id':'b'*64}
+        with patch.object(web_app.crop_monitoring,'create',return_value={'status':'ready','scope':'recorte'}) as operation:
+            request=Request(self.base+'/api/crop-monitoring',data=json.dumps(body).encode(),headers={'Content-Type':'application/json'})
+            with urlopen(request) as response:self.assertEqual(json.load(response)['status'],'ready')
+            operation.assert_called_once_with(body)
     def test_activity_map_endpoint_supports_geometry_and_state_only_updates(self):
         result={'dates':['2026-10-09'],'states':[['unknown']]}
         with patch.object(web_app.municipal_activity,'map_assessment',return_value=result) as operation:

@@ -12,7 +12,30 @@ POOL = ThreadPoolExecutor(max_workers=1,thread_name_prefix='cv-spatial')
 LOCK = threading.Lock()
 RUNNING = set()
 OUTPUT_ROOT = Path(__file__).resolve().parents[1]/'data/outputs/cv'
-FEATURE_NAMES = ['common_coverage','persistent_low_fraction','latest_ndvi_std','mean_ndvi_change','patches_per_100ha','largest_patch_fraction']
+FEATURE_NAMES = ['common_coverage','persistent_low_fraction','latest_ndvi_std','mean_ndvi_change','patches_per_100ha','largest_patch_fraction','vegetation_gain_fraction','vegetation_loss_fraction']
+
+
+def change_patches(mask, grid, signal, delta):
+    import cv2
+    import numpy as np
+    from rasterio.features import shapes
+    from rasterio.warp import transform_geom
+    from shapely.geometry import shape, mapping
+    from shapely import make_valid
+    count,labels,stats,_=cv2.connectedComponentsWithStats(mask.astype(np.uint8),connectivity=8)
+    retained=[index for index in range(1,count) if stats[index,cv2.CC_STAT_AREA]>=100]
+    mapped=np.isin(labels,retained)
+    features=[]
+    for geometry,index in shapes(labels.astype(np.int32),mask=mapped,transform=grid['transform'],connectivity=8):
+        index=int(index)
+        geometry=make_valid(shape(geometry))
+        if geometry.geom_type=='GeometryCollection':
+            from shapely.ops import unary_union
+            geometry=unary_union([part for part in geometry.geoms if part.geom_type in ('Polygon','MultiPolygon')])
+        features.append({'type':'Feature','geometry':transform_geom(grid['crs'],'EPSG:4326',mapping(geometry)),
+                         'properties':{'patch_id':index,'area_ha':int(stats[index,cv2.CC_STAT_AREA])*.01,'signal':signal,
+                                       'mean_ndvi_change':float(delta[labels==index].mean()),'observations':3}})
+    return features,int(mapped.sum())*.01
 
 
 def select_periods(points, as_of):
@@ -81,12 +104,23 @@ def analyze_pixels(images, grid):
                                 'mean_ndvi_change':float(np.mean(cube[-1][common]-cube[0][common])),
                                 'patches_per_100ha':len(retained)/(common_pixels*.01)*100,
                                 'largest_patch_fraction':max(patch_sizes,default=0)/common_pixels}})
+    delta=cube[-1]-cube[0]
+    gain,gain_ha=change_patches(common & ~low & (delta>=.15),grid,'vegetation_gain',delta)
+    loss,loss_ha=change_patches(common & ~low & (delta<=-.15),grid,'vegetation_loss',delta)
+    base.update(change_geojson={'type':'FeatureCollection','features':features+gain+loss},
+                vegetation_gain_ha=gain_ha,vegetation_loss_ha=loss_ha,change_threshold_ndvi=.15)
+    base['ml_features'].update(vegetation_gain_fraction=gain_ha/base['observed_area_ha'],vegetation_loss_fraction=loss_ha/base['observed_area_ha'])
     return base
 
 
 def resolve_geometry(data):
     if data.get('geojson'):
-        return extract_geometry(data['geojson']), 'Recorte selecionado no mapa'
+        geometry=extract_geometry(data['geojson'])
+        if data.get('dataset_id'):
+            history=research.dataset(data['dataset_id'])
+            if research.fingerprint(geometry)!=research.fingerprint(history['parameters']['geometry']):
+                raise ValueError('O histórico carregado é de outro recorte. Abra o histórico da área selecionada para iniciar seu acompanhamento.')
+        return geometry, 'Recorte selecionado no mapa'
     if str(data.get('municipality_code','5107925'))!='5107925':
         raise ValueError('Selecione um recorte no mapa. A referência automática deste piloto é somente de Sorriso.')
     reference = storage.source_snapshot('research:sorriso:pilot')
@@ -98,8 +132,11 @@ def resolve_geometry(data):
 def start(data):
     geometry,scope = resolve_geometry(data)
     spatial_raster.grid_for(geometry)  # Validate before queuing downloads.
-    params = {'geometry':geometry,'area_id':research.fingerprint(geometry),'as_of':inactive_soy.today().isoformat(),
-              'scope':scope,'algorithm_version':1}
+    as_of=data.get('as_of') or inactive_soy.today().isoformat()
+    if not isinstance(as_of,str) or not date(2018,1,1)<=date.fromisoformat(as_of)<=inactive_soy.today():
+        raise ValueError('Escolha uma data de acompanhamento entre 2018 e hoje.')
+    params = {'geometry':geometry,'area_id':research.fingerprint(geometry),'as_of':as_of,
+              'scope':scope,'algorithm_version':2}
     job_id = research.fingerprint(params)
     with LOCK:
         cached = storage.source_snapshot('cv:job:'+job_id)
@@ -150,6 +187,8 @@ def build(job_id,params):
         folder = OUTPUT_ROOT/job_id
         folder.mkdir(parents=True,exist_ok=True)
         (folder/'manchas.geojson').write_text(json.dumps(result['geojson'],ensure_ascii=False),encoding='utf-8')
+        if result.get('change_geojson'):
+            (folder/'mudancas.geojson').write_text(json.dumps(result['change_geojson'],ensure_ascii=False),encoding='utf-8')
         if result['ml_features']:
             row = {'area_id':params['area_id'],'date_from':periods[0]['from'],'date_to':periods[-1]['to'],**result['ml_features']}
             with (folder/'caracteristicas_ml.csv').open('w',encoding='utf-8-sig',newline='') as stream:

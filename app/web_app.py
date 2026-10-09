@@ -17,7 +17,7 @@ from urllib.request import Request, urlopen
 
 from .catalog_search import DEFAULT_COLLECTION, DEFAULT_ENDPOINT, extract_geometry, request_items, validate_date
 from .localities import location_data
-from . import storage, data_sources, municipalities, inactive_soy, research, assistant, municipal_activity, satellite_learning, spatial_activity
+from . import storage, data_sources, municipalities, inactive_soy, research, assistant, municipal_activity, satellite_learning, spatial_activity, crop_monitoring
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -324,14 +324,15 @@ class Handler(SimpleHTTPRequestHandler):
         super().do_GET()
 
     def do_POST(self):
-        if self.path in ('/api/spatial-activity','/api/research/history','/api/research/pilot','/api/research/events','/api/research/train','/api/research/satellite-learning','/api/research/analyze','/api/assistant','/api/soy-activity','/api/soy-activity/municipality'):
+        if self.path in ('/api/crop-monitoring','/api/spatial-activity','/api/research/history','/api/research/pilot','/api/research/events','/api/research/train','/api/research/satellite-learning','/api/research/analyze','/api/assistant','/api/soy-activity','/api/soy-activity/municipality'):
             try:
                 size=int(self.headers.get('Content-Length','0'))
                 if not 0<size<=2_000_000: raise ValueError('Pedido inválido.')
                 data=json.loads(self.rfile.read(size))
                 if not isinstance(data,dict): raise ValueError('Informe um objeto JSON.')
                 if self.path in ('/api/spatial-activity','/api/research/history','/api/research/pilot','/api/soy-activity','/api/soy-activity/municipality') and not all(read_app_env().get(key) for key in ('CDSE_CLIENT_ID','CDSE_CLIENT_SECRET')): raise ValueError('Histórico Sentinel-2 indisponível no momento.')
-                if self.path=='/api/spatial-activity': result=spatial_activity.start(data)
+                if self.path=='/api/crop-monitoring': result=crop_monitoring.create(data)
+                elif self.path=='/api/spatial-activity': result=spatial_activity.start(data)
                 elif self.path=='/api/research/history': result=research.start_history(data)
                 elif self.path=='/api/research/pilot': result=research.pilot()
                 elif self.path=='/api/research/events': result=research.add_event(data)

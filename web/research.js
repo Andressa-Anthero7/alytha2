@@ -46,6 +46,7 @@ document.addEventListener('DOMContentLoaded',()=>{
   async function watch(history,revision) {
     if(revision!==researchRevision) return;
     researchHistory=history;
+    document.dispatchEvent(new CustomEvent('alytha-history-ready',{detail:history}));
     const previous=el('research-year').value;
     el('research-year').replaceChildren();
     (history.years || []).filter(y=>y.status==='ready').forEach(y=>el('research-year').add(new Option(`${y.year} · ${y.observations} leituras`,y.year)));
@@ -111,8 +112,10 @@ document.addEventListener('DOMContentLoaded',()=>{
     try {
       const context=window.agriAssistantContext();
       if(!context.municipality_code)throw Error('Pesquise ou selecione uma cidade no mapa para começarmos a leitura.');
-      const dataset=researchHistory?.parameters?.municipality_code || '5107925';
-      const result=await storageJson('/api/assistant',{prompt:el('ai-prompt').value,municipality_code:context.municipality_code,municipal_job_id:context.municipal_job_id,map_date:context.map_date,dataset_id:dataset===context.municipality_code ? researchHistory?.id : undefined});
+      const monitoring=window.cropMonitoringContext?.();
+      const history=monitoring?.municipality_code===context.municipality_code ? monitoring : researchHistory;
+      const dataset=history?.parameters?.municipality_code || history?.municipality_code || '5107925';
+      const result=await storageJson('/api/assistant',{prompt:el('ai-prompt').value,municipality_code:context.municipality_code,municipal_job_id:context.municipal_job_id,map_date:context.map_date,dataset_id:dataset===context.municipality_code ? history?.dataset_id || history?.id : undefined,area_geojson:fieldLoaded && !drawingArea ? await fieldGeojson() : undefined});
       if(window.agriAssistantContext().revision!==context.revision)throw Error('O contexto do mapa mudou durante a consulta. Consulte novamente para ler a área ou data atual.');
       const answer=document.createElement('p');answer.textContent=result.answer;
       const parts=[answer];

@@ -52,6 +52,26 @@ class SpatialTests(unittest.TestCase):
         result=spatial.analyze_pixels(images,self.grid)
         self.assertEqual(result['patches'],0)
         self.assertEqual(result['persistent_low_ha'],0)
+    def test_gain_loss_and_low_patches_are_disjoint_and_exclude_cloud_gaps(self):
+        images=[(np.full((30,30),.5,dtype=np.float32),np.ones((30,30),dtype=bool)) for _ in range(3)]
+        for index,(ndvi,_) in enumerate(images):
+            ndvi[:10]=.2
+            ndvi[10:20]=[.1,.3,.6][index]
+            ndvi[20:]=[.8,.5,.2][index]
+        images[1][1][:,:5]=False
+        result=spatial.analyze_pixels(images,self.grid)
+        self.assertAlmostEqual(result['vegetation_gain_ha'],2.5)
+        self.assertAlmostEqual(result['vegetation_loss_ha'],2.5)
+        self.assertAlmostEqual(result['persistent_low_ha'],2.5)
+        self.assertEqual({f['properties']['signal'] for f in result['change_geojson']['features']},
+                         {'vegetation_gain','vegetation_loss','persistent_low_vegetation'})
+        self.assertAlmostEqual(sum(f['properties']['area_ha'] for f in result['change_geojson']['features']),result['observed_area_ha'])
+    def test_small_change_patches_are_not_promoted_to_mapped_hectares(self):
+        images=[(np.full((30,30),.5,dtype=np.float32),np.ones((30,30),dtype=bool)) for _ in range(3)]
+        images[-1][0][:5,:5]=.9
+        result=spatial.analyze_pixels(images,self.grid)
+        self.assertEqual(result['vegetation_gain_ha'],0)
+        self.assertEqual(result['change_geojson']['features'],[])
     def test_nan_and_invalid_ndvi_are_not_valid_even_with_quality_flag(self):
         images=self.images()
         images[0][0][:16,:]=np.nan
@@ -74,6 +94,13 @@ class SpatialTests(unittest.TestCase):
     def test_large_recorte_is_rejected_without_downsampling(self):
         geometry={'type':'Polygon','coordinates':[[[-56,-12],[-55,-12],[-55,-11],[-56,-11],[-56,-12]]]}
         with self.assertRaises(ValueError):spatial_raster.grid_for(geometry)
+    def test_area_mismatch_is_rejected_before_downloading(self):
+        geometry={'type':'Polygon','coordinates':[[[-55,-12],[-54.99,-12],[-54.99,-11.99],[-55,-11.99],[-55,-12]]]}
+        other={'type':'Polygon','coordinates':[[[-54,-12],[-53.99,-12],[-53.99,-11.99],[-54,-11.99],[-54,-12]]]}
+        with patch.object(spatial.research,'dataset',return_value={'parameters':{'geometry':other}}),patch.object(spatial_raster,'fetch') as provider:
+            with self.assertRaisesRegex(ValueError,'outro recorte'):
+                spatial.start({'geojson':geometry,'dataset_id':'a'*64})
+            provider.assert_not_called()
     def test_provider_requests_numeric_data_and_reuses_validated_cache(self):
         from app import web_app
         from rasterio.io import MemoryFile
