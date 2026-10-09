@@ -50,6 +50,8 @@
   #ai-prompt-submit { flex:none; height:34px; margin:0; background:#28714f; color:white; padding:0 16px; font-size:12px; white-space:nowrap; }
   .ai-composer small { font-size:9px; color:#829087; }
   .ai-reading { flex:0 1 auto; display:flex; flex-direction:column; }
+  .ai-reading:has(#ai-prompt-status:empty) { display:none; }
+  #ai-prompt-panel:has(#ai-prompt-status:empty) .ai-composer { border-top:0; padding-top:0; }
   .ai-reading .ai-eyebrow { display:none; }
   #ai-prompt-panel #ai-prompt-status { flex:0 1 auto; min-height:0; max-height:min(240px,30dvh); overflow:auto; margin:0; padding-right:12px; font-size:13px; line-height:1.65; scrollbar-width:thin; }
   #ai-prompt-status > p { margin:0 0 8px; color:inherit; font-size:inherit; line-height:inherit; }
