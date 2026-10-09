@@ -42,6 +42,7 @@ document.addEventListener('DOMContentLoaded',()=>{
   window.agriAssistantContext=assistantContext;
   document.addEventListener('alytha-map-search',event=>{searchedCity=event.detail;contextRevision++;});
   for(const id of ['municipality-select','state-select'])document.getElementById(id).addEventListener('change',()=>{searchedCity=null;contextRevision++;});
+  document.getElementById('mapbiomas-year').addEventListener('change',()=>{contextRevision++;});
   window.addEventListener('popstate',()=>{searchedCity=null;contextRevision++;});
   document.addEventListener('alytha-soy-job-updated',event=>{municipalJob=event.detail;});
   document.addEventListener('alytha-soy-context-cleared',()=>{municipalJob=null;selectedDate='';contextRevision++;});

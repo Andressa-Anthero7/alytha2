@@ -7,6 +7,10 @@
 #crop-monitoring-map-legend { width:180px; }
 #crop-monitoring-map-legend:not([hidden]) { display:block; }
 #crop-monitoring-map-legend .monitoring-legend { display:grid; gap:6px; margin:0; }
+.map-card:has(#crop-class-legend:not([hidden])) > .map-legend:not(#crop-class-legend) { display:none; }
+#crop-class-legend:not([hidden]) { display:block; }
+#crop-class-legend p { margin:5px 0; font-size:11px; }
+body:has(#activity-map-legend:not([hidden])) #crop-class-legend { display:none; }
 .ai-turn { padding:8px 0; }
 .ai-turn-user { margin-top:8px; padding:7px 10px; border-radius:6px; background:#f3f7f4; }
 .ai-turn-name { display:block; margin-bottom:3px; color:#668071; font-size:10px; font-weight:600; }

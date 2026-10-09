@@ -87,6 +87,7 @@ document.addEventListener('DOMContentLoaded',()=>{
     } catch(error) {if(current===revision){busy=false;el('crop-monitoring-status').textContent=error.message;el('start-crop-monitoring').disabled=false;}}
   });
   el('hide-crop-monitoring').addEventListener('click',hideLayer);
+  document.addEventListener('alytha-hide-spatial-layers',hideLayer);
   document.addEventListener('alytha-history-ready',event=>{
     if(history?.id===event.detail.id) {history=event.detail;el('start-crop-monitoring').disabled=busy || !history.points.length;return;}
     clear();history=event.detail;

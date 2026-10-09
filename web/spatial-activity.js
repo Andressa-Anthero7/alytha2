@@ -68,6 +68,7 @@ document.addEventListener('DOMContentLoaded',()=>{
     } catch(error){if(current===revision){el('spatial-status').textContent=error.message;el('start-spatial-analysis').disabled=false;}}
   });
   el('clear-spatial-analysis').addEventListener('click',removeLayer);
+  document.addEventListener('alytha-hide-spatial-layers',removeLayer);
   document.addEventListener('alytha-area-selected',event=>{clear();geometry=event.detail.geojson;el('spatial-scope').textContent=`Recorte selecionado: ${event.detail.name}. Não representa o município inteiro.`;});
   document.addEventListener('alytha-area-cleared',()=>{clear();geometry=null;el('spatial-scope').textContent='Sem recorte selecionado: a análise usa a referência de Sorriso, somente uma amostra.';});
   document.addEventListener('alytha-map-search',()=>{clear();});

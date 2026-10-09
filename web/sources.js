@@ -22,6 +22,7 @@ function clearAgriculturalResults() {
   clearTimeout(inactivePoll);
   if (mapReady) removeMapLayer(agriculturalLayer);
   agriculturalLayer = null; agriculturalFeatures = [];
+  const legend=document.getElementById('crop-class-legend');if(legend)legend.hidden=true;
   const select = document.getElementById('mapbiomas-candidates');
   select.replaceChildren(new Option('Marque uma cultura para visualizar áreas','')); select.disabled = true;
 }
@@ -48,16 +49,17 @@ function useAgriculturalArea(index) {
 
 document.addEventListener('DOMContentLoaded', () => {
   const el = id => document.getElementById(id);
+  const cropLegend=document.createElement('aside');cropLegend.id='crop-class-legend';cropLegend.className='map-legend';cropLegend.hidden=true;cropLegend.setAttribute('aria-label','Culturas do mapa histórico');document.querySelector('.map-card').append(cropLegend);
   el('inactive-soy-filter').checked=false;
   document.querySelectorAll('input[name="map-crop"]').forEach(input => { input.checked = false; input.closest('label').style.setProperty('--crop-color',cropColor(input.value)); });
   for (let year = 2025; year >= 1985; year--) el('mapbiomas-year').add(new Option(year, year));
-  async function run(button, status, task, revision) {
+  async function run(button, status, task, revision, propagate=false) {
     if(button) button.disabled = true;
     status.setAttribute('aria-busy','true'); status.textContent = 'Buscando dados…';
-    try { await task(); } catch (error) { if (revision === undefined || revision === cropRequest) status.textContent = error.message; }
+    try { return await task(); } catch (error) { if (revision === undefined || revision === cropRequest) status.textContent = error.message;if(propagate)throw error; }
     finally { if (revision === undefined || revision === cropRequest) { if(button) button.disabled = false; status.setAttribute('aria-busy','false'); } }
   }
-  function updateCropMap() {
+  function updateCropMap(propagate=false,isCurrent=()=>true) {
     clearTimeout(inactivePoll);
     const revision = ++cropRequest;
     return run(null, el('mapbiomas-status'), async () => {
@@ -66,24 +68,26 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!classes.length) { el('mapbiomas-status').textContent = 'Marque uma cultura para visualizar suas áreas.'; return; }
     const b = map.getBounds(), sw = b.getSouthWest(), ne = b.getNorthEast();
     const bounds = openMap ? [sw.lng,sw.lat,ne.lng,ne.lat] : [sw.lng(),sw.lat(),ne.lng(),ne.lat()];
+    const municipality_code=window.agriAssistantContext?.().municipality_code || el('municipality-select').value || undefined;
     if(el('inactive-soy-filter').checked) {
-      const job=await storageJson('/api/inactive-soy',{bounds,municipality_code:el('municipality-select').value || undefined,year:Number(el('mapbiomas-year').value)});
+      const job=await storageJson('/api/inactive-soy',{bounds,municipality_code,year:Number(el('mapbiomas-year').value)});
       if(revision===cropRequest) pollInactive(job,revision);
       return;
     }
     const results = [];
     let pending = classes.length;
     const tasks = classes.map(async class_id => {
-      const result = await cropData({bounds,municipality_code:el('municipality-select').value || undefined,year:Number(el('mapbiomas-year').value),class_id});
-      results.push(result); pending--;
-      if (revision === cropRequest) renderCropResults(results,pending);
+      const result = await cropData({bounds,municipality_code,year:Number(el('mapbiomas-year').value),class_id});
+      results.push({...result,class_id}); pending--;
+      if (revision === cropRequest && isCurrent()) renderCropResults(results,pending);
     });
     const settled = await Promise.allSettled(tasks);
-    if (revision !== cropRequest) return;
+    if (revision !== cropRequest || !isCurrent()) return null;
     if(results.length) renderCropResults(results,0);
     const failures=settled.filter(item => item.status === 'rejected');
-    if(failures.length) el('mapbiomas-status').textContent += ' ' + failures.map(item => item.reason.message).join(' ');
-    }, revision);
+    if(failures.length) {el('mapbiomas-status').textContent += ' ' + failures.map(item => item.reason.message).join(' ');if(propagate)throw failures[0].reason;}
+    return {features:agriculturalFeatures.length,year:Number(el('mapbiomas-year').value)};
+    }, revision,propagate);
   }
   function renderCropResults(results,pending) {
     const result = {type:'FeatureCollection', features:results.flatMap(item => item.features), year:results[0].year, class_name:results.map(item => item.class_name).join(', '), overview:results.some(item => item.overview), resolution_m:Math.max(...results.map(item => item.resolution_m))};
@@ -103,6 +107,10 @@ document.addEventListener('DOMContentLoaded', () => {
     el('mapbiomas-candidates').disabled = !result.features.length;
     el('mapbiomas-status').textContent = `${result.features.length} áreas · ${result.class_name} · ${result.year}${result.overview ? ` · visão geral (${result.resolution_m} m)` : ' · detalhe de 30 m'}`;
     el('mapbiomas-detail-status').textContent = `Recorte visível${document.getElementById('municipality-select').value ? ' dentro do município' : ''}. Classificação histórica; não confirma a cultura atual.${results.some(item => item.features.length >= 200) ? ' Limite de áreas atingido; aproxime o mapa.' : ''}${result.overview ? ' Visualização aproximada: áreas pequenas podem não aparecer. Aproxime o mapa para o detalhe de 30 m.' : ''}`;
+    cropLegend.replaceChildren();
+    const title=document.createElement('strong');title.textContent='Culturas mapeadas · '+result.year;cropLegend.append(title);
+    for(const item of results) {const row=document.createElement('p');row.textContent=item.class_name;row.style.borderLeft='3px solid '+cropColor(item.class_id || item.features[0]?.properties.class_id || 39);row.style.paddingLeft='6px';cropLegend.append(row);}
+    const note=document.createElement('small');note.textContent='Referência histórica · MapBiomas';cropLegend.append(note);cropLegend.hidden=!result.features.length;
     document.dispatchEvent(new Event('alytha-crop-layer-updated'));
     if(pending) el('mapbiomas-status').textContent += ` / Carregando ${pending} cultura(s)...`;
   }
@@ -122,6 +130,35 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   el('mapbiomas-candidates').addEventListener('change', event => { if (event.target.value !== '') useAgriculturalArea(Number(event.target.value)); });
   let layersHidden=false;
+  window.showCropClasses=async ({class_ids,year,municipality_code,isCurrent})=>{
+    if(!mapReady || drawingArea)throw Error('Aguarde o mapa e conclua o desenho antes de mostrar a cultura.');
+    if(!class_ids.length) {
+      layersHidden=true;clearTimeout(viewportTimer);
+      const activity=el('soy-map-classes');activity.checked=false;activity.dispatchEvent(new Event('change'));
+      el('inactive-soy-filter').checked=false;
+      document.querySelectorAll('input[name="map-crop"]').forEach(input=>{input.disabled=false;input.checked=false;});
+      clearAgriculturalResults();el('mapbiomas-status').textContent='Camadas de culturas ocultas.';
+      return {hidden:true,features:0,year:Number(el('mapbiomas-year').value)};
+    }
+    const dossier=await storageJson('/api/municipalities/'+municipality_code);
+    if(!isCurrent())return null;
+    if(!dossier.boundary)throw Error('A base da cidade ainda está carregando. Tente novamente em instantes.');
+    clearTimeout(viewportTimer);layersHidden=true;
+    try {
+      const activity=el('soy-map-classes');activity.checked=false;activity.dispatchEvent(new Event('change'));
+      document.dispatchEvent(new Event('alytha-hide-spatial-layers'));
+      if(ndviOverlay){removeMapLayer(ndviOverlay);ndviOverlay=null;}
+      el('inactive-soy-filter').checked=false;
+      document.querySelectorAll('input[name="map-crop"]').forEach(input=>{input.disabled=false;input.checked=class_ids.includes(Number(input.value));});
+      if(year)el('mapbiomas-year').value=String(year);
+      clearAgriculturalResults();
+      if(openMap)map.fitBounds(L.geoJSON(dossier.boundary).getBounds(),{padding:[40,40],animate:false});
+      else await new Promise(resolve=>{let listener;const finish=()=>{clearTimeout(timeout);if(listener)google.maps.event.removeListener(listener);resolve();};const timeout=setTimeout(finish,1500);listener=google.maps.event.addListenerOnce(map,'idle',finish);fitGeojson(dossier.boundary);});
+      if(!isCurrent())return null;
+      clearTimeout(viewportTimer);
+      return await updateCropMap(true,isCurrent);
+    } finally {layersHidden=false;if(isCurrent())clearTimeout(viewportTimer);}
+  };
   el('clear-mapbiomas').addEventListener('click', () => { layersHidden=true; clearAgriculturalResults(); el('mapbiomas-status').setAttribute('aria-busy','false'); el('mapbiomas-status').textContent = 'Camada oculta. Marque uma cultura para voltar a exibir.'; });
   function filterChanged() {
     layersHidden=false;
