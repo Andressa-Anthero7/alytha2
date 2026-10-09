@@ -1,8 +1,8 @@
 /* Shared interactive time series for Sentinel-2 and SATVeg. */
 const SOY_ACTIVITY_CLASSES={
   possible_inactive:{label:'Baixo vigor persistente',color:'#ce9352'},
-  not_matched:{label:'Sem persistência de baixo vigor',color:'#33816d'},
-  unknown:{label:'Sem classificação',color:'#c5cdd2'}
+  not_matched:{label:'Vegetação mais expressiva no período',color:'#33816d'},
+  unknown:{label:'Avaliação inconclusiva',color:'#c5cdd2'}
 };
 function renderNdvi(input, options={}) {
   const prefix=options.prefix || 'ndvi';
@@ -103,8 +103,8 @@ function renderNdvi(input, options={}) {
           card.append(title,amount);cards.append(card);
         }
         detail.append(cards);
-        const note=document.createElement('span');note.className='chart-detail-note';note.textContent=`Sem classificação: ${hectares(p.unknown_ha)} com observações insuficientes e ${hectares(p.pending_ha)} não avaliados. Área de soja mapeada em 2025: ${hectares(p.total_soy_ha)}. Não determina área plantada na safra atual ou condição de pousio.`;detail.append(note);
-        technical.textContent='Classificação da atividade vegetativa em áreas de soja mapeadas pelo MapBiomas em 2025, delimitadas pelo município do IBGE. Baixo vigor persistente: NDVI médio ≤ 0,25 nas três observações válidas mais recentes, com intervalo mínimo de 10 dias entre a primeira e a última e última observação há no máximo 15 dias. Cada observação exige pelo menos 50 pixels válidos e cobertura de 50% da área. Sem persistência de baixo vigor: pelo menos uma dessas três observações apresenta NDVI acima de 0,25. Os polígonos são unidades de análise, não limites cadastrais de talhões; áreas menores que 5 ha permanecem não avaliadas. Valores médios podem reunir diferentes condições de cobertura vegetal. O limiar é experimental e não confirma colheita, preparo do solo, pousio ou implantação da cultura. Não há extrapolação para áreas não observadas.';
+        const note=document.createElement('span');note.className='chart-detail-note';note.textContent=`Avaliação inconclusiva: ${hectares(p.unknown_ha)} com observações insuficientes e ${hectares(p.pending_ha)} não avaliados. Área de soja mapeada em 2025: ${hectares(p.total_soy_ha)}. Não determina área plantada na safra atual ou condição de pousio.`;detail.append(note);
+        technical.textContent='Classificação da atividade vegetativa em áreas de soja mapeadas pelo MapBiomas em 2025, delimitadas pelo município do IBGE. Baixo vigor persistente: NDVI médio ≤ 0,25 nas três observações válidas mais recentes, com intervalo mínimo de 10 dias entre a primeira e a última e última observação há no máximo 15 dias. Cada observação exige pelo menos 50 pixels válidos e cobertura de 50% da área. Vegetação mais expressiva no período: pelo menos uma dessas três observações apresenta NDVI acima de 0,25. Os polígonos são unidades de análise, não limites cadastrais de talhões; áreas menores que 5 ha permanecem não avaliadas. Valores médios podem reunir diferentes condições de cobertura vegetal. O limiar é experimental e não confirma colheita, preparo do solo, pousio ou implantação da cultura. Não há extrapolação para áreas não observadas.';
       } else {
       const coverage=Number.isFinite(p.valid_fraction)?Math.max(0,Math.min(1,p.valid_fraction)):null;
       const limited=(coverage!==null && coverage<.5) || (Number.isFinite(p.valid_pixels) && p.valid_pixels<50);
@@ -128,7 +128,7 @@ function renderNdvi(input, options={}) {
       }
       }
     } else {
-      detail.textContent=options.municipal || options.activity ? 'Selecione uma data para consultar a atividade vegetativa. Ocre: baixo vigor persistente. Verde: sem persistência de baixo vigor. Cinza: sem classificação.' : 'Passe o mouse ou toque no gráfico para ver o que o satélite observou na área. Pontos cinza indicam menos da metade da área avaliada.';
+      detail.textContent=options.municipal || options.activity ? 'Selecione uma data para consultar a atividade vegetativa. Ocre: baixo vigor persistente. Verde: vegetação mais expressiva em pelo menos um período. Cinza: avaliação inconclusiva.' : 'Passe o mouse ou toque no gráfico para ver o que o satélite observou na área. Pontos cinza indicam menos da metade da área avaliada.';
       technical.textContent='Selecione uma data para consultar o índice e os dados da imagem.';
     }
     const ticks=[...new Set([start,Math.round(start+(end-start)/3),Math.round(start+2*(end-start)/3),end])];

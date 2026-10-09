@@ -228,11 +228,11 @@
         <button id="ai-panel-close" class="ai-close" type="button" aria-label="Fechar">&times;</button>
         <div class="ai-reading">
           <span class="ai-eyebrow">LEITURA DA ÁREA</span>
-          <p class="ai-note" id="ai-prompt-status" role="status" aria-live="polite">Escolha uma pergunta para começar.</p>
+          <div class="ai-note" id="ai-prompt-status" role="status" aria-live="polite">Escolha uma pergunta para começar.</div>
         </div>
         <div class="ai-composer">
           <label for="ai-prompt">O que vamos investigar?</label>
-          <input id="ai-prompt" type="text" placeholder="Ex.: O aumento da vegetação pode indicar emergência da lavoura?">
+          <input id="ai-prompt" type="text" placeholder="Ex.: Como está avançando a safra e o que precisamos acompanhar nesta área?">
           <div class="ai-suggestions" aria-label="Sugestões de perguntas">
             <button type="button" data-ai-question="O que mudou nas leituras recentes de vegetação da área pesquisada?">O que mudou?</button>
             <button type="button" data-ai-question="A sequência disponível é compatível com emergência da lavoura? Explique as evidências e o que ainda não podemos concluir.">Possível emergência</button>
@@ -379,7 +379,7 @@
         <div class="chart-controls" aria-label="Mapa e zoom do histórico de atividade"><label class="activity-map-toggle"><input id="soy-map-classes" type="checkbox" checked>Classes no mapa</label><button id="soy-zoom-in" type="button" aria-label="Aproximar histórico" disabled>+</button><button id="soy-zoom-out" type="button" aria-label="Afastar histórico" disabled>−</button><button id="soy-zoom-reset" type="button" disabled>Ver todo o período</button></div>
         <p id="soy-map-status" role="status"></p>
         <svg id="soy-chart" viewBox="0 0 640 190" role="group" tabindex="0" aria-label="Histórico interativo dos sinais de atividade. Use as setas para consultar as datas." aria-describedby="soy-point-detail"><text x="320" y="95" text-anchor="middle" fill="#718078" font-size="14">Selecione uma cidade para consultar a soja</text></svg>
-        <div class="chart-legend" aria-label="Classes de atividade vegetativa"><span><i style="--legend-color:#ce9352" aria-hidden="true"></i>Baixo vigor persistente</span><span><i style="--legend-color:#33816d" aria-hidden="true"></i>Sem persistência de baixo vigor</span><span><i style="--legend-color:#c5cdd2" aria-hidden="true"></i>Sem classificação</span></div>
+        <div class="chart-legend" aria-label="Classes de atividade vegetativa"><span><i style="--legend-color:#ce9352" aria-hidden="true"></i>Baixo vigor persistente</span><span><i style="--legend-color:#33816d" aria-hidden="true"></i>Vegetação mais expressiva no período</span><span><i style="--legend-color:#c5cdd2" aria-hidden="true"></i>Avaliação inconclusiva</span></div>
         <p id="soy-point-detail" aria-live="polite">Selecione uma data para consultar a área por classe de atividade vegetativa.</p>
         <details><summary>Critérios da avaliação vegetativa</summary><p id="soy-technical-detail">Classificação pelo vigor vegetativo observado via satélite. A interpretação não determina a fase fenológica ou as operações de manejo.</p></details>
       </section>

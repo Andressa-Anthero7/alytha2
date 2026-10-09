@@ -15,8 +15,8 @@ document.addEventListener('DOMContentLoaded',()=>{
     const feature=model.geojson.features[index],status=state(index),group=classification(index);
     const output=document.createElement('div');
     for(const text of [group.label,`${ha(feature.properties.area_ha)} · avaliação em ${formatDate(selectedDate)}`,
-      status==='pending' ? 'Área ainda não avaliada nesta consulta.' : status==='unknown' ? 'Observações insuficientes para classificação nesta data.' : 'Classe baseada nas três observações válidas recentes. Não determina a cultura atual ou a fase fenológica.',
-      'Base: soja mapeada em 2025. Polígono de análise, sem limite cadastral de talhão confirmado.']) {
+      status==='pending' ? 'O acompanhamento desta área ainda não foi concluído.' : status==='unknown' ? 'Ainda não há acompanhamento suficiente para interpretar a condição desta área.' : status==='possible_inactive' ? 'A área manteve baixo vigor nos períodos recentes. Pós-colheita, preparo ou pousio são possibilidades; o manejo ainda não está identificado.' : 'A vegetação ficou acima da faixa de baixo vigor em pelo menos um dos períodos recentes. Isso ainda não confirma a cultura ou a implantação da safra.',
+      'Área com histórico de soja em 2025. O acompanhamento não confirma o limite de um talhão.']) {
       const line=document.createElement('p');line.textContent=text;line.style.margin='4px 0';output.append(line);
     }
     return output;
@@ -48,7 +48,7 @@ document.addEventListener('DOMContentLoaded',()=>{
       amount.textContent=summary ? ha(key==='unknown'?summary.unknown_ha+summary.pending_ha:summary[key+'_ha']) : '';
       row.append(swatch,title,amount);el('activity-map-rows').append(row);
     }
-    el('activity-map-note').textContent=`${model.processed}/${model.states.length} polígonos consultados. Cinza: observações insuficientes ou área não avaliada. Fragmentos < 5 ha não são desenhados. Não determina pousio ou área plantada na safra atual.`;
+    el('activity-map-note').textContent=`Acompanhamento de ${model.processed}/${model.states.length} áreas. Cinza: acompanhamento insuficiente ou ainda não concluído. Áreas menores que 5 ha não aparecem nesta camada. As cores apoiam o monitoramento; ainda não confirmam a área plantada na safra atual.`;
     legend.hidden=false;
   }
   function draw() {

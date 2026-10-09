@@ -115,7 +115,12 @@ document.addEventListener('DOMContentLoaded',()=>{
       const dataset=researchHistory?.parameters?.municipality_code || '5107925';
       const result=await storageJson('/api/assistant',{prompt:el('ai-prompt').value,municipality_code:context.municipality_code,municipal_job_id:context.municipal_job_id,map_date:context.map_date,dataset_id:dataset===context.municipality_code ? researchHistory?.id : undefined});
       if(window.agriAssistantContext().revision!==context.revision)throw Error('O contexto do mapa mudou durante a consulta. Consulte novamente para ler a área ou data atual.');
-      el('ai-prompt-status').textContent=`${result.answer}\n${result.limitations.join(' ')}\nFontes: ${result.sources.map(s=>s.source).join(', ') || 'sem evidências locais suficientes'}`;
+      const answer=document.createElement('p');answer.textContent=result.answer;
+      const parts=[answer];
+      if(result.limitations.length) {const note=document.createElement('p');note.textContent=result.limitations.join(' ');parts.push(note);}
+      const sources=document.createElement('details'),summary=document.createElement('summary'),sourceText=document.createElement('p');
+      summary.textContent='Bases do acompanhamento';sourceText.textContent=result.sources.map(s=>s.source).join(', ') || 'Sem evidências locais suficientes.';
+      sources.append(summary,sourceText);parts.push(sources);el('ai-prompt-status').replaceChildren(...parts);
       if(result.action.kind==='filter_crops') {
         const inactive=el('inactive-soy-filter');if(inactive.checked){inactive.checked=false;inactive.dispatchEvent(new Event('change'));}
         document.querySelectorAll('input[name="map-crop"]').forEach(input=>input.checked=result.action.class_ids.includes(Number(input.value)));
