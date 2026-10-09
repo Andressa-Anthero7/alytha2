@@ -212,9 +212,10 @@
     .map-legend { bottom:calc(var(--timeline-height,68px) + 14px); }
     .leaflet-bottom { bottom:calc(var(--timeline-height,68px) + 2px); }
   </style>
+  <link rel="stylesheet" href="/notebook-layout.css">
 </head>
 <body>
-  <header aria-label="Alytha"><img class="brand" src="/alytha-logo.png" alt="Alytha"></header>
+  <header aria-label="Alytha"><img class="brand" src="/alytha-logo.png" alt="Alytha"><span class="workspace-title">Monitoramento agrícola</span></header>
   <main>
     <h1>Monitoramento de talh&#245;es</h1>
     <p class="intro">Acompanhe a &#225;rea delimitada, encontre imagens de sat&#233;lite e visualize a evolu&#231;&#227;o do vigor da lavoura ao longo da safra.</p>
@@ -235,7 +236,7 @@
         <h2 class="section-title">Localidade</h2>
         <label for="state-select">Estado</label><select id="state-select"><option value="">Carregando estados…</option></select>
         <label for="municipality-select">Município</label><select id="municipality-select" disabled><option value="">Selecione um estado</option></select>
-        <h2 class="section-title">Culturas</h2>
+        <details id="crop-layers-panel" open><summary>Culturas e camadas</summary>
         <div class="crop-section">
           <label for="mapbiomas-year">Ano de referência</label><select id="mapbiomas-year"></select>
           <fieldset class="crop-filters"><legend>Culturas mapeadas</legend>
@@ -260,6 +261,8 @@
           <small><a href="https://brasil.mapbiomas.org/downloads/mapas-para-download-geotiff/" target="_blank" rel="noopener">MapBiomas · Coleção 11 · CC BY 4.0</a></small>
           </details>
         </div>
+        </details>
+        <h2 class="section-title">Análise e histórico</h2>
         <details class="municipal-overview"><summary>Panorama do munic&iacute;pio</summary>
         <p id="region-status" role="status">Limites territoriais: IBGE. Escolha uma região para navegar.</p>
         <p id="municipal-base-status" role="status">Escolha uma cidade para consultar o panorama agrícola.</p>
@@ -361,7 +364,7 @@
         </div>
       </section>
       <section class="analysis" id="soy-activity-panel" aria-label="Histórico de atividade da área de soja">
-        <h2>Atividade vegetativa · soja histórica</h2>
+        <div class="analysis-header"><h2>Atividade vegetativa · soja histórica</h2><button id="soy-panel-close" class="analysis-close" type="button" aria-label="Recolher gráfico de atividade da soja" title="Recolher gráfico">×</button></div>
         <p class="analysis-subtitle" id="soy-area-label">Selecione uma cidade para consultar suas áreas de soja histórica.</p>
         <p id="soy-status" class="analysis-subtitle" role="status">Avaliação do vigor vegetativo. Não determina a fase fenológica ou a condição de pousio.</p>
         <div class="chart-controls" aria-label="Mapa e zoom do histórico de atividade"><label class="activity-map-toggle"><input id="soy-map-classes" type="checkbox" checked>Classes no mapa</label><button id="soy-zoom-in" type="button" aria-label="Aproximar histórico" disabled>+</button><button id="soy-zoom-out" type="button" aria-label="Afastar histórico" disabled>−</button><button id="soy-zoom-reset" type="button" disabled>Ver todo o período</button></div>
@@ -373,11 +376,12 @@
       </section>
       <section id="activity-map-legend" aria-label="Legenda da atividade vegetativa no mapa" hidden>
         <div class="activity-map-heading"><strong>Atividade vegetativa · soja</strong><button id="hide-activity-map" type="button" aria-label="Ocultar classes no mapa" title="Ocultar classes no mapa">×</button></div>
-        <p id="activity-map-date"></p><div id="activity-map-rows"></div><p id="activity-map-note"></p>
+        <p id="activity-map-date"></p><div id="activity-map-rows"></div><details class="activity-map-info"><summary>Informações da camada</summary><p id="activity-map-note"></p></details>
       </section>
       <section class="analysis" id="ndvi-panel">
           <div class="analysis-header">
             <h2>Vigor da vegeta&#231;&#227;o &middot; NDVI</h2>
+            <button id="ndvi-panel-close" class="analysis-close" type="button" aria-label="Recolher gráfico de vigor" title="Recolher gráfico">×</button>
           </div>
           <div id="ndvi-content">
           <p class="analysis-subtitle">Acompanhe como a vegetação mudou na área. Cada leitura reúne até 5 dias de imagens; partes sem boa visibilidade ficam fora do cálculo.</p>
@@ -399,6 +403,7 @@
   <script src="/soy-activity.js"></script>
   <script src="/soy-activity-map.js"></script>
   <script src="/spatial-activity.js"></script>
+  <script src="/workspace-layout.js"></script>
   <script>
     const sidePanel = document.getElementById('side-panel');
     const timeline = document.querySelector('.timeline');
