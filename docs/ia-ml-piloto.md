@@ -4,7 +4,8 @@
 
 - Histórico Sentinel-2 L2A desde 2018 para pequenas áreas dentro da malha de Sorriso/MT, código IBGE 5107925. Consultas anuais em segundo plano, persistência, retomada de anos com falha e reaproveitamento do cache.
 - Gráfico por ano e regras temporais que mostram hipóteses de crescimento, perda de vegetação ou baixo vigor. Nuvens e cobertura insuficiente tornam a análise inconclusiva.
-- KMeans aplicado a janelas históricas de 90 dias: agrupamento de padrões de vegetação sem inventar rótulos de manejo. O agrupamento usa o histórico completo e serve para exploração retrospectiva, sem teste de previsão futura.
+- KMeans aplicado a janelas históricas de 90 dias: agrupamento de padrões de vegetação sem inventar rótulos de manejo. A versão atual usa somente observações disponíveis até a data analisada, com cache separado por corte; continua sendo exploração, sem teste de previsão futura.
+- Comparação sazonal com pandas desde 2018: períodos equivalentes, controle de qualidade, anos sem dados separados e características causais exportadas para ML. Consulte [comparacao-historica.md](comparacao-historica.md).
 - Cadastro de registros conhecidos de campo, treinamento Random Forest, avaliação GroupKFold por área, métricas persistidas e inferência experimental após treinamento.
 - Assistente OpenAI com evidências recuperadas no servidor, referências verificadas e ações limitadas a filtros de culturas, abertura do histórico e navegação para Sorriso. Nenhuma resposta executa código ou URLs arbitrárias.
 

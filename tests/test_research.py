@@ -90,6 +90,13 @@ class ResearchTests(unittest.TestCase):
         patterns=research.patterns(d,self.end.isoformat())
         self.assertEqual(patterns['kind'],'unsupervised');self.assertEqual(len(patterns['groups']),4)
         self.assertIn('não são etapas',patterns['note'])
+    def test_historical_groups_do_not_learn_from_future_observations(self):
+        d=self.save_dataset('causal-clusters',[.2+(index%30)/50 for index in range(180)])
+        first=research.patterns(d,self.end.isoformat())
+        later=copy.deepcopy(d)
+        later['points'].extend(self.points([.95]*60,date(2026,12,1)))
+        second=research.patterns(later,self.end.isoformat())
+        self.assertEqual(first,second)
     def test_openai_missing_key_and_grounded_structured_response(self):
         with patch.object(assistant,'urlopen') as api:
             with self.assertRaisesRegex(ValueError,'OPENAI_API_KEY'):assistant.ask({'prompt':'Olá'}, {})

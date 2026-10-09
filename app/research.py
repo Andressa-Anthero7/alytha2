@@ -167,6 +167,9 @@ def _train():
 def analyze(dataset_id,cutoff=None):
     history=dataset(dataset_id);cutoff=cutoff or history['parameters']['as_of']
     result={'dataset_id':dataset_id,'date':cutoff,'baseline':baseline(history['points'],cutoff),'model_prediction':None}
+    from .historical_comparison import compare
+    try: result['historical_comparison']=compare(history,cutoff)
+    except ImportError: result['historical_comparison']={'status':'unavailable','reading':'Comparação histórica indisponível: instale as dependências de requirements-ml.txt.'}
     try: result['vegetation_patterns']=patterns(history,cutoff)
     except (ValueError,ImportError): result['vegetation_patterns']=None
     status=model_status()
@@ -185,13 +188,16 @@ def patterns(history,cutoff):
     from sklearn.cluster import KMeans
     from sklearn.preprocessing import StandardScaler
     from threadpoolctl import threadpool_limits
-    cache_key='ml:patterns:'+fingerprint([history['id'],history.get('updated_at'),len(history['points']),1])
+    from .historical_comparison import prepare
+    frame,_=prepare(history,cutoff)
+    eligible=[{**point,'date':point['date'].date().isoformat(),'available':point['available'].date().isoformat()} for point in frame.to_dict('records')]
+    cache_key='ml:patterns:'+fingerprint([history['id'],history.get('updated_at'),len(eligible),cutoff,2])
     cached=storage.source_snapshot(cache_key)
     select=[0,1,2,3,4,5,6,7,10]
     if not cached:
         vectors=[]
-        for point in history['points'][::3]:
-            try: vector=features(history['points'],point['date'])
+        for point in eligible[::3]:
+            try: vector=features(eligible,point['available'])
             except ValueError: continue
             vectors.append([vector[i] for i in select])
         if len(vectors)<20: raise ValueError('Histórico ainda insuficiente para aprender padrões de vegetação.')
@@ -204,7 +210,7 @@ def patterns(history,cutoff):
         centroids=scaler.inverse_transform(model.cluster_centers_)
         learned={'method':'KMeans','kind':'unsupervised','windows':len(vectors),'groups':[{'id':int(index),'windows':int(np.sum(model.labels_==index)),'mean_ndvi':round(float(center[1]),3),'latest_ndvi':round(float(center[0]),3),'slope_day':round(float(center[5]),5)} for index,center in enumerate(centroids)],'centers':model.cluster_centers_.tolist(),'mean':scaler.mean_.tolist(),'scale':scaler.scale_.tolist(),'note':'Grupos aprendidos do histórico real; não são etapas de manejo confirmadas nem medem acurácia.'}
         storage.source_snapshot(cache_key,learned);cached=storage.source_snapshot(cache_key)
-    learned=cached['result'];vector=features(history['points'],cutoff)
+    learned=cached['result'];vector=features(eligible,cutoff)
     scaled=(np.array([vector[i] for i in select])-np.array(learned['mean']))/np.array(learned['scale'])
     group=int(np.sum((np.array(learned['centers'])-scaled)**2,axis=1).argmin())
     return {key:value for key,value in learned.items() if key not in ('centers','mean','scale')} | {'current_group':group}

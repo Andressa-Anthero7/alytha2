@@ -30,7 +30,7 @@ document.addEventListener('DOMContentLoaded',()=>{
       colheita:'O vigor caiu depois de um período com mais vegetação. Pode estar relacionado à colheita ou a outro evento de perda de vegetação.',
       solo_exposto:'A área manteve pouco sinal de vegetação. Pode haver solo exposto, pós-colheita ou pousio; o satélite sozinho não diferencia essas situações.'
     };
-    el('research-analysis').textContent=`${readings[result.baseline.stage] || result.baseline.label} ${result.model_prediction ? `A análise baseada nos registros de campo sugere ${result.model_prediction.label.toLowerCase()}, ainda sem confirmação.` : ''} Compare a sequência de imagens e o mesmo período nos anos anteriores disponíveis.`;
+    el('research-analysis').textContent=`${readings[result.baseline.stage] || result.baseline.label} ${result.historical_comparison?.reading || ''} ${result.model_prediction ? `A análise baseada nos registros de campo sugere ${result.model_prediction.label.toLowerCase()}, ainda sem confirmação.` : ''}`;
     el('research-analysis-method').textContent=`${result.baseline.reason}${result.vegetation_patterns ? ` O histórico foi separado em ${result.vegetation_patterns.groups.length} grupos de comportamento da vegetação. Esses grupos não identificam etapas de manejo.` : ''}${result.model_prediction ? ` Resultado experimental do modelo: ${result.model_prediction.label}; pontuação ${(result.model_prediction.probability_uncalibrated*100).toLocaleString('pt-BR',{maximumFractionDigits:0})}%, que não representa uma chance comprovada de acerto.` : ' A interpretação utiliza somente a evolução observada pelo satélite; as hipóteses de manejo não são confirmações.'}`;
   }
   function chartYear() {
