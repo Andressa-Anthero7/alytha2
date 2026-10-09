@@ -14,6 +14,13 @@ document.addEventListener('DOMContentLoaded',()=>{
     });
   }
   new ResizeObserver(resizeMap).observe(canvas);
+  const aiPanel=document.getElementById('ai-prompt-panel');
+  const aiResult=document.getElementById('ai-prompt-status');
+  new ResizeObserver(()=>{
+    if(!aiPanel.hidden)document.body.style.setProperty('--ai-panel-height',aiPanel.getBoundingClientRect().height+'px');
+  }).observe(aiPanel);
+  new MutationObserver(()=>requestAnimationFrame(()=>{aiResult.scrollTop=aiResult.scrollHeight;}))
+    .observe(aiResult,{childList:true,subtree:true,characterData:true});
   document.addEventListener('alytha-map-ready',resizeMap);
   document.getElementById('panel-toggle').setAttribute('aria-expanded',String(!document.getElementById('side-panel').classList.contains('closed')));
   if(matchMedia('(min-width:1000px)').matches)document.getElementById('crop-layers-panel').open=false;

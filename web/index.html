@@ -226,6 +226,10 @@
       <div class="toolbar" aria-label="Ferramentas do mapa"><button id="panel-toggle" class="tool-button" type="button" aria-label="Camadas e cenas" aria-expanded="false" title="Camadas e cenas">&#9776;</button><button id="pen-tool" class="tool-button" type="button" aria-label="Caneta: desenhar área" aria-pressed="false" title="Caneta: desenhar área (Esc cancela)" disabled><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m16 3 5 5-13 13H3v-5Z"/><path d="m14 5 5 5"/></svg></button><button id="upload-trigger" class="tool-button" type="button" aria-label="Carregar talh&#227;o GeoJSON" title="Carregar talh&#227;o GeoJSON">&#43;</button><button id="chart-toggle" class="tool-button" type="button" aria-label="Mostrar gr&#225;fico NDVI" title="Mostrar gr&#225;fico NDVI">&#8767;</button><button id="ai-mode-toggle" class="tool-button ai-mode-button" type="button" aria-label="Modo I.A" title="Modo I.A">Modo I.A</button></div>
       <section class="ai-prompt-panel" id="ai-prompt-panel" aria-label="Prompt da intelig&#234;ncia artificial" hidden>
         <button id="ai-panel-close" class="ai-close" type="button" aria-label="Fechar">&times;</button>
+        <div class="ai-reading">
+          <span class="ai-eyebrow">LEITURA DA ÁREA</span>
+          <p class="ai-note" id="ai-prompt-status" role="status" aria-live="polite">Escolha uma pergunta para começar.</p>
+        </div>
         <div class="ai-composer">
           <label for="ai-prompt">O que vamos investigar?</label>
           <input id="ai-prompt" type="text" placeholder="Ex.: O aumento da vegetação pode indicar emergência da lavoura?">
@@ -235,10 +239,6 @@
           </div>
           <button id="ai-prompt-submit" type="button">Enviar</button>
           <small>Ctrl + Enter para enviar</small>
-        </div>
-        <div class="ai-reading">
-          <span class="ai-eyebrow">LEITURA DA ÁREA</span>
-          <p class="ai-note" id="ai-prompt-status" role="status" aria-live="polite">Escolha uma pergunta para começar.</p>
         </div>
       </section>
       <section class="card panel" id="side-panel">
